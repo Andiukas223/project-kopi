@@ -1,0 +1,10 @@
+# Keep design/source assets binary-safe.
+*.ai binary
+*.cdr binary
+*.odt binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.svg text eol=lf
+
