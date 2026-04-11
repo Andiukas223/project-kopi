@@ -17,4 +17,4 @@ Pirmas etapas yra sukurti veikianti desktop-first vidines sistemos prototipa pag
 
 - `PROJECT_PLAN.md` - detalus kurimo planas, fazes, moduliai, techniniai sprendimai ir atviri klausimai.
 - `CHANGELOG.md` - visi reiksmingi pakeitimai, kad kita sesija galetu greitai perimti konteksta.
-
+- `docs/VIVAMEDICAL_WEBSITE.md` - `vivamedical.lt` svetaines ziniu baze ir taisykle, kaip ja pildyti per Playwright, kai informacijos truksta.
