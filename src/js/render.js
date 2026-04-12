@@ -332,6 +332,9 @@ function chipClass(status) {
 
 function pageHeader(page) {
   const [title, sub] = pageMeta[page] || pageMeta.command;
+  const newJobBtn = canCreateServiceJob()
+    ? `<button class="btn primary" type="button" data-action="new-service-job">New service job</button>`
+    : "";
   return `
     <div class="page-header">
       <div>
@@ -341,7 +344,7 @@ function pageHeader(page) {
       <div class="action-row">
         ${roleSwitcher()}
         <button class="btn ghost" type="button">Export view</button>
-        <button class="btn primary" type="button" data-action="new-service-job">New service job</button>
+        ${newJobBtn}
       </div>
     </div>
   `;
@@ -672,33 +675,325 @@ function templatePanel(doc = selectedDocument()) {
 }
 
 // ---------------------------------------------------------------------------
+// Role-awareness helpers
+// ---------------------------------------------------------------------------
+
+// Maps the active role to the demo user's display name used on job records.
+// Returns null for admin/manager who see all data.
+function currentUserName() {
+  return {
+    service:   "R. Petrauskas",
+    svcmgr:    "M. Vaitkus",
+    sales:     "V. Klimaite",
+    finance:   "V. Klimaite",
+    office:    "I. Mazure",
+    logistics: "T. Gruodis",
+    warehouse: "T. Gruodis"
+  }[state.role] || null;
+}
+
+// Returns jobs the current role is allowed to see.
+// service engineers see only their own; everyone else sees all.
+function visibleJobs() {
+  const name = currentUserName();
+  if (state.role === "service" && name) return jobs.filter((j) => j.owner === name);
+  return jobs;
+}
+
+// Whether the current role can open the "New service job" wizard.
+function canCreateServiceJob() {
+  return ["service", "svcmgr", "office", "admin"].includes(state.role);
+}
+
+// Returns the 4 joined stat-card HTML strings for the Command Center.
+function roleStats() {
+  const r           = state.role;
+  const allOverdue  = overdueDocuments();
+  const myJobList   = visibleJobs();
+  const pmSchedule  = computePmSchedule();
+
+  if (r === "service") {
+    const myOverdueCount = allOverdue.filter((d) =>
+      myJobList.some((j) => j.id === d.jobId)
+    ).length;
+    return [
+      statCard("My open jobs",     myJobList.filter((j) => j.status === "Open").length, "Assigned to me",         "info"),
+      statCard("My overdue docs",  myOverdueCount,                                       "Need my follow-up",      myOverdueCount > 0 ? "danger" : "ok"),
+      statCard("Parts pending",    partsRequests.filter((pr) => pr.status === "Pending approval").length, "Waiting for svcmgr", "warn"),
+      statCard("Final documents",  myJobList.filter((j) => j.stage === "Final documents").length, "Work acts to complete", "")
+    ].join("");
+  }
+
+  if (r === "svcmgr") {
+    const needApproval = partsRequests.filter((pr) => pr.status === "Pending approval").length;
+    const today = todayOnly();
+    const in14  = new Date(today.getTime() + 14 * 864e5);
+    const pmSoon = pmSchedule.filter((pm) => {
+      const d = dateOnly(pm.date);
+      return pm.status === "Scheduled" && d >= today && d <= in14;
+    }).length;
+    return [
+      statCard("Open jobs (all)",     jobs.filter((j) => j.status === "Open").length, "Across all engineers", "info"),
+      statCard("Parts to approve",    needApproval, "Awaiting your decision",       needApproval > 0 ? "warn" : "ok"),
+      statCard("Overdue documents",   allOverdue.length, "Team follow-up needed",   allOverdue.length > 0 ? "danger" : "ok"),
+      statCard("PM visits (14 days)", pmSoon, "Scheduled visits approaching",       pmSoon > 0 ? "warn" : "")
+    ].join("");
+  }
+
+  if (r === "sales") {
+    const salesDocs = documents.filter((d) => d.owner === "Sales");
+    return [
+      statCard("Quotations in review",  salesDocs.filter((d) => d.pipelineStep === "Review").length,   "Awaiting approval",    salesDocs.filter((d) => d.pipelineStep === "Review").length > 0 ? "warn" : ""),
+      statCard("Awaiting customer",     salesDocs.filter((d) => d.pipelineStep === "Customer").length, "Customer signature",   salesDocs.filter((d) => d.pipelineStep === "Customer").length > 0 ? "warn" : ""),
+      statCard("Sales docs total",      salesDocs.length,                                              "In pipeline",          "info"),
+      statCard("Active contracts",      contracts.length,                                              "Managed contracts",    "")
+    ].join("");
+  }
+
+  if (r === "finance") {
+    const atSig = documents.filter((d) => d.pipelineStep === "Signature").length;
+    return [
+      statCard("Awaiting signature",   atSig, "Docs at signature stage",           atSig > 0 ? "warn" : "ok"),
+      statCard("Overdue documents",    allOverdue.length, "All owners",             allOverdue.length > 0 ? "danger" : "ok"),
+      statCard("Active contracts",     contracts.length, "Balance tracking active", "info"),
+      statCard("Total contract value", contracts.reduce((s, c) => s + c.value, 0).toLocaleString() + " EUR", "Combined value", "")
+    ].join("");
+  }
+
+  if (r === "office") {
+    const today   = todayOnly();
+    const in7     = new Date(today.getTime() + 7 * 864e5);
+    const upcoming = getMonthEvents(today.getFullYear(), today.getMonth())
+      .filter((ev) => { const d = dateOnly(ev.date); return d >= today && d <= in7; }).length;
+    return [
+      statCard("Open jobs",          jobs.filter((j) => j.status === "Open").length, "Active service cases", "info"),
+      statCard("Overdue documents",  allOverdue.length, "Need follow-up",             allOverdue.length > 0 ? "danger" : "ok"),
+      statCard("Events next 7 days", upcoming,          "Calendar, PM, sales",        upcoming > 0 ? "warn" : ""),
+      statCard("Customers",          customers.length,  "In registry",                "")
+    ].join("");
+  }
+
+  if (r === "logistics") {
+    const inTransit  = partsRequests.filter((pr) => pr.status === "In transit").length;
+    const arrived    = partsRequests.filter((pr) => pr.status === "Arrived at warehouse").length;
+    const noDelivery = partsRequests.filter((pr) => pr.status === "Arrived at warehouse" && !pr.delivery).length;
+    return [
+      statCard("In transit",           inTransit,   "Ordered and en route",          inTransit > 0 ? "info" : ""),
+      statCard("Arrived at warehouse", arrived,     "Ready for delivery decision",    arrived > 0 ? "warn" : "ok"),
+      statCard("Delivery unspecified", noDelivery,  "Need your decision",             noDelivery > 0 ? "danger" : "ok"),
+      statCard("Pending approval",     partsRequests.filter((pr) => pr.status === "Pending approval").length, "Not yet approved", "")
+    ].join("");
+  }
+
+  if (r === "warehouse") {
+    return [
+      statCard("Pending approval",     partsRequests.filter((pr) => pr.status === "Pending approval").length, "Awaiting svcmgr",        "warn"),
+      statCard("In transit",           partsRequests.filter((pr) => pr.status === "In transit").length,       "Ordered and en route",   "info"),
+      statCard("Arrived at warehouse", partsRequests.filter((pr) => pr.status === "Arrived at warehouse").length, "Log stock receipt",  "warn"),
+      statCard("Total parts requests", partsRequests.length, "All statuses",                                                           "")
+    ].join("");
+  }
+
+  if (r === "manager") {
+    const pmDone = pmSchedule.filter((pm) => pm.status === "Completed").length;
+    return [
+      statCard("Open jobs",         jobs.filter((j) => j.status === "Open").length, "Across all teams",          "info"),
+      statCard("Overdue documents", allOverdue.length, "Require team follow-up",      allOverdue.length > 0 ? "danger" : "ok"),
+      statCard("Active contracts",  contracts.length,  "Contract coverage",           ""),
+      statCard("PM completion",     `${pmDone}/${pmSchedule.length}`, "This contract period", pmDone === pmSchedule.length && pmSchedule.length > 0 ? "ok" : "")
+    ].join("");
+  }
+
+  // admin — default
+  return [
+    statCard("Open service jobs",  jobs.length,        "Across diagnostics, repair, and documents", "info"),
+    statCard("Overdue documents",  allOverdue.length,   "Require owner follow-up today",              allOverdue.length > 0 ? "danger" : "ok"),
+    statCard("Customer approvals", 3,                   "Waiting before service handoff",             "warn"),
+    statCard("Finishing this week", 5,                  "Ready for final work act",                   "ok")
+  ].join("");
+}
+
+// Returns the role-specific focus panel for the Command Center.
+function roleFocusPanel() {
+  const r = state.role;
+
+  if (r === "service") {
+    const myJobList = visibleJobs();
+    return `
+      <section class="panel">
+        <div class="section-heading">
+          <div class="section-title">My assigned jobs</div>
+          <span class="role-tag service">service</span>
+        </div>
+        ${myJobList.length
+          ? jobsTableRows(myJobList)
+          : `<div class="modal-placeholder">No jobs currently assigned to you.</div>`}
+      </section>
+    `;
+  }
+
+  if (r === "svcmgr") {
+    const pending = partsRequests.filter((pr) => pr.status === "Pending approval");
+    return `
+      <section class="panel">
+        <div class="section-heading">
+          <div class="section-title">Parts awaiting your approval (${pending.length})</div>
+          <span class="role-tag svcmgr">svcmgr</span>
+        </div>
+        ${pending.length
+          ? partsQueueTable(pending)
+          : `<div class="modal-placeholder">No parts requests pending your approval.</div>`}
+      </section>
+      <section class="panel">
+        <div class="section-heading"><div class="section-title">All active jobs</div></div>
+        ${jobsTableRows(jobs)}
+      </section>
+    `;
+  }
+
+  if (r === "sales" || r === "finance") {
+    const ownerLabel = r === "sales" ? "Sales" : "Finance";
+    const ownerDocs  = documents.filter((d) => d.owner === ownerLabel);
+    return `
+      <section class="panel">
+        <div class="section-heading">
+          <div class="section-title">${ownerLabel} document queue</div>
+          <span class="role-tag ${r}">${r}</span>
+        </div>
+        ${ownerDocs.length
+          ? documentsTableRows(ownerDocs)
+          : `<div class="modal-placeholder">No ${ownerLabel.toLowerCase()} documents in pipeline.</div>`}
+      </section>
+    `;
+  }
+
+  if (r === "logistics" || r === "warehouse") {
+    const relevant = partsRequests.filter((pr) =>
+      ["Pending approval", "In transit", "Arrived at warehouse"].includes(pr.status)
+    );
+    return `
+      <section class="panel">
+        <div class="section-heading">
+          <div class="section-title">Parts queue</div>
+          <span class="role-tag ${r}">${r}</span>
+        </div>
+        ${relevant.length
+          ? partsQueueTable(relevant)
+          : `<div class="modal-placeholder">No active parts requests.</div>`}
+      </section>
+    `;
+  }
+
+  if (r === "office" || r === "manager") {
+    return `
+      <section class="panel">
+        <div class="section-heading">
+          <div class="section-title">All service jobs</div>
+          <span class="role-tag ${r}">${r}</span>
+        </div>
+        ${jobsTableRows(jobs)}
+      </section>
+    `;
+  }
+
+  // admin — document pipeline + jobs
+  return `
+    <section class="panel">
+      <div class="section-heading"><div class="section-title">Document pipeline</div></div>
+      ${pipelineBoard()}
+    </section>
+  `;
+}
+
+// Inline jobs table body (reuses columns from jobsTable but without the outer card wrapper).
+function jobsTableRows(rows) {
+  if (!rows.length) return `<div class="modal-placeholder">No jobs to display.</div>`;
+  return `
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Job ID</th><th>Customer</th><th>Equipment</th>
+          <th>Owner</th><th>Stage</th><th>Status</th><th>Due</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((job) => `
+          <tr>
+            <td class="mono">${escapeHtml(job.id)}</td>
+            <td>${escapeHtml(job.customer)}</td>
+            <td>${escapeHtml(job.equipment)}</td>
+            <td>${escapeHtml(job.owner)}</td>
+            <td>${escapeHtml(job.stage)}</td>
+            <td>${statusChip(job.status)}</td>
+            <td class="mono">${escapeHtml(job.due)}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+// Inline documents table body for focus panels.
+function documentsTableRows(rows) {
+  if (!rows.length) return `<div class="modal-placeholder">No documents to display.</div>`;
+  return `
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Doc ID</th><th>Type</th><th>Customer</th><th>Stage</th><th>Due</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((doc) => `
+          <tr class="${documentIsOverdue(doc) ? "overdue" : ""}">
+            <td class="mono">${escapeHtml(doc.id)}</td>
+            <td>${escapeHtml(doc.type)}</td>
+            <td>${escapeHtml(doc.customer)}</td>
+            <td>${statusChip(doc.pipelineStep)}</td>
+            <td>${dueCell(doc)}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+// Compact parts table for svcmgr approval queue and logistics focus panels.
+function partsQueueTable(rows) {
+  return `
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Request</th><th>Equipment</th><th>Part</th><th>Status</th><th>EDD</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((pr) => `
+          <tr>
+            <td class="mono">${escapeHtml(pr.id)}</td>
+            <td>${escapeHtml(pr.equipment)}</td>
+            <td>${escapeHtml(pr.part)}</td>
+            <td>${statusChip(pr.status)}</td>
+            <td class="mono">${escapeHtml(pr.edd || "—")}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+// ---------------------------------------------------------------------------
 // Page renders
 // ---------------------------------------------------------------------------
 function commandPage() {
-  const overdueCount = overdueDocuments().length;
   return `
     ${pageHeader("command")}
     <div class="page-content">
-      <section class="stat-grid">
-        ${statCard("Open service jobs", jobs.length, "Across diagnostics, repair, and documents", "info")}
-        ${statCard("Overdue documents", overdueCount, "Require owner follow-up today", "danger")}
-        ${statCard("Customer approvals", 3, "Waiting before service handoff", "warn")}
-        ${statCard("Finishing this week", 5, "Ready for final work act", "ok")}
-      </section>
-      <section class="two-col">
-        <div class="panel">
-          <div class="section-heading"><div class="section-title">Document pipeline</div></div>
-          ${pipelineBoard()}
-        </div>
-        <div class="panel">
-          <div class="section-heading"><div class="section-title">Role focus</div></div>
-          <div class="info-box">
-            <div class="info-title">${escapeHtml(roles.find((role) => role.id === state.role)?.label || "Workspace")}</div>
-            <div class="info-body">Queue emphasis changes by role. Service sees diagnostics and repair. Sales sees quotations and approvals. Admin sees exceptions and templates.</div>
-          </div>
-        </div>
-      </section>
-      ${jobsTable(jobs.slice(0, 3))}
+      <div class="stat-grid">
+        ${roleStats()}
+      </div>
+      ${roleFocusPanel()}
+      ${state.role === "admin" ? jobsTable(jobs.slice(0, 3)) : ""}
       ${devSpecPanel("command")}
     </div>
   `;
@@ -708,12 +1003,14 @@ function servicePage() {
   const pmSchedule  = computePmSchedule();
   const pmUpcoming  = pmSchedule.filter((pm) => pm.status === "Scheduled").length;
   const pmCompleted = pmSchedule.filter((pm) => pm.status === "Completed").length;
+  const myJobList   = visibleJobs();
+  const isOwn       = state.role === "service";
 
   return `
     ${pageHeader("service")}
     <div class="page-content">
       <div class="tile-grid">
-        ${moduleTile("NEW", "New requests",    "4 unassigned jobs")}
+        ${moduleTile("NEW", "New requests",    isOwn ? `${myJobList.length} my jobs` : "4 unassigned jobs")}
         ${moduleTile("DIA", "Diagnostics",     "2 durations to log")}
         ${moduleTile("PRT", "Parts pending",   "3 waiting for EDD")}
         ${moduleTile("PM",  "PM schedule",     `${pmUpcoming} upcoming · ${pmCompleted} done`)}
@@ -724,7 +1021,23 @@ function servicePage() {
         <div class="section-heading"><div class="section-title">Service process — Pipeline A (repair, no contract)</div></div>
         ${serviceFlow()}
       </section>
-      ${jobsTable()}
+      ${isOwn
+        ? `<section class="panel">
+             <div class="section-heading">
+               <div class="section-title">My jobs (${myJobList.length})</div>
+               <span class="role-tag service">service</span>
+             </div>
+             ${jobsTableRows(myJobList)}
+           </section>`
+        : jobsTable()}
+      ${state.role === "svcmgr" || state.role === "admin" ? `
+        <section class="panel">
+          <div class="section-heading">
+            <div class="section-title">Parts awaiting approval</div>
+            <span class="role-tag svcmgr">svcmgr</span>
+          </div>
+          ${partsQueueTable(partsRequests.filter((pr) => pr.status === "Pending approval"))}
+        </section>` : ""}
       <section class="panel">
         <div class="section-heading">
           <div class="section-title">PM submodule — periodic maintenance auto-schedule</div>
@@ -754,10 +1067,19 @@ function salesPage() {
   `;
 }
 
+// Returns the default document owner filter for the current role.
+function roleDefaultDocFilter() {
+  return { sales: "Sales", finance: "Finance", service: "Service", svcmgr: "Service" }[state.role] || "All";
+}
+
 function documentsPage() {
-  const filteredDocs = state.documentFilter === "All"
+  // If the user hasn't explicitly set a filter yet, use the role default.
+  const effectiveFilter = state.documentFilter === "All" && roleDefaultDocFilter() !== "All"
+    ? roleDefaultDocFilter()
+    : state.documentFilter;
+  const filteredDocs = effectiveFilter === "All"
     ? documents
-    : documents.filter((doc) => doc.owner === state.documentFilter);
+    : documents.filter((doc) => doc.owner === effectiveFilter);
   const doc = selectedDocument();
 
   return `
