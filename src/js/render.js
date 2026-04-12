@@ -628,21 +628,16 @@ function serviceFlow() {
 
 function templatePanel(doc = selectedDocument()) {
   const template = templates.find((tpl) => tpl.id === state.selectedTemplateId) || templates[0];
-  const payload = {
-    documentId: doc?.id || "DOC-0000",
-    type: doc?.type || "Service act",
-    jobId: doc?.jobId || "VM-SV-0000",
-    customer: doc?.customer || "Customer",
-    owner: doc?.owner || "Service",
-    template: template?.name || "Service act",
-    output: state.documentOutputFormat
-  };
+
+  // Check if a preview has been generated for the current doc+template combination
+  const p = state.generatedDocPreview;
+  const previewActive = p && p.docId === doc?.id && p.templateId === template?.id;
 
   return `
     <section class="panel">
       <div class="section-heading">
         <div class="section-title">Template generation</div>
-        <span class="chip pending">${escapeHtml(state.generationStatus)}</span>
+        <span class="chip ${previewActive ? "done" : "pending"}">${escapeHtml(state.generationStatus)}</span>
       </div>
       <div class="template-controls">
         <label class="filter-control" for="template-select">
@@ -669,8 +664,212 @@ function templatePanel(doc = selectedDocument()) {
           </button>
         `).join("")}
       </div>
-      <pre class="json-preview">${escapeHtml(JSON.stringify(payload, null, 2))}</pre>
+      ${previewActive
+        ? docPreviewPanel(doc, template, p)
+        : `<pre class="json-preview">${escapeHtml(JSON.stringify({ documentId: doc?.id || "DOC-0000", type: doc?.type || "Service act", jobId: doc?.jobId || "VM-SV-0000", customer: doc?.customer || "Customer", owner: doc?.owner || "Service", template: template?.name || "Service act", output: state.documentOutputFormat }, null, 2))}</pre>`
+      }
     </section>
+  `;
+}
+
+// ---------------------------------------------------------------------------
+// Document preview panel — rendered HTML mock of the generated document
+// ---------------------------------------------------------------------------
+
+function dpfRow(label, value) {
+  return `<div class="dpf-row"><div class="dpf-label">${escapeHtml(label)}</div><div class="dpf-value">${escapeHtml(String(value ?? "—"))}</div></div>`;
+}
+
+function sigRow(role, name = "") {
+  return `
+    <div class="dpf-sig">
+      <div class="dpf-sig-line"></div>
+      <div class="dpf-sig-label">${escapeHtml(role)}${name ? " — " + escapeHtml(name) : ""}</div>
+    </div>
+  `;
+}
+
+function generateDownloadText(doc, template, job, eq) {
+  const lines = [
+    `VIVA MEDICAL SERVICE IS — MOCK DOCUMENT`,
+    `Generated: ${new Date().toLocaleString("lt-LT")}`,
+    `Template: ${template?.name || ""}  |  Format: ${(state.documentOutputFormat || "pdf").toUpperCase()}`,
+    ``,
+    `Document No: ${doc?.id || ""}`,
+    `Date: ${new Date().toISOString().slice(0, 10)}`,
+    `Type: ${doc?.type || ""}`,
+    `Job No: ${doc?.jobId || ""}`,
+    `Customer: ${doc?.customer || ""}`,
+    `Equipment: ${job?.equipment || eq?.name || ""}`,
+    `Serial No: ${job?.serial || eq?.serial || ""}`,
+    `Owner: ${doc?.owner || ""}`,
+    ``,
+    `[END OF MOCK]`
+  ];
+  return "data:text/plain;charset=utf-8," + encodeURIComponent(lines.join("\n"));
+}
+
+function docPreviewPanel(doc, template, preview) {
+  const job  = jobs.find((j) => j.id === doc?.jobId);
+  const cust = customers.find((c) => c.name === doc?.customer);
+  const eq   = equipment.find((e) => e.name === (job?.equipment || ""));
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const fmt  = (preview?.format || "pdf").toUpperCase();
+  const body = docPreviewBody(template?.id, doc, job, cust, eq, dateStr);
+  const dlHref = generateDownloadText(doc, template, job, eq);
+
+  return `
+    <div class="doc-preview">
+      <div class="doc-preview-head">
+        <div class="doc-preview-brand">VIVA MEDICAL</div>
+        <div class="doc-preview-type">${escapeHtml(template?.name || doc?.type || "Document")}</div>
+        <div class="doc-preview-meta-row">
+          <span>No: <strong>${escapeHtml(doc?.id || "")}</strong></span>
+          <span>Date: <strong>${escapeHtml(dateStr)}</strong></span>
+          <span>Format: <strong>${escapeHtml(fmt)}</strong></span>
+        </div>
+      </div>
+      <div class="doc-preview-body">
+        ${body}
+      </div>
+      <div class="doc-preview-actions">
+        <a class="btn primary compact" href="${dlHref}" download="${escapeHtml((doc?.id || "doc") + "-mock.txt")}">Download mock (.txt)</a>
+        <button class="btn ghost compact" type="button" data-reset-preview>Reset</button>
+      </div>
+    </div>
+  `;
+}
+
+function docPreviewBody(templateId, doc, job, cust, eq, dateStr) {
+  const serial   = job?.serial   || eq?.serial   || "—";
+  const eqName   = job?.equipment || eq?.name    || "—";
+  const custName = doc?.customer || cust?.name   || "—";
+  const custAddr = cust?.address || "—";
+  const owner    = doc?.owner    || "—";
+  const jobId    = doc?.jobId    || "—";
+
+  if (templateId === "tpl-service-act") {
+    return `
+      <div class="dpf-section">General</div>
+      ${dpfRow("Document No", doc?.id)}
+      ${dpfRow("Job No", jobId)}
+      ${dpfRow("Date", dateStr)}
+      ${dpfRow("Customer", custName)}
+      ${dpfRow("Address", custAddr)}
+      <div class="dpf-section">Equipment</div>
+      ${dpfRow("Equipment", eqName)}
+      ${dpfRow("Serial No", serial)}
+      ${dpfRow("Fault reported", job?.stage || "—")}
+      <div class="dpf-section">Work performed</div>
+      ${dpfRow("Diagnosis", "Equipment inspected; fault identified and corrected.")}
+      ${dpfRow("Parts used", "Per attached parts list.")}
+      ${dpfRow("Duration (h)", "—")}
+      ${dpfRow("Engineer", owner)}
+      <div class="dpf-section">Signatures</div>
+      <div class="dpf-sig-row">
+        ${sigRow("Service engineer", owner)}
+        ${sigRow("Customer representative")}
+      </div>
+    `;
+  }
+
+  if (templateId === "tpl-diagnostic") {
+    return `
+      <div class="dpf-section">Diagnostic Report</div>
+      ${dpfRow("Document No", doc?.id)}
+      ${dpfRow("Job No", jobId)}
+      ${dpfRow("Date", dateStr)}
+      ${dpfRow("Customer", custName)}
+      <div class="dpf-section">Equipment</div>
+      ${dpfRow("Equipment", eqName)}
+      ${dpfRow("Serial No", serial)}
+      <div class="dpf-section">Findings</div>
+      ${dpfRow("Symptom", "Reported fault as described in intake.")}
+      ${dpfRow("Root cause", "To be completed by engineer.")}
+      ${dpfRow("Recommended action", "—")}
+      ${dpfRow("Engineer", owner)}
+      <div class="dpf-section">Signature</div>
+      <div class="dpf-sig-row">
+        ${sigRow("Diagnosing engineer", owner)}
+      </div>
+    `;
+  }
+
+  if (templateId === "tpl-quotation") {
+    const qte = quotations.find((q) => q.id === doc?.quotationId) || quotations[0];
+    return `
+      <div class="dpf-section">Quotation</div>
+      ${dpfRow("Document No", doc?.id)}
+      ${dpfRow("Date", dateStr)}
+      ${dpfRow("Customer", custName)}
+      ${dpfRow("Contact", cust?.contact || "—")}
+      <div class="dpf-section">Scope</div>
+      ${dpfRow("Equipment", eqName)}
+      ${dpfRow("Type", qte?.type || "—")}
+      ${dpfRow("Description", qte?.notes || "As per service agreement.")}
+      <div class="dpf-section">Pricing</div>
+      ${dpfRow("Amount", qte ? `${qte.amount.toLocaleString("lt-LT")} ${qte.currency}` : "—")}
+      ${dpfRow("Valid until", qte?.due || "—")}
+      ${dpfRow("Prepared by", owner)}
+      <div class="dpf-section">Acceptance</div>
+      <div class="dpf-sig-row">
+        ${sigRow("Sales representative", owner)}
+        ${sigRow("Customer authorisation")}
+      </div>
+    `;
+  }
+
+  if (templateId === "tpl-acceptance") {
+    return `
+      <div class="dpf-section">Acceptance Report</div>
+      ${dpfRow("Document No", doc?.id)}
+      ${dpfRow("Job No", jobId)}
+      ${dpfRow("Date", dateStr)}
+      ${dpfRow("Customer", custName)}
+      ${dpfRow("Address", custAddr)}
+      <div class="dpf-section">Installed Equipment</div>
+      ${dpfRow("Equipment", eqName)}
+      ${dpfRow("Serial No", serial)}
+      ${dpfRow("Installation date", dateStr)}
+      ${dpfRow("Installer", owner)}
+      <div class="dpf-section">Acceptance</div>
+      ${dpfRow("Acceptance criteria met", "Yes")}
+      ${dpfRow("Training provided", "Yes")}
+      <div class="dpf-sig-row">
+        ${sigRow("Installation engineer", owner)}
+        ${sigRow("Customer representative")}
+        ${sigRow("Hospital management")}
+      </div>
+    `;
+  }
+
+  if (templateId === "tpl-vendor-return") {
+    const pr = partsRequests.find((p) => p.jobId === jobId);
+    return `
+      <div class="dpf-section">Vendor Return Note</div>
+      ${dpfRow("Document No", doc?.id)}
+      ${dpfRow("Date", dateStr)}
+      ${dpfRow("Job No", jobId)}
+      ${dpfRow("Customer", custName)}
+      <div class="dpf-section">Part Details</div>
+      ${dpfRow("Part No", pr?.partNumber || "—")}
+      ${dpfRow("Description", pr?.description || "—")}
+      ${dpfRow("Reason", "Defective part returned to vendor.")}
+      ${dpfRow("Authorised by", owner)}
+      <div class="dpf-sig-row">
+        ${sigRow("Service manager", owner)}
+      </div>
+    `;
+  }
+
+  // Fallback
+  return `
+    <div class="dpf-section">Document fields</div>
+    ${dpfRow("Document No", doc?.id)}
+    ${dpfRow("Date", dateStr)}
+    ${dpfRow("Customer", custName)}
+    ${dpfRow("Equipment", eqName)}
+    ${dpfRow("Owner", owner)}
   `;
 }
 

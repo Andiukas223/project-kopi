@@ -44,6 +44,7 @@ export function bindDocumentPipeline(renderApp) {
     if (templateButton) {
       state.selectedTemplateId = templateButton.dataset.templatePick;
       state.generationStatus = "Ready";
+      state.generatedDocPreview = null;
       renderAppCallback();
       return;
     }
@@ -51,6 +52,15 @@ export function bindDocumentPipeline(renderApp) {
     const generateButton = event.target.closest("[data-generate-document]");
     if (generateButton) {
       generateMockDocument(generateButton.dataset.generateDocument);
+      return;
+    }
+
+    const resetPreview = event.target.closest("[data-reset-preview]");
+    if (resetPreview) {
+      state.generatedDocPreview = null;
+      state.generationStatus = "Ready";
+      renderAppCallback();
+      return;
     }
   });
 
@@ -64,6 +74,7 @@ export function bindDocumentPipeline(renderApp) {
     if (event.target.matches("[data-template-select]")) {
       state.selectedTemplateId = event.target.value;
       state.generationStatus = "Ready";
+      state.generatedDocPreview = null;
       renderAppCallback();
       return;
     }
@@ -71,6 +82,7 @@ export function bindDocumentPipeline(renderApp) {
     if (event.target.matches("[data-output-format]")) {
       state.documentOutputFormat = event.target.value;
       state.generationStatus = "Ready";
+      state.generatedDocPreview = null;
       renderAppCallback();
     }
   });
@@ -80,6 +92,7 @@ function selectDocument(id) {
   if (!documents.some((doc) => doc.id === id)) return;
   state.selectedDocumentId = id;
   state.generationStatus = "Ready";
+  state.generatedDocPreview = null;
   renderAppCallback();
 }
 
@@ -95,6 +108,7 @@ function advanceDocument(id) {
   doc.status = statusByStage[nextStage];
   state.selectedDocumentId = doc.id;
   state.generationStatus = "Ready";
+  state.generatedDocPreview = null;
   renderAppCallback();
 }
 
@@ -104,6 +118,7 @@ function reviewNextDocument() {
   state.selectedDocumentId = nextDoc.id;
   state.documentFilter = "All";
   state.generationStatus = "Ready";
+  state.generatedDocPreview = null;
   renderAppCallback();
 }
 
@@ -114,5 +129,11 @@ function generateMockDocument(id) {
 
   state.selectedDocumentId = doc.id;
   state.generationStatus = `${state.documentOutputFormat.toUpperCase()} mock ready`;
+  state.generatedDocPreview = {
+    docId:       doc.id,
+    templateId:  template.id,
+    format:      state.documentOutputFormat,
+    generatedAt: new Date().toISOString()
+  };
   renderAppCallback();
 }
