@@ -629,9 +629,9 @@ function serviceFlow() {
 function templatePanel(doc = selectedDocument()) {
   const template = templates.find((tpl) => tpl.id === state.selectedTemplateId) || templates[0];
 
-  // Check if a preview has been generated for the current doc+template combination
+  // Show the preview when one has been generated (state is cleared on any doc/template/format change)
   const p = state.generatedDocPreview;
-  const previewActive = p && p.docId === doc?.id && p.templateId === template?.id;
+  const previewActive = p !== null && p !== undefined;
 
   return `
     <section class="panel">
