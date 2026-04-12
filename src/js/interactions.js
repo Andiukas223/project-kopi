@@ -1,7 +1,7 @@
 // Interactions for Admin, Equipment, Customers, and Parts pages.
 // Bound once on app init — delegates via data attributes on the document.
 
-import { customers, equipment, jobs, partsRequests, users } from "./data.js";
+import { customers, documents, equipment, jobs, partsRequests, quotations, users } from "./data.js";
 import { renderSupportPortalPreview } from "./render.js";
 import { state } from "./state.js";
 
@@ -151,6 +151,57 @@ function handleClick(event) {
     return;
   }
 
+  // Sales — select quotation row
+  const qteRow = event.target.closest("[data-qte-row]");
+  if (qteRow) {
+    state.selectedQuotationId = qteRow.dataset.qteRow;
+    state.salesTab = "offer";
+    renderAppCallback();
+    return;
+  }
+
+  // Sales — switch detail tab
+  const salesTab = event.target.closest("[data-sales-tab]");
+  if (salesTab) {
+    state.salesTab = salesTab.dataset.salesTab;
+    renderAppCallback();
+    return;
+  }
+
+  // Sales — mark sent to customer
+  const qteSend = event.target.closest("[data-qte-send]");
+  if (qteSend) {
+    updateQuotationStatus(qteSend.dataset.qteSend, "Sent");
+    return;
+  }
+
+  // Sales — mark customer approved
+  const qteApprove = event.target.closest("[data-qte-approve]");
+  if (qteApprove) {
+    const q = quotations.find((x) => x.id === qteApprove.dataset.qteApprove);
+    if (q) {
+      q.status = "Approved";
+      q.approvalDate = new Date().toISOString().slice(0, 10);
+      state.salesTab = "handoff";
+    }
+    renderAppCallback();
+    return;
+  }
+
+  // Sales — mark rejected
+  const qteReject = event.target.closest("[data-qte-reject]");
+  if (qteReject) {
+    updateQuotationStatus(qteReject.dataset.qteReject, "Rejected");
+    return;
+  }
+
+  // Sales — hand off to service (creates new job)
+  const qteHandoff = event.target.closest("[data-qte-handoff]");
+  if (qteHandoff) {
+    handoffToService(qteHandoff.dataset.qteHandoff);
+    return;
+  }
+
   // Calendar — previous month
   if (event.target.closest("[data-cal-prev]")) {
     if (state.calendarMonth === 0) {
@@ -295,5 +346,53 @@ function specifyDelivery(prId, method) {
   }
   pr.status = method === "Pick up at warehouse" ? "Delivered" : pr.status;
   state.selectedPartsRequestId = prId;
+  renderAppCallback();
+}
+
+// ---------------------------------------------------------------------------
+// Sales workflow helpers
+// ---------------------------------------------------------------------------
+function updateQuotationStatus(qteId, newStatus) {
+  const q = quotations.find((x) => x.id === qteId);
+  if (!q) return;
+  q.status = newStatus;
+  renderAppCallback();
+}
+
+function handoffToService(qteId) {
+  const q = quotations.find((x) => x.id === qteId);
+  if (!q || q.status !== "Approved") return;
+
+  const jobId = `VM-SV-${1024 + jobs.length}`;
+  jobs.unshift({
+    id:             jobId,
+    customer:       q.customer,
+    equipment:      q.equipment,
+    serial:         "Pending",
+    owner:          "Unassigned",
+    priority:       "Normal",
+    stage:          q.type === "Installation" ? "New installation" : "New request",
+    status:         "Open",
+    due:            q.due,
+    documentStatus: "—",
+    source:         `Quotation ${q.id}`
+  });
+
+  documents.unshift({
+    id:           `DOC-${3108 + documents.length}`,
+    type:         q.type === "PM Contract" ? "PM contract"
+                : q.type === "Installation" ? "Acceptance report"
+                : "Service act",
+    jobId,
+    customer:     q.customer,
+    owner:        "Service",
+    status:       "Draft",
+    due:          q.due,
+    pipelineStep: "Draft"
+  });
+
+  q.status         = "Handed off";
+  q.handedOffJobId = jobId;
+  state.salesTab   = "handoff";
   renderAppCallback();
 }

@@ -8,6 +8,17 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 
 ### Added
 
+- Implementuotas Sales modulis: split layout su quotation lentele (kaire) ir detale panele (desine). Detale panele turi 4 tabsus — Offer (kliento/irenginio/sumos informacija), Contract/Warranty (PM Contract ir Installation tipams: garantijos datos, PM vizitai/metus, apimtis), Approval (mygtuka "Mark customer approved" / "Mark rejected", patvirtinimo data), Handoff (mygtukass "Send to Service team" — sukuria nauja service job ir dokumenta, perjungia statusa i "Handed off"). Stat korteliai: Total, Awaiting approval, Approved, Handed off.
+- Prideta quotations duomenu struktura i data.js (4 demo irasai: Repair/PM Contract/Installation/Handed off statusai).
+- Papildyta state.js: selectedQuotationId, salesTab.
+- Prideti Sales interaksijų handlers i interactions.js: qte-row (pasirinkimas), sales-tab (tab perjungimas), qte-send (Draft → Sent), qte-approve (→ Approved + data), qte-reject (→ Rejected), qte-handoff (sukuria job + doc, → Handed off).
+- Prideti trukstami chip CSS klasiai: .chip.sent, .chip.awaiting-approval, .chip.handed-off, .chip.new-installation, .chip.new-request.
+- Prideta role-filtruota Command Center: kiekviena is 9 roliu mato savo stat korteles ir focus panel (service — savo jobus, svcmgr — parts approval queue, sales/finance — savo dokumentu eile, logistics/warehouse — parts queue, office/manager — visi jobus, admin — pipeline board).
+- Service puslapis: service role mato tik savo jobus; svcmgr/admin gauna papildoma parts approval paneli.
+- Documents puslapis: numatytasis dokumentu filtras nustatomas pagal role (service/svcmgr → Service, sales → Sales, finance → Finance).
+- pageHeader: "New service job" mygtukas slepiamas sales/finance/logistics/warehouse/manager rolemis.
+- Sidebar badges: dinamiškai atnaujinamai pagal role po kiekvieno render (vietoj hardkodinto HTML).
+
 - Implementuotas pilnas Calendar puslapis: mnesio grid (Mon-Sun, 7 stulpeliai), spauda navigacija (Prev/Next mnesiu), spalvoti ivykiai (ev-job, ev-pm, ev-sales, ev-logistics, ev-contract), siandien pazymetas apvaliu zalio fono numeriu; PM schedule lentele zemiau grid'o.
 - Service puslapyje pridetas PM submodule skyrius: automatiskai generuojama PM vizitu lentele is kontraktu (computePmSchedule), su statuso chipais ir datos/vizito numeriu.
 - Reports puslapis papildytas realiais duomenimis: 4 stat korteliai (open jobs, overdue docs, parts pending, PM completion), Jobs by stage horizontalios bar diagramos, Document pipeline health, Contract utilisation barsai su procentais ir remaining balance ispejimais.

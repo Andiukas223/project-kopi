@@ -790,8 +790,9 @@
   width: 15px;
 }
 
-/* Parts actions row */
-.parts-actions {
+/* Parts and Sales action rows */
+.parts-actions,
+.sales-actions {
   border-top: 1px solid var(--border);
   display: flex;
   gap: 8px;

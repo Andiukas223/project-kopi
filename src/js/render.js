@@ -1,6 +1,6 @@
 import {
   allPermissions, calendarEvents, contracts, customers, documents, equipment,
-  jobs, partsRequests, pipelineStages, roles, templates, users
+  jobs, partsRequests, pipelineStages, quotations, roles, templates, users
 } from "./data.js";
 import { escapeHtml } from "./dom.js";
 import { state } from "./state.js";
@@ -1049,19 +1049,191 @@ function servicePage() {
   `;
 }
 
+// ---------------------------------------------------------------------------
+// Sales page helpers
+// ---------------------------------------------------------------------------
+function selectedQuotation() {
+  return quotations.find((q) => q.id === state.selectedQuotationId) || quotations[0];
+}
+
+function salesQuotationsTable() {
+  return `
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>ID</th><th>Customer</th><th>Type</th>
+          <th class="num">Amount</th><th>Status</th><th>Due</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${quotations.map((q) => `
+          <tr class="${q.id === state.selectedQuotationId ? "selected" : ""}"
+              data-qte-row="${escapeHtml(q.id)}" style="cursor:pointer">
+            <td class="mono">${escapeHtml(q.id)}</td>
+            <td>${escapeHtml(q.customer)}</td>
+            <td>${escapeHtml(q.type)}</td>
+            <td class="num">${q.amount.toLocaleString()} ${q.currency}</td>
+            <td>${statusChip(q.status)}</td>
+            <td class="mono">${escapeHtml(q.due)}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function salesDetailPanel(qte) {
+  const tabs       = ["offer", "contract", "approval", "handoff"];
+  const tabLabels  = { offer: "Offer", contract: "Contract / Warranty", approval: "Approval", handoff: "Handoff" };
+  const activeTab  = state.salesTab || "offer";
+
+  const tabBar = tabs.map((t) => `
+    <button class="eq-tab ${activeTab === t ? "active" : ""}"
+            type="button" data-sales-tab="${t}">${tabLabels[t]}</button>
+  `).join("");
+
+  const content = activeTab === "offer"    ? salesOfferTab(qte)
+                : activeTab === "contract" ? salesContractTab(qte)
+                : activeTab === "approval" ? salesApprovalTab(qte)
+                :                            salesHandoffTab(qte);
+
+  return `
+    <div class="section-heading">
+      <div class="section-title">${escapeHtml(qte.id)} — ${escapeHtml(qte.customer)}</div>
+      ${statusChip(qte.status)}
+    </div>
+    <div class="eq-tab-bar">${tabBar}</div>
+    <div class="eq-tab-content">${content}</div>
+  `;
+}
+
+function salesOfferTab(qte) {
+  return `
+    <div class="field-stack">
+      <div class="field"><div class="field-label">Customer</div><div class="field-value">${escapeHtml(qte.customer)}</div></div>
+      <div class="field"><div class="field-label">Equipment</div><div class="field-value">${escapeHtml(qte.equipment)}</div></div>
+      <div class="field"><div class="field-label">Offer type</div><div class="field-value">${escapeHtml(qte.type)}</div></div>
+      <div class="field"><div class="field-label">Amount</div><div class="field-value mono">${qte.amount.toLocaleString()} ${qte.currency}</div></div>
+      <div class="field"><div class="field-label">Owner</div><div class="field-value">${escapeHtml(qte.owner)}</div></div>
+      <div class="field"><div class="field-label">Created</div><div class="field-value mono">${escapeHtml(qte.created)}</div></div>
+      <div class="field"><div class="field-label">Due</div><div class="field-value mono">${escapeHtml(qte.due)}</div></div>
+      <div class="field full"><div class="field-label">Notes</div><div class="field-value">${escapeHtml(qte.notes)}</div></div>
+    </div>
+    ${qte.status === "Draft" ? `
+      <div class="eq-footer">
+        <button class="btn primary" type="button" data-qte-send="${escapeHtml(qte.id)}">
+          Mark as sent to customer
+        </button>
+      </div>
+    ` : ""}
+  `;
+}
+
+function salesContractTab(qte) {
+  if (!["PM Contract", "Installation"].includes(qte.type)) {
+    return `<div class="modal-placeholder">Contract indexing applies to PM Contract and Installation offer types only.</div>`;
+  }
+  return `
+    <div class="field-stack">
+      <div class="field"><div class="field-label">Linked contract</div><div class="field-value mono">${escapeHtml(qte.contractId || "Not yet indexed")}</div></div>
+      <div class="field"><div class="field-label">Warranty start</div><div class="field-value mono">${escapeHtml(qte.warrantyStart || "—")}</div></div>
+      <div class="field"><div class="field-label">Warranty end</div><div class="field-value mono">${escapeHtml(qte.warrantyEnd || "—")}</div></div>
+      <div class="field"><div class="field-label">PM visits / year</div><div class="field-value mono">${qte.pmPerYear || "—"}</div></div>
+      <div class="field full"><div class="field-label">Contract scope</div><div class="field-value">${escapeHtml(qte.contractScope || "—")}</div></div>
+    </div>
+    <div class="info-box" style="margin-top:12px">
+      <div class="info-title">Contract ownership</div>
+      <div class="info-body">After handoff to Service, contract ownership transfers to Admin. Sales cannot edit the contract after submission. Admin can restore it to edit mode from the Admin module.</div>
+    </div>
+  `;
+}
+
+function salesApprovalTab(qte) {
+  const canDecide = ["Sent", "Awaiting approval"].includes(qte.status);
+  return `
+    <div class="field-stack">
+      <div class="field"><div class="field-label">Approval contact</div><div class="field-value">${escapeHtml(qte.approvalContact)}</div></div>
+      <div class="field"><div class="field-label">Approval date</div><div class="field-value mono">${escapeHtml(qte.approvalDate || "Pending")}</div></div>
+      <div class="field"><div class="field-label">Current status</div><div class="field-value">${statusChip(qte.status)}</div></div>
+    </div>
+    ${canDecide ? `
+      <div class="sales-actions">
+        <button class="btn primary" type="button" data-qte-approve="${escapeHtml(qte.id)}">Mark customer approved</button>
+        <button class="btn ghost"   type="button" data-qte-reject="${escapeHtml(qte.id)}">Mark rejected</button>
+      </div>
+    ` : ""}
+    ${qte.status === "Approved" ? `
+      <div class="info-box" style="margin-top:12px">
+        <div class="info-title">Approved on ${escapeHtml(qte.approvalDate || "—")}</div>
+        <div class="info-body">Go to the Handoff tab to transfer this job to the Service team.</div>
+      </div>
+    ` : ""}
+    ${qte.status === "Rejected" ? `
+      <div class="info-box warn" style="margin-top:12px">
+        <div class="info-title">Rejected by customer</div>
+        <div class="info-body">Revise the offer on the Offer tab and re-send to customer.</div>
+      </div>
+    ` : ""}
+  `;
+}
+
+function salesHandoffTab(qte) {
+  if (qte.status === "Handed off") {
+    return `
+      <div class="info-box" style="margin-top:8px">
+        <div class="info-title">Handed off to Service</div>
+        <div class="info-body">Resulting job: <span class="mono">${escapeHtml(qte.handedOffJobId || "—")}</span>. The Service team now owns this case. Contract ownership has transferred to Admin.</div>
+      </div>
+    `;
+  }
+  if (qte.status !== "Approved") {
+    return `<div class="modal-placeholder">Customer approval is required before handoff. Go to the Approval tab.</div>`;
+  }
+  return `
+    <div class="field-stack">
+      <div class="field"><div class="field-label">Customer</div><div class="field-value">${escapeHtml(qte.customer)}</div></div>
+      <div class="field"><div class="field-label">Equipment</div><div class="field-value">${escapeHtml(qte.equipment)}</div></div>
+      <div class="field"><div class="field-label">Offer amount</div><div class="field-value mono">${qte.amount.toLocaleString()} ${qte.currency}</div></div>
+    </div>
+    <div class="sales-actions">
+      <button class="btn primary" type="button" data-qte-handoff="${escapeHtml(qte.id)}">Send to Service team</button>
+    </div>
+    <div class="info-box" style="margin-top:12px">
+      <div class="info-title">What happens on handoff</div>
+      <div class="info-body">A new service job is created automatically. The offer status changes to "Handed off". Contract ownership transfers to Admin. This action cannot be undone.</div>
+    </div>
+  `;
+}
+
 function salesPage() {
-  const salesDocs = documents.filter((doc) => doc.owner === "Sales" || doc.type === "Quotation");
+  const qte          = selectedQuotation();
+  const awaitingCount = quotations.filter((q) => q.status === "Awaiting approval").length;
+  const approvedCount = quotations.filter((q) => q.status === "Approved").length;
+  const handedCount   = quotations.filter((q) => q.status === "Handed off").length;
+
   return `
     ${pageHeader("sales")}
     <div class="page-content">
-      <div class="tile-grid">
-        ${moduleTile("QTE", "Quotations",         "1 in review")}
-        ${moduleTile("APR", "Customer approvals", "3 pending")}
-        ${moduleTile("HND", "Service handoff",    "2 ready")}
-        ${moduleTile("INV", "Invoices",           "Finance queue")}
-        ${moduleTile("CTR", "Contracts",          "Upload and index")}
+      <div class="stat-grid">
+        ${statCard("Total quotations",    quotations.length, "In system",                 "info")}
+        ${statCard("Awaiting approval",   awaitingCount,     "Customer response needed",  awaitingCount > 0 ? "warn" : "")}
+        ${statCard("Approved",            approvedCount,     "Ready to hand off",         approvedCount > 0 ? "ok"   : "")}
+        ${statCard("Handed off",          handedCount,       "Transferred to Service",    "")}
       </div>
-      ${documentsTable(salesDocs)}
+
+      <section class="split-layout">
+        <div class="panel split-left">
+          <div class="section-heading">
+            <div class="section-title">Quotations (${quotations.length})</div>
+            <button class="btn primary compact" type="button">New quotation</button>
+          </div>
+          ${salesQuotationsTable()}
+        </div>
+        <div class="panel split-right">
+          ${qte ? salesDetailPanel(qte) : `<div class="modal-placeholder">Select a quotation to view details.</div>`}
+        </div>
+      </section>
+
       ${devSpecPanel("sales")}
     </div>
   `;

@@ -407,6 +407,106 @@ export const contracts = [
 ];
 
 // ---------------------------------------------------------------------------
+// Sales quotations / commercial offers.
+// Pipeline: Draft → Sent → Awaiting approval → Approved → Handed off
+//           (or Rejected at any point after Sent)
+// ---------------------------------------------------------------------------
+export const quotations = [
+  {
+    id: "QTE-501",
+    customer: "Baltic Cardio Center",
+    customerId: "CUST-02",
+    equipment: "COR-KNOT Device",
+    equipmentId: "EQ-504",
+    type: "Repair",
+    amount: 4200,
+    currency: "EUR",
+    status: "Awaiting approval",
+    created: "2026-04-08",
+    due: "2026-04-18",
+    owner: "V. Klimaite",
+    notes: "Parts and labor for COR-KNOT calibration and seal replacement. Site visit included.",
+    approvalDate: null,
+    approvalContact: "Rima Vaitkiene",
+    contractScope: "",
+    warrantyStart: "",
+    warrantyEnd: "",
+    pmPerYear: 0,
+    contractId: null,
+    handedOffJobId: null
+  },
+  {
+    id: "QTE-502",
+    customer: "Vilnius Clinical Hospital",
+    customerId: "CUST-01",
+    equipment: "ARIETTA 850 DeepInsight",
+    equipmentId: "EQ-501",
+    type: "PM Contract",
+    amount: 18500,
+    currency: "EUR",
+    status: "Draft",
+    created: "2026-04-10",
+    due: "2026-04-25",
+    owner: "V. Klimaite",
+    notes: "Annual PM contract renewal. 2 visits per year, parts not included above threshold.",
+    approvalDate: null,
+    approvalContact: "Jonas Kazlauskas",
+    contractScope: "Preventive maintenance 2×/year. Emergency call-outs billed separately.",
+    warrantyStart: "2026-05-01",
+    warrantyEnd: "2027-04-30",
+    pmPerYear: 2,
+    contractId: null,
+    handedOffJobId: null
+  },
+  {
+    id: "QTE-503",
+    customer: "Northway Clinic",
+    customerId: "CUST-04",
+    equipment: "ARJO Maxi Move Patient Lift",
+    equipmentId: "EQ-503",
+    type: "Installation",
+    amount: 32000,
+    currency: "EUR",
+    status: "Approved",
+    created: "2026-03-20",
+    due: "2026-04-30",
+    owner: "V. Klimaite",
+    notes: "New unit installation including acceptance protocol and warranty registration.",
+    approvalDate: "2026-04-02",
+    approvalContact: "Marta Stonkiene",
+    contractScope: "Full installation and commissioning. Acceptance act required before warranty start.",
+    warrantyStart: "2026-05-15",
+    warrantyEnd: "2028-05-14",
+    pmPerYear: 0,
+    contractId: "CTR-103",
+    handedOffJobId: null
+  },
+  {
+    id: "QTE-504",
+    customer: "Kaunas Diagnostics",
+    customerId: "CUST-03",
+    equipment: "WASSENBURG WD440 Endoscope Washer",
+    equipmentId: "EQ-502",
+    type: "Repair",
+    amount: 1850,
+    currency: "EUR",
+    status: "Handed off",
+    created: "2026-03-15",
+    due: "2026-03-28",
+    owner: "V. Klimaite",
+    notes: "Valve assembly replacement. Parts under partial warranty coverage.",
+    approvalDate: "2026-03-22",
+    approvalContact: "Arturas Jonaitis",
+    contractScope: "",
+    warrantyStart: "",
+    warrantyEnd: "",
+    pmPerYear: 0,
+    contractId: null,
+    handedOffJobId: "VM-SV-1026"
+  }
+];
+
+// ---------------------------------------------------------------------------
 // Parts requests. Flows from Engineer → Service Manager approval →
 // Logistics/Warehouse fulfillment → delivery decision → repair proceeds.
 // ---------------------------------------------------------------------------

@@ -353,6 +353,24 @@
   color: var(--red);
 }
 
+/* Quotation-specific statuses */
+.chip.sent {
+  background: var(--blue-lt);
+  color: var(--blue);
+}
+
+.chip.awaiting-approval,
+.chip.new-installation,
+.chip.new-request {
+  background: var(--amber-lt);
+  color: var(--amber);
+}
+
+.chip.handed-off {
+  background: var(--green-lt);
+  color: var(--green);
+}
+
 .due-cell {
   align-items: center;
   display: inline-flex;

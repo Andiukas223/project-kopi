@@ -31,7 +31,11 @@ export const state = {
   calendarMonth: 3,   // 0-indexed: 3 = April
 
   // PM submodule
-  selectedPmJobId: null
+  selectedPmJobId: null,
+
+  // Sales module
+  selectedQuotationId: "QTE-501",
+  salesTab: "offer"     // offer | contract | approval | handoff
 };
 
 export function setPage(page) {
