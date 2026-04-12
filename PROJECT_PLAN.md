@@ -334,6 +334,70 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 
 ---
 
+## 18. Dabartinė būsena (2026-04-12)
+
+### Implementuota ✅
+
+| Modulis / funkcija | Pastabos |
+|---|---|
+| App shell — topbar, sidebar, navigacija | Dinamiški badges pagal rolę |
+| Command Center | 9 rolių filtruoti stat korteliai + focus panel |
+| Service puslapis | Jobs lentelė, PM submodule, svcmgr parts approval |
+| Sales puslapis | Quotation lentelė + 4-tab detalė (Offer/Contract/Approval/Handoff) |
+| Documents puslapis | Pipeline board, filtrai, overdue monitoring, template generation mock su vizualiniu preview + download |
+| Customers puslapis | Lentelė + detalės panel (kontaktai, mini-stat, equipment, contracts) |
+| Equipment puslapis | Lentelė + 4 tabai + Support Portal (Settings/Emails/Web Links + preview modal) |
+| Parts puslapis | Lentelė + stat korteliai + workflow mygtukai (Approve/Reject/Transit/Arrived/Deliver) |
+| Reports puslapis | 4 stat korteliai, Jobs by stage bar chart, Document pipeline health, Contract utilisation |
+| Admin puslapis | User sąrašas + permission grid (checkbox) + role assignment |
+| Calendar puslapis | Mėnesio grid, Prev/Next navigacija, spalvoti events, PM schedule lentelė |
+| Reminders strip | Sidebar spalvoti priminimai (overdue docs, parts, PM visits) |
+| New service job wizard | 8 žingsniai, Pipeline type routing (A/B/C/D), Contract balance info |
+| Role sistema | 9 rolės, role switcher, role-filtruoti vaizdai visuose moduliuose |
+| Document pipeline step | Advance + **Step back** (admin/svcmgr), generatedDocPreview state |
+
+### Laukiantis darbas (backlog) — eilės tvarka
+
+#### 🔴 Prioritetas 1 — Pipeline pilnumas
+
+| # | Užduotis | Aprašas |
+|---|---|---|
+| B-01 | **Document step-back** | Admin/svcmgr gali grąžinti dokumentą vienu žingsniu atgal (pvz. Review → Draft). Mygtukas dokumento detalės panelėje. |
+| B-02 | **Document rejection path** | „Reject" mygtukas Review/Customer/Signature etapuose → `Rejected` statusas su komentaro lauku → grįžta į Draft. |
+| B-03 | **Service job detail panel** | Paspaudus jobs lentelės eilutę — dešinė detalės panelė: job info, stage, susieti dokumentai, susietos parts requests. Dabar tokio panel nėra. |
+| B-04 | **Finance modulis** | Atskiras Finance puslapis: invoice sąrašas (susietas su jobs), payment statusas (Paid/Pending/Cancelled), mock „Generate invoice", „Mark paid"/„Mark cancelled" mygtukai. |
+
+#### 🟡 Prioritetas 2 — Duomenų pilnumas ir UX
+
+| # | Užduotis | Aprašas |
+|---|---|---|
+| B-05 | **Document upload flow** | „Upload document" mygtukas → metadata forma (tipas, job ref, klientas, kas pasirašė, aprašas) → sukuria dokumento įrašą pipeline'e. |
+| B-06 | **Document search** | Pilno teksto paieška + multi-filter chips dokumentų lentelėje (tipas / owner / statusas / klientas / datos intervalas). |
+| B-07 | **PM date reschedule** | PM submodulyje leisti perkelti PM vizito datą (tik to paties mėnesio ribose). Atnaujina kalendarių. |
+| B-08 | **Sales: New quotation** | „New quotation" mygtukas su mini forma (klientas, įrenginys, tipas, suma) → sukuria Draft QTE įrašą. |
+| B-09 | **Vendor return flow** | Iš Parts modulio: „Create vendor return" mygtukas → sukuria return case → Logistics mato jį eilėje. |
+
+#### 🟢 Prioritetas 3 — Lentynos (vėlesniam etapui)
+
+| # | Užduotis | Aprašas |
+|---|---|---|
+| B-10 | **Contract management** | Atskiras sutarties peržiūros/redagavimo vaizdas Sales modulyje. Dabar kontraktai tik rodomi. |
+| B-11 | **Warranty/calendar sync** | Tipo C instaliacijos acceptance akto įkėlimas auto-sinchronizuoja warranty expiry datą į kalendorių. |
+| B-12 | **Parts delivery address registry** | Autofill siūlymai įvedant pristatymo adresą, saugomi iš klientų registro. |
+| B-13 | **localStorage persistence** | Pasirinktinas — išsaugoti state tarp puslapio perkrovimų. |
+| B-14 | **Carbone document service** | Phase 4B: backend container su Node.js + Carbone + LibreOffice, realus DOCX/ODT/PDF generavimas. |
+
+---
+
+### Dokumentavimo taisyklė
+
+**Po kiekvienos implementacijos sesijos privaloma:**
+1. Atnaujinti `CHANGELOG.md` — pridėti prie `[Unreleased]` sekcijos.
+2. Atnaujinti `PROJECT_PLAN.md` § 18 — pažymėti įvykdytus backlog punktus ✅, pridėti naujus jei atsirado.
+3. `git commit` + `git push` — vienas commit per sesijos darbą.
+
+---
+
 ## 9. Kitos sesijos starto instrukcija
 
 Kitas chat turetu:

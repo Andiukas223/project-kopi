@@ -595,55 +595,85 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 
 ## Implementation Phases
 
-### Phase 1: Static Docker Shell
+### Phase 1: Static Docker Shell ✅ DONE
 
-- Create `src/` structure.
-- Create initial HTML shell.
-- Create CSS files.
-- Create Dockerfile and docker-compose.
-- Serve the static app through nginx.
+- `src/` structure created.
+- HTML shell, CSS modules, Dockerfile, docker-compose in place.
+- Served via nginx static container.
 
-### Phase 2: Core Pages
+### Phase 2: Core Pages ✅ DONE
 
-- Add Command Center, Service, Sales, Documents, and Admin pages.
-- Add demo data.
-- Add navigation and reusable render helpers.
+- Command Center, Service, Sales, Documents, Customers, Equipment, Parts, Reports, Admin, Calendar pages.
+- Full demo data in `data.js` (jobs, documents, equipment, customers, contracts, quotations, partsRequests, users, templates, calendarEvents).
+- Navigation, role switcher, dynamic sidebar badges.
 
-### Phase 3: Service Wizard
+### Phase 3: Service Wizard ✅ DONE
 
-- Add new service job modal.
-- Add decision cards, diagnostics/repair duration fields, and checklist.
-- Add final submit behavior to insert demo job.
+- New service job wizard — 8 steps.
+- Pipeline type routing (A/B/C/D) with real-time type detection.
+- Duration entry fields for diagnostics and repair.
+- Contract balance info block for type B.
+- Submit creates in-memory job + document, redirects to Service page.
 
-### Phase 4: Document Pipeline
+### Phase 4: Document Pipeline ✅ DONE
 
-- Add document status transitions.
-- Add document table filtering.
-- Add status monitoring and overdue indicators.
-- Add mock template generation UI for future Carbone integration.
+- `Draft → Review → Customer → Signature → Approved → Archived` stage transitions (Advance button).
+- Document step-back — admin/svcmgr can move one stage backward.
+- Owner filter, `Review next`, overdue monitoring (due-today / customer / signature cards, red row indicator).
+- Template generation mock: select template, output format, click Generate → styled document preview with filled fields, signature lines, `.txt` download, Reset button.
+- Five per-template renderers: Service act, Diagnostic report, Quotation, Acceptance report, Vendor return note.
 
-Current prototype step:
+### Phase 4B: Role-Filtered Views ✅ DONE
 
-- Documents page has owner filtering, selected document details, `Review next`, and `Advance` actions that move demo documents through Draft, Review, Customer, Signature, Approved, and Archived stages in memory.
-- Template generation panel lets the user pick a planned template and output format, then marks the mock output as ready for the selected document.
-- Status monitoring now derives overdue document counts from demo due dates, shows overdue/due-today/customer/signature cards, and marks late table rows with an `Overdue` badge.
+- 9 roles: service, svcmgr, sales, finance, office, logistics, warehouse, manager, admin.
+- Command Center: per-role stat cards + focus panels.
+- Service page: service engineer sees only own jobs; svcmgr sees parts approval queue.
+- Documents page: default filter by role (service/svcmgr → Service, sales → Sales, finance → Finance).
+- Page header: "New service job" button hidden for roles that cannot create jobs.
+- Sales module: full quotation pipeline (Draft → Sent → Awaiting approval → Approved → Handed off / Rejected) with 4-tab detail (Offer / Contract / Approval / Handoff).
 
-### Phase 4B: Carbone Document Service
+---
 
-- Add backend `document-service` container with Node.js, Carbone, LibreOffice, templates volume, and generated output volume.
-- Add document generation API for work acts, diagnostic reports, quotations, acceptance reports, and vendor return notes.
-- Add output format selection for DOCX/ODT/PDF.
-- Add download flow so the user can save generated files and send them through their local mail client.
-- Add document generation audit metadata to the app data model.
+## Current Backlog — Ordered
 
-This phase is intentionally after the static prototype, because Carbone is server-side and should not be bundled into the browser-only UI shell.
+### Priority 1 — Pipeline completeness
 
-### Phase 5: Polish And Verification
+| ID | Task | Description |
+|---|---|---|
+| B-02 | **Document rejection path** | "Reject" button on Review / Customer / Signature stages → `Rejected` status with comment input → back to Draft. Needs inline comment field or modal. |
+| B-03 | **Service job detail panel** | Clicking a row in the jobs table should open a right-side detail panel: job info, current stage, linked documents, linked parts requests. Currently no such panel exists. |
+| B-04 | **Finance module** | New Finance page: invoice list linked to jobs, payment status (Paid / Pending / Cancelled), mock "Generate invoice", "Mark paid" / "Mark cancelled" workflow buttons. |
 
-- Review layout against `design_system.md`.
-- Run Docker locally.
-- If possible, use Playwright screenshot checks.
-- Update `CHANGELOG.md` after each meaningful phase.
+### Priority 2 — Data completeness and UX
+
+| ID | Task | Description |
+|---|---|---|
+| B-05 | **Document upload flow** | "Upload document" button → metadata form (type, job ref, customer, who signed, description) → inserts document record into pipeline. |
+| B-06 | **Document search** | Free-text search + multi-filter chips (type / owner / status / customer / date range) in the documents table. |
+| B-07 | **PM date reschedule** | In PM submodule: allow moving a PM visit date (constraint: same month only). Updates calendar on change. |
+| B-08 | **Sales: New quotation** | "New quotation" button with a mini form (customer, equipment, type, amount) → creates a Draft QTE entry in memory. |
+| B-09 | **Vendor return flow** | From Parts module: "Create vendor return" button → creates return case → visible in Logistics queue. |
+
+### Priority 3 — Later / deferred
+
+| ID | Task | Description |
+|---|---|---|
+| B-10 | **Contract management** | Dedicated contract view/edit screen in Sales module. Contracts currently read-only. |
+| B-11 | **Warranty/calendar sync** | Type C installation: acceptance act upload auto-populates warranty expiry date in calendar. |
+| B-12 | **Parts delivery address registry** | Autofill suggestions when entering delivery address on parts requests (populated from customer registry). |
+| B-13 | **localStorage persistence** | Optional: persist in-memory state across page reloads. |
+| B-14 | **Carbone document service** | Phase 4C: backend container with Node.js + Carbone + LibreOffice; real DOCX/ODT/PDF generation replacing mock. API endpoints: preview, generate, download. Audit trail metadata. |
+
+---
+
+## Documentation Rule
+
+After every implementation session:
+1. Update `CHANGELOG.md` — add entries under `[Unreleased]`.
+2. Update `PROJECT_PLAN.md` section 18 — mark completed backlog items ✅, add new items as they arise.
+3. `git commit` + `git push` — one commit per session's work.
+
+---
 
 ## Definition Of Done For First Prototype
 
@@ -654,4 +684,4 @@ This phase is intentionally after the static prototype, because Carbone is serve
 - Has document pipeline monitoring with demo status changes.
 - Code is split into clear modules.
 - All code comments are in English.
-- `CHANGELOG.md` documents the implemented changes.
+- `CHANGELOG.md` and `PROJECT_PLAN.md` document implemented changes after every session.
