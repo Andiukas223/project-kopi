@@ -362,7 +362,7 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 
 | # | Užduotis | Aprašas |
 |---|---|---|
-| B-01 | **Document step-back** | Admin/svcmgr gali grąžinti dokumentą vienu žingsniu atgal (pvz. Review → Draft). Mygtukas dokumento detalės panelėje. |
+| ~~B-01~~ | ~~**Document step-back**~~ | ✅ Implementuota — Advance + Step back mygtukai dokumentų detalės panelėje. |
 | B-02 | **Document rejection path** | „Reject" mygtukas Review/Customer/Signature etapuose → `Rejected` statusas su komentaro lauku → grįžta į Draft. |
 | B-03 | **Service job detail panel** | Paspaudus jobs lentelės eilutę — dešinė detalės panelė: job info, stage, susieti dokumentai, susietos parts requests. Dabar tokio panel nėra. |
 | B-04 | **Finance modulis** | Atskiras Finance puslapis: invoice sąrašas (susietas su jobs), payment statusas (Paid/Pending/Cancelled), mock „Generate invoice", „Mark paid"/„Mark cancelled" mygtukai. |
