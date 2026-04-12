@@ -669,8 +669,8 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 ## Documentation Rule
 
 After every implementation session:
-1. Update `CHANGELOG.md` — add entries under `[Unreleased]`.
-2. Update `PROJECT_PLAN.md` section 18 — mark completed backlog items ✅, add new items as they arise.
+1. Update `docs/CHANGELOG.md` — add entries under `[Unreleased]`.
+2. Update `docs/PROJECT_PLAN.md` section 18 — mark completed backlog items ✅, add new items as they arise.
 3. `git commit` + `git push` — one commit per session's work.
 
 ---
@@ -684,4 +684,4 @@ After every implementation session:
 - Has document pipeline monitoring with demo status changes.
 - Code is split into clear modules.
 - All code comments are in English.
-- `CHANGELOG.md` and `PROJECT_PLAN.md` document implemented changes after every session.
+- `docs/CHANGELOG.md` and `docs/PROJECT_PLAN.md` document implemented changes after every session.

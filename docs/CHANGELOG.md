@@ -8,7 +8,8 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 
 ### Added
 
-- Atnaujintas `PROJECT_PLAN.md` § 18 su pilna dabartine busena, prioritetuotu backlog'u (B-01–B-14) ir dokumentavimo taisykle. Atnaujintas `WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md`: fazes pazymetos Done/TODO, pridetas isorinis backlog blokas su ta pacia eilės tvarka.
+- `design_system.md`, `PROJECT_PLAN.md`, `CHANGELOG.md` perkelti i `docs/` aplanka. Atnaujintos visos nuorodos `README.md`, `WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md` ir `PROJECT_PLAN.md` failuose. Nuo siol visa dokumentacija randama tik `docs/`.
+- Atnaujintas `docs/PROJECT_PLAN.md` § 18 su pilna dabartine busena, prioritetuotu backlog'u (B-01–B-14) ir dokumentavimo taisykle. Atnaujintas `docs/WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md`: fazes pazymetos Done/TODO, pridetas isorinis backlog blokas su ta pacia eilės tvarka.
 - Pataisyta document generation mock: `previewActive` check supaprastintas i `state.generatedDocPreview !== null` (saugus, nes null nustatomas bet kokiam pakeitimui); ankstesnis dvigubas ID palyginimas buvo per griežtas.
 
 - Implementuotas Document generation mock: po "Generate mock" paspaudimo vietoj JSON payload rodomas stilizuotas dokumentas su brand header, dokumento tipu, meta eilute (No/Data/Formatas), uzpildytais laukais is job/customer/equipment duomenu ir paraso eilutemis. Kiekvienam template (Service act, Diagnostic report, Quotation, Acceptance report, Vendor return note) sava lauku rinkinys. "Download mock (.txt)" parsiuncia data URI tekstini faila. "Reset" mygtukais grizta atgal i JSON payload. `state.generatedDocPreview` objektas nustato ar ir koks preview rodomas; nustatomas i null pakeitus dokumenta, template, formata ar paspaudus Advance/Review Next.

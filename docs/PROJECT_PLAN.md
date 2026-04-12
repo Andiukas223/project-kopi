@@ -392,8 +392,8 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 ### Dokumentavimo taisyklė
 
 **Po kiekvienos implementacijos sesijos privaloma:**
-1. Atnaujinti `CHANGELOG.md` — pridėti prie `[Unreleased]` sekcijos.
-2. Atnaujinti `PROJECT_PLAN.md` § 18 — pažymėti įvykdytus backlog punktus ✅, pridėti naujus jei atsirado.
+1. Atnaujinti `docs/CHANGELOG.md` — pridėti prie `[Unreleased]` sekcijos.
+2. Atnaujinti `docs/PROJECT_PLAN.md` § 18 — pažymėti įvykdytus backlog punktus ✅, pridėti naujus jei atsirado.
 3. `git commit` + `git push` — vienas commit per sesijos darbą.
 
 ---
@@ -402,10 +402,10 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 
 Kitas chat turetu:
 
-1. Perskaityti `README.md`, `PROJECT_PLAN.md`, `CHANGELOG.md` ir `design_system.md`.
+1. Perskaityti `README.md` ir visus failus `docs/` aplanke: `PROJECT_PLAN.md`, `CHANGELOG.md`, `design_system.md`, `WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md`.
 2. Patikrinti `git status`.
-3. Jeigu vartotojas patvirtina MVP krypti, kurti `index.html` pagal `design_system.md`.
-4. Kiekviena reiksminga pakeitima prideti i `CHANGELOG.md`.
+3. Jeigu vartotojas patvirtina MVP krypti, kurti `index.html` pagal `docs/design_system.md`.
+4. Kiekviena reiksminga pakeitima prideti i `docs/CHANGELOG.md` ir atnaujinti `docs/PROJECT_PLAN.md` § 18.
 5. Neliesti logo saltiniu, kol neaisku, kokiu web formatu reikia eksportuoti.
 
 ## 10. Atnaujinta prototipo kryptis 2026-04-12

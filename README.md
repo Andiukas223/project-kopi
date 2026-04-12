@@ -1,24 +1,27 @@
 # Viva Medical Business Management Web App
 
-Vidines verslo valdymo web aplikacijos projektas pagal esama `design_system.md` dokumentacija ir pateiktus logo failus.
+Vidines verslo valdymo web aplikacijos projektas pagal esama `docs/design_system.md` dokumentacija ir pateiktus logo failus.
 
 ## Esama medziaga
 
-- `design_system.md` - pagrindine UI/UX specifikacija: shell struktura, komponentai, wizard modalai, lenteles, proceduru trukmes laukeliai, process flow ir JS architekturos principai.
+- `docs/design_system.md` - pagrindine UI/UX specifikacija: shell struktura, komponentai, wizard modalai, lenteles, proceduru trukmes laukeliai, process flow ir JS architekturos principai.
 - `LOGO.odt` - dokumentas su imontuotu logo paveiksleliu.
 - `viva medical logo.ai` - Adobe Illustrator logo saltinis.
 - `viva medical logo.cdr` - CorelDRAW logo saltinis.
 
 ## Dabartinis susitarimas
 
-Pirmas etapas yra veikiantis desktop-first vidines sistemos prototipas pagal `design_system.md`, dabar moduliarizuotas i `src/` failus ir paleidziamas per Docker su nginx. Pilnesne backend architektura planuojama velesniame etape, kai bus patvirtinti verslo moduliai, duomenu modeliai ir naudotoju roles.
+Pirmas etapas yra veikiantis desktop-first vidines sistemos prototipas pagal `docs/design_system.md`, dabar moduliarizuotas i `src/` failus ir paleidziamas per Docker su nginx. Pilnesne backend architektura planuojama velesniame etape, kai bus patvirtinti verslo moduliai, duomenu modeliai ir naudotoju roles.
 
 ## Dokumentacija
 
-- `PROJECT_PLAN.md` - detalus kurimo planas, fazes, moduliai, techniniai sprendimai ir atviri klausimai.
-- `CHANGELOG.md` - visi reiksmingi pakeitimai, kad kita sesija galetu greitai perimti konteksta.
-- `docs/VIVAMEDICAL_WEBSITE.md` - `vivamedical.lt` svetaines ziniu baze ir taisykle, kaip ja pildyti per Playwright, kai informacijos truksta.
+Visa dokumentacija yra `docs/` aplanke:
+
+- `docs/PROJECT_PLAN.md` - detalus kurimo planas, fazes, moduliai, techniniai sprendimai, pilnas backlog.
+- `docs/CHANGELOG.md` - visi reiksmingi pakeitimai, kad kita sesija galetu greitai perimti konteksta.
+- `docs/design_system.md` - UI/UX specifikacija.
 - `docs/WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md` - moduliarinio Docker web prototipo planas Viva Medical verslo valdymo sistemai.
+- `docs/VIVAMEDICAL_WEBSITE.md` - `vivamedical.lt` svetaines ziniu baze ir taisykle, kaip ja pildyti per Playwright, kai informacijos truksta.
 
 ## Paleidimas
 
