@@ -21,6 +21,7 @@ Visa dokumentacija yra `docs/` aplanke:
 - `docs/CHANGELOG.md` - visi reiksmingi pakeitimai, kad kita sesija galetu greitai perimti konteksta.
 - `docs/design_system.md` - UI/UX specifikacija.
 - `docs/WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md` - moduliarinio Docker web prototipo planas Viva Medical verslo valdymo sistemai.
+- `docs/VM_WEB_CONTROL.md` - `vm-web-control.cmd` / `.ps1` valdymo įrankio dokumentacija: komandos, Docker konfigūracija, dažnos problemos.
 - `docs/VIVAMEDICAL_WEBSITE.md` - `vivamedical.lt` svetaines ziniu baze ir taisykle, kaip ja pildyti per Playwright, kai informacijos truksta.
 
 ## Paleidimas

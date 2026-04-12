@@ -6,6 +6,10 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 
 ## [Unreleased]
 
+### Added
+
+- Pridėta `docs/VM_WEB_CONTROL.md` — pilna `vm-web-control.cmd` / `.ps1` dokumentacija: paskirtis, visų komandų aprašas, veikimo logika, Docker konfigūracija (Dockerfile + docker-compose.yml), interaktyvus meniu, alternatyva be Docker, dažnos problemos ir sprendimai.
+
 ### Fixed
 
 - `navigation.js`: Service badge filtras naudojo perteklinį hardkodintą vardų sąrašą su AND sąlyga — pakeista į paprastą `j.owner === ownerForRole(r)` patikrinimą. Ankstesnis kodas nesugestų, bet buvo klaidinantis ir potencialiai lauštų pridėjus naujo service inžinieriaus rolę.
