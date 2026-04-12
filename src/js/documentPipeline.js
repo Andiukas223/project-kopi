@@ -84,6 +84,7 @@ export function bindDocumentPipeline(renderApp) {
       state.generationStatus = "Ready";
       state.generatedDocPreview = null;
       renderAppCallback();
+      return;
     }
   });
 }

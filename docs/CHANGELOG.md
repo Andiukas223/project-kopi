@@ -6,6 +6,13 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 
 ## [Unreleased]
 
+### Fixed
+
+- `navigation.js`: Service badge filtras naudojo perteklinį hardkodintą vardų sąrašą su AND sąlyga — pakeista į paprastą `j.owner === ownerForRole(r)` patikrinimą. Ankstesnis kodas nesugestų, bet buvo klaidinantis ir potencialiai lauštų pridėjus naujo service inžinieriaus rolę.
+- `interactions.js` `specifyDelivery`: pristatymo adresas visada grįždavo „Address to be confirmed" nes `equipment.find(eq => eq.serial === pr.partNumber)` niekada nesutapdavo (part number != serial). Pataisyta: `equipment.find(e => e.name === pr.equipment)` → `customers.find(c => c.id === eq?.customerId)`.
+- `render.js` line 1731: `t.toLowerCase().replace(" ", "-")` keisdavo tik pirmą tarpą. Pakeista į `replaceAll` — aktualu support sub-tab ID generavimui.
+- `documentPipeline.js`: trūkstamas `return;` po paskutinio `change` handlerio — pridėtas dėl konsistencijos.
+
 ### Added
 
 - `design_system.md`, `PROJECT_PLAN.md`, `CHANGELOG.md` perkelti i `docs/` aplanka. Atnaujintos visos nuorodos `README.md`, `WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md` ir `PROJECT_PLAN.md` failuose. Nuo siol visa dokumentacija randama tik `docs/`.

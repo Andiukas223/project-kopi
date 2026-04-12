@@ -340,7 +340,8 @@ function specifyDelivery(prId, method) {
   if (!pr) return;
   pr.delivery = method;
   if (method === "Deliver to site") {
-    const cust = customers.find((c) => c.name === equipment.find((eq) => eq.serial === pr.partNumber)?.customer);
+    const eq   = equipment.find((e) => e.name === pr.equipment);
+    const cust = customers.find((c) => c.id === eq?.customerId);
     pr.deliveryAddress = cust?.address || "Address to be confirmed";
     pr.deliveryContact = cust ? `${cust.contact} — ${cust.phone}` : "Contact to be confirmed";
   }

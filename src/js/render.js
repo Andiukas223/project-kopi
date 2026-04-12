@@ -1728,7 +1728,7 @@ function eqSupportTab(eq) {
   return `
     <div class="support-sub-bar">
       ${subTabs.map((t) => {
-        const id = t.toLowerCase().replace(" ", "-");
+        const id = t.toLowerCase().replaceAll(" ", "-");
         return `<button class="support-sub-tab ${state.supportSubTab === id ? "active" : ""}" type="button" data-support-tab="${id}">${t}</button>`;
       }).join("")}
     </div>

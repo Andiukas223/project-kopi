@@ -24,8 +24,9 @@ function updateSidebarBadges() {
   }).length;
 
   // Service badge — open jobs visible to this role
-  const myJobs = r === "service"
-    ? jobs.filter((j) => ["R. Petrauskas", "M. Vaitkus", "A. Jankauske"].includes(j.owner) && j.owner === ownerForRole(r))
+  const ownerName = ownerForRole(r);
+  const myJobs = r === "service" && ownerName
+    ? jobs.filter((j) => j.owner === ownerName)
     : jobs;
   const serviceCount = myJobs.filter((j) => j.status === "Open" || j.status === "Blocked").length;
 
