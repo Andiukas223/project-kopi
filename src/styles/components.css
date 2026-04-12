@@ -1,0 +1,504 @@
+.page-header {
+  align-items: center;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  padding: 17px 24px;
+}
+
+.ph-title {
+  color: var(--dark);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -.3px;
+}
+
+.ph-sub {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 3px;
+}
+
+.action-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  align-items: center;
+  border: 0;
+  border-radius: var(--r);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 6px;
+  padding: 7px 14px;
+}
+
+.btn.primary {
+  background: var(--brand);
+  color: var(--bg-card);
+}
+
+.btn.primary:hover {
+  background: var(--brand-dk);
+}
+
+.btn.dark {
+  background: var(--dark);
+  color: var(--bg-card);
+}
+
+.btn.ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-mid);
+}
+
+.btn.ghost:hover {
+  border-color: var(--border-mid);
+  color: var(--text);
+}
+
+.btn.compact {
+  font-size: 11px;
+  padding: 5px 9px;
+}
+
+.btn:disabled {
+  cursor: default;
+  opacity: .48;
+}
+
+.role-switcher {
+  align-items: center;
+  background: var(--wb);
+  border: 1px solid var(--wb-dark);
+  border-radius: var(--r);
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+}
+
+.role-btn {
+  background: transparent;
+  border: 0;
+  border-radius: var(--r);
+  color: var(--text-mid);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 9px;
+}
+
+.role-btn.active {
+  background: var(--dark);
+  color: var(--bg-card);
+}
+
+.section-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  color: var(--text-mid);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.stat-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh);
+  padding: 16px 18px;
+}
+
+.stat-card.danger {
+  border-top: 3px solid var(--red);
+}
+
+.stat-card.warn {
+  border-top: 3px solid var(--amber);
+}
+
+.stat-card.ok {
+  border-top: 3px solid var(--green);
+}
+
+.stat-card.info {
+  border-top: 3px solid var(--blue);
+}
+
+.stat-label {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .8px;
+  text-transform: uppercase;
+}
+
+.stat-value {
+  color: var(--text);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 30px;
+  font-weight: 800;
+  margin-top: 5px;
+}
+
+.stat-note {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-top: 3px;
+}
+
+.tile-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.module-tile,
+.panel,
+.table-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh);
+}
+
+.module-tile {
+  min-height: 118px;
+  padding: 16px;
+  transition: box-shadow .15s, border-color .15s;
+}
+
+.module-tile:hover,
+.table-card:hover {
+  border-color: var(--border-mid);
+  box-shadow: var(--sh-md);
+}
+
+.tile-code {
+  color: var(--brand);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.tile-name {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.tile-meta {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-top: 5px;
+}
+
+.panel {
+  padding: 16px;
+}
+
+.panel.slim {
+  padding: 12px 16px;
+}
+
+.panel + .panel {
+  margin-top: 12px;
+}
+
+.pipeline {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.pipeline-stage {
+  background: var(--wb);
+  border: 1px solid var(--wb-dark);
+  border-radius: var(--r);
+  padding: 12px;
+}
+
+.pipeline-stage strong {
+  display: block;
+  font-size: 12px;
+}
+
+.pipeline-stage span {
+  color: var(--text-muted);
+  display: block;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+
+.table-card {
+  overflow: hidden;
+}
+
+.table-toolbar {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  justify-content: space-between;
+  padding: 12px 16px;
+}
+
+.data-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.data-table th {
+  background: var(--wb);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .8px;
+  padding: 9px 14px;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.data-table td {
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  padding: 10px 14px;
+}
+
+.data-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.data-table tbody tr:hover {
+  background: var(--wb);
+}
+
+.data-table tbody tr.selected {
+  background: var(--brand-lt);
+}
+
+.data-table tbody tr.overdue {
+  box-shadow: inset 3px 0 0 var(--red);
+}
+
+.table-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.chip {
+  border-radius: 4px;
+  display: inline-block;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+
+.chip.open,
+.chip.draft {
+  background: var(--brand-lt);
+  color: var(--brand-dk);
+}
+
+.chip.pending,
+.chip.review {
+  background: var(--blue-lt);
+  color: var(--blue);
+}
+
+.chip.warn,
+.chip.customer,
+.chip.signature {
+  background: var(--amber-lt);
+  color: var(--amber);
+}
+
+.chip.done,
+.chip.approved,
+.chip.finished,
+.chip.archived {
+  background: var(--green-lt);
+  color: var(--green);
+}
+
+.chip.blocked,
+.chip.rejected {
+  background: var(--red-lt);
+  color: var(--red);
+}
+
+.due-cell {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.due-badge {
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  text-transform: uppercase;
+}
+
+.due-badge.overdue {
+  background: var(--red-lt);
+  color: var(--red);
+}
+
+.due-badge.today {
+  background: var(--amber-lt);
+  color: var(--amber);
+}
+
+/* ---------------------------------------------------------------------------
+   Dev spec panel — development reference block at the bottom of each page.
+   Shows module purpose, roles, pipeline, actions, and planned features.
+   Uses native <details>/<summary> for collapsible behaviour — no JS needed.
+--------------------------------------------------------------------------- */
+.dev-spec {
+  background: #0f1923;
+  border: 1px solid #1e3a4a;
+  border-left: 3px solid #1a6b8a;
+  border-radius: var(--r);
+  margin-top: 24px;
+}
+
+.dev-spec-summary {
+  color: #5bb8d4;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  list-style: none;
+  padding: 10px 14px;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.dev-spec-summary::marker,
+.dev-spec-summary::-webkit-details-marker {
+  display: none;
+}
+
+.dev-spec-summary::before {
+  color: #1a6b8a;
+  content: "▶ ";
+  font-size: 9px;
+}
+
+details[open] .dev-spec-summary::before {
+  content: "▼ ";
+}
+
+.dev-spec-body {
+  border-top: 1px solid #1e3a4a;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+}
+
+.ds-row {
+  border-bottom: 1px solid #141f28;
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 0;
+}
+
+.ds-row:last-child {
+  border-bottom: none;
+}
+
+.ds-label {
+  background: #0b1520;
+  color: #3d7a96;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  padding: 8px 12px;
+  text-transform: uppercase;
+}
+
+.ds-value {
+  color: #8db8cc;
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.6;
+  padding: 8px 14px;
+  white-space: pre-wrap;
+}
+
+.info-box {
+  background: var(--wb);
+  border: 1px solid var(--wb-dark);
+  border-radius: var(--r);
+  padding: 12px 14px;
+}
+
+.info-box.warn {
+  background: var(--amber-lt);
+  border-color: #e0a832;
+}
+
+/* Wizard — pipeline type routing badge */
+.pipeline-type-badge {
+  border-radius: var(--r);
+  margin-top: 8px;
+  padding: 12px 14px;
+}
+
+.pipeline-type-label {
+  color: var(--dark);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pipeline-type-desc {
+  color: var(--text-mid);
+  font-size: 11.5px;
+  line-height: 1.55;
+  margin-top: 3px;
+}
+
+.info-title {
+  color: var(--dark);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.info-body {
+  color: var(--text-mid);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.55;
+  margin-top: 4px;
+}

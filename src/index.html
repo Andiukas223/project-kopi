@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Viva Medical Service IS</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23118f7a'/%3E%3Ctext x='16' y='21' text-anchor='middle' font-family='Arial' font-size='11' font-weight='700' fill='white'%3EVM%3C/text%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./styles/base.css">
+    <link rel="stylesheet" href="./styles/shell.css">
+    <link rel="stylesheet" href="./styles/components.css">
+    <link rel="stylesheet" href="./styles/pages.css">
+    <link rel="stylesheet" href="./styles/wizard.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="wordmark" aria-label="Viva Medical">
+          <span class="wordmark-main">Viva Medical</span>
+          <span class="wordmark-divider" aria-hidden="true"></span>
+          <span class="wordmark-sub">Service IS</span>
+        </div>
+        <div class="user-pill" aria-label="Current user">
+          <span class="avatar">VM</span>
+          <span id="active-role-label">Admin workspace</span>
+        </div>
+      </header>
+
+      <div class="app-body">
+        <aside class="sidebar" aria-label="Main navigation">
+          <div class="sb-section">
+            <div class="sb-label">Workspace</div>
+            <button class="sb-item active" data-nav="command" id="sb-command">
+              <span class="sb-icon">CC</span>
+              <span>Command Center</span>
+              <span class="sb-badge brand">12</span>
+            </button>
+            <button class="sb-item" data-nav="service" id="sb-service">
+              <span class="sb-icon">SV</span>
+              <span>Service</span>
+              <span class="sb-badge warn">5</span>
+            </button>
+            <button class="sb-item" data-nav="sales" id="sb-sales">
+              <span class="sb-icon">SL</span>
+              <span>Sales</span>
+            </button>
+            <button class="sb-item" data-nav="documents" id="sb-documents">
+              <span class="sb-icon">DC</span>
+              <span>Documents</span>
+              <span class="sb-badge warn">7</span>
+            </button>
+          </div>
+
+          <div class="sb-section">
+            <div class="sb-label">Registry</div>
+            <button class="sb-item" data-nav="customers" id="sb-customers">
+              <span class="sb-icon">CU</span>
+              <span>Customers</span>
+            </button>
+            <button class="sb-item" data-nav="equipment" id="sb-equipment">
+              <span class="sb-icon">EQ</span>
+              <span>Equipment</span>
+            </button>
+            <button class="sb-item" data-nav="parts" id="sb-parts">
+              <span class="sb-icon">PT</span>
+              <span>Parts</span>
+            </button>
+          </div>
+
+          <div class="sb-section">
+            <div class="sb-label">Control</div>
+            <button class="sb-item" data-nav="calendar" id="sb-calendar">
+              <span class="sb-icon">CL</span>
+              <span>Calendar</span>
+            </button>
+            <button class="sb-item" data-nav="reports" id="sb-reports">
+              <span class="sb-icon">RP</span>
+              <span>Reports</span>
+            </button>
+            <button class="sb-item" data-nav="admin" id="sb-admin">
+              <span class="sb-icon">AD</span>
+              <span>Admin</span>
+            </button>
+          </div>
+
+          <div class="sb-reminders">
+            <div class="sb-reminders-label">Reminders</div>
+            <div id="sidebar-reminders"></div>
+          </div>
+        </aside>
+
+        <main class="main" id="app-main" tabindex="-1"></main>
+      </div>
+    </div>
+
+    <div class="wiz-overlay" id="service-wizard" aria-hidden="true">
+      <section class="wiz-dialog" role="dialog" aria-modal="true" aria-labelledby="wiz-title">
+        <div class="wiz-head">
+          <div>
+            <h2 id="wiz-title">New service job</h2>
+            <p id="wiz-subtitle">Step 1 of 8 - Customer</p>
+          </div>
+          <button class="wiz-close" type="button" id="wiz-close" aria-label="Close service wizard">x</button>
+        </div>
+        <div class="wiz-body">
+          <div class="wiz-steps" id="wiz-steps" aria-label="Service workflow steps"></div>
+          <div class="wiz-content" id="wiz-content"></div>
+        </div>
+        <div class="wiz-footer">
+          <button class="btn ghost" type="button" id="wiz-back">Back</button>
+          <div class="wiz-footer-right">
+            <span id="wiz-count">1 / 8</span>
+            <button class="btn dark" type="button" id="wiz-next">Continue</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>

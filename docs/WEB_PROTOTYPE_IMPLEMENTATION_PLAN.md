@@ -1,0 +1,657 @@
+# Web Prototype Implementation Plan
+
+Date: 2026-04-12
+
+## Goal
+
+Build a Docker-runnable web prototype for Viva Medical's internal business management system.
+
+The prototype is not a marketing website. It is a desktop-first internal operations tool for service, sales, and admin users who manage medical equipment service work, document creation pipelines, document processing status, work acts, approvals, and job completion.
+
+## Product Scope
+
+The first prototype should support these workflows:
+
+- Service job intake for medical equipment.
+- Job status monitoring from request to finished work act.
+- Document creation pipeline for service documents, sales documents, and administrative documents.
+- Service technician workflow with diagnostics, repair, parts, vendor return, and final checklist.
+- Sales workflow for quotations, customer approval, contract/warranty context, and handoff to service.
+- Admin workflow for user role visibility, overdue work, document exceptions, and system configuration.
+
+The prototype should use realistic demo data, not a real backend yet.
+
+## Technology Direction
+
+The original `design_system.md` recommends a single `.html` file. For this new request, the prototype should still visually follow that design system, but the code should be modularized.
+
+Recommended implementation:
+
+- `src/index.html` - app shell and mount points.
+- `src/styles/` - CSS split by purpose.
+- `src/js/` - modular JavaScript files.
+- `src/data/` - demo data and workflow definitions.
+- `public/` - generated or copied static output served by Docker.
+- `Dockerfile` - static nginx container.
+- `docker-compose.yml` - local web service.
+
+No heavy frontend framework is needed for the first prototype. Use vanilla JavaScript modules so the app stays easy to inspect and close to the existing design system.
+
+All code comments must be in English.
+
+## Document Generation Direction
+
+The Documents module should be designed for a later Carbone integration.
+
+Reference:
+
+- Carbone GitHub: `https://github.com/carboneio/carbone`
+
+Planned use:
+
+- Users prepare LibreOffice or Microsoft Office templates such as `.odt`, `.docx`, `.ods`, or `.xlsx`.
+- The system injects job, customer, equipment, parts, and approval data into templates using JSON data.
+- Users generate work acts, diagnostic reports, quotations, acceptance reports, contract annexes, warranty confirmations, parts requests, and vendor return notes.
+- Users can save generated documents as `.docx`, `.odt`, or `.pdf`.
+- Users can download the generated file and send it through the mail client they already use on their own PC.
+
+Carbone integration notes from the upstream project:
+
+- Carbone is a server-side report generator that injects JSON data into document templates.
+- It supports templates from LibreOffice and Microsoft Office formats such as ODT, DOCX, ODS, XLSX, PPTX, and related XML-based formats.
+- PDF conversion needs a server-side document converter. LibreOffice is the established path documented by Carbone.
+- The static prototype should only model the UI and pipeline states. Actual Carbone rendering belongs in a later backend/document-service phase.
+
+Future backend shape:
+
+- `document-service` container with Node.js, Carbone, LibreOffice, and a templates volume.
+- `templates/` volume for approved document templates.
+- `generated/` volume for output files.
+- API endpoints for preview, generate DOCX/ODT, generate PDF, and download.
+- Audit trail fields for who generated, reviewed, approved, downloaded, or sent a document.
+
+Document module UI step:
+
+- Add a "Templates" tab in the Documents module.
+- Add template cards for service act, diagnostic report, quotation, acceptance report, and vendor return.
+- Add a "Generate from template" action on documents and service jobs.
+- In the first UI prototype, this action should open a mock generation panel that shows selected template, source JSON payload, output format, and a planned backend integration state.
+
+## Proposed File Structure
+
+```text
+.
+|-- Dockerfile
+|-- docker-compose.yml
+|-- vm-web-control.cmd
+|-- vm-web-control.ps1
+|-- public/
+|   `-- index.html
+|-- src/
+|   |-- index.html
+|   |-- js/
+|   |   |-- app.js
+|   |   |-- data.js
+|   |   |-- dom.js
+|   |   |-- navigation.js
+|   |   |-- render.js
+|   |   |-- state.js
+|   |   `-- wizard.js
+|   `-- styles/
+|       |-- base.css
+|       |-- shell.css
+|       |-- components.css
+|       |-- pages.css
+|       `-- wizard.css
+`-- docs/
+    `-- WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md
+```
+
+For phase one, `public/index.html` can be the runnable assembled artifact. If we want to avoid a build pipeline at first, it can load CSS and JS directly from copied static paths.
+
+## Docker Plan
+
+Use nginx to serve the static prototype.
+
+Planned service:
+
+- Service name: `web`
+- Port: `8080:80`
+- Image built from local `Dockerfile`
+- Static root: `/usr/share/nginx/html`
+
+Suggested commands:
+
+```powershell
+docker compose up -d --build
+docker compose ps
+```
+
+Root control utility:
+
+- `vm-web-control.cmd` opens the Windows-friendly launcher.
+- `vm-web-control.ps1` supports `menu`, `on`, `off`, `restart`, `status`, `logs`, `open`, and `quit`.
+- Web startup and restart controls must stay outside the web UI, because a broken or stopped web app cannot reliably start itself.
+
+Because the current environment approval policy is `never`, if Docker commands require outside-sandbox access, the assistant should not request escalation. Instead, provide the exact command for the user to run manually.
+
+## App Shell
+
+Follow `design_system.md`:
+
+- Topbar with Viva Medical / Service IS wordmark.
+- Sidebar with grouped navigation.
+- Main area with one active page at a time.
+- Page header with title, subtitle, and contextual actions.
+- Content area using stat cards, tiles, tables, flow diagrams, and wizard modal.
+- No web-hosted `CMD` start/stop/restart control. Use the root control utility instead.
+
+Primary navigation:
+
+- Command Center
+- Service
+- Sales
+- Documents
+- Customers
+- Equipment
+- Parts
+- Reports
+- Admin
+
+Role switcher:
+
+- Service user
+- Sales user
+- Admin user
+
+The role switcher is only a prototype control. It should change visible emphasis, dashboard cards, and allowed action labels, but it does not need authentication yet.
+
+## Core Data Model For Demo State
+
+Use plain JavaScript objects in `src/js/data.js`.
+
+### Job
+
+Fields:
+
+- `id`
+- `customer`
+- `equipment`
+- `serial`
+- `department`
+- `owner`
+- `roleOwner`
+- `priority`
+- `status`
+- `stage`
+- `due`
+- `sla`
+- `contract`
+- `warranty`
+- `quotationStatus`
+- `partsStatus`
+- `documentStatus`
+
+Example statuses:
+
+- `New request`
+- `Diagnostics`
+- `Waiting for quotation`
+- `Customer approval`
+- `Parts pending`
+- `Repair`
+- `Document drafting`
+- `Signature pending`
+- `Finished`
+
+### Document
+
+Fields:
+
+- `id`
+- `type`
+- `jobId`
+- `customer`
+- `owner`
+- `status`
+- `created`
+- `due`
+- `pipelineStep`
+
+Document types:
+
+- Service act
+- Diagnostic report
+- Quotation
+- Contract annex
+- Warranty confirmation
+- Parts request
+- Vendor return note
+- Acceptance report
+
+Document statuses:
+
+- Draft
+- In review
+- Waiting for customer
+- Waiting for signature
+- Approved
+- Rejected
+- Archived
+
+### Equipment
+
+Fields:
+
+- `id`
+- `name`
+- `category`
+- `customer`
+- `serial`
+- `location`
+- `warrantyUntil`
+- `servicePlan`
+- `lastService`
+
+Use product/domain names inspired by `docs/VIVAMEDICAL_WEBSITE.md`, for example ARIETTA ultrasound systems, ARJO patient lifting equipment, WASSENBURG systems, EEG, radiology, and surgery-related equipment.
+
+## Pages And Components
+
+### Command Center
+
+Purpose: one-page operational overview.
+
+Components:
+
+- Stat cards for open service jobs, overdue documents, waiting customer approvals, and jobs finishing this week.
+- Pipeline board with grouped counts by stage.
+- "Needs attention" table.
+- Quick actions: New service job, New quotation, Create service act.
+
+### Service
+
+Purpose: medical equipment service workflow.
+
+Components:
+
+- Subgroup tiles: New requests, Diagnostics, Parts pending, Repairs, Vendor returns, Final documents.
+- Service jobs table.
+- Process flow diagram.
+- New service job wizard.
+- Diagnostics and repair process nodes should be labeled as duration entry points, not live timers.
+
+Wizard steps:
+
+1. Customer and equipment
+2. Issue intake
+3. Contract and warranty check
+4. Diagnostics duration entry
+5. Quotation decision
+6. Parts and vendor handling
+7. Repair duration entry
+8. Final documents and checklist
+
+### Sales
+
+Purpose: sales-managed quotation and customer approval pipeline.
+
+Components:
+
+- Quote pipeline table.
+- Customer approval queue.
+- Handoff to service panel.
+- Document status chips.
+
+Primary actions:
+
+- Create quotation
+- Mark customer approved
+- Send to service
+
+### Documents
+
+Purpose: central document creation and processing monitor.
+
+Components:
+
+- Document pipeline cards.
+- Filters by document type, owner, status, and due date.
+- Table with document ID, job ID, customer, owner, status, and next action.
+- Detail panel for selected document.
+- Templates tab for future Carbone-based LibreOffice/Microsoft Office template generation.
+- Mock generation panel for selecting a template and output format (`docx`, `odt`, `pdf`).
+
+Pipeline stages:
+
+- Draft
+- Review
+- Customer
+- Signature
+- Approved
+- Archived
+
+### Customers
+
+Purpose: customer context for hospitals, clinics, and private medical institutions.
+
+Components:
+
+- Customer list.
+- Open jobs count.
+- Equipment count.
+- Outstanding documents.
+
+### Equipment
+
+Purpose: equipment registry.
+
+Components:
+
+- Equipment table.
+- Warranty and service plan indicators.
+- Last service and next service date.
+
+### Parts
+
+Purpose: parts and vendor return tracking.
+
+Components:
+
+- Parts request table.
+- Warehouse status.
+- Vendor return queue.
+- Expected delivery date tracking.
+
+### Reports
+
+Purpose: management view.
+
+Components:
+
+- SLA summary.
+- Document cycle time.
+- Service jobs by stage.
+- Sales-to-service handoff count.
+
+### Admin
+
+Purpose: admin-facing prototype configuration.
+
+Components:
+
+- User role summary.
+- Document template list.
+- Workflow settings mock panel.
+- System alerts.
+
+## Component Inventory
+
+Build reusable render helpers:
+
+- `renderPageHeader()`
+- `renderStatCard()`
+- `renderModuleTile()`
+- `renderSubgroupTile()`
+- `renderDataTable()`
+- `renderStatusChip()`
+- `renderPipelineBoard()`
+- `renderFlowNode()`
+- `renderFlowTrack()`
+- `renderWizardStepIndicator()`
+- `renderDurationField()`
+- `renderChecklist()`
+- `renderInfoBox()`
+- `renderDecisionCards()`
+
+Keep these helpers pure where possible: input data in, HTML string out.
+
+## Interaction Plan
+
+Prototype interactions:
+
+- Sidebar changes active page.
+- Role switcher changes dashboard framing and visible mock permissions.
+- Table row click opens a side/detail panel or updates a detail area.
+- "New service job" opens wizard modal.
+- Decision cards change wizard state inline.
+- Diagnostics and repair time are entered manually as duration fields after the user completes each procedure.
+- Submitting wizard adds a new demo job into in-memory state and returns to Service page.
+- Document action buttons move demo documents between pipeline statuses.
+
+No real persistence is required in phase one. Optional phase two can add `localStorage`.
+
+## Styling Plan
+
+Use `design_system.md` as the visual contract:
+
+- Dark topbar/sidebar.
+- Brand accent border on topbar and modal.
+- CSS variables for all colors.
+- Card radius no larger than 8px.
+- Stable table, tile, and toolbar dimensions.
+- No animations or keyframes.
+- Hover uses border or shadow changes only.
+
+Palette direction:
+
+- Avoid a one-note blue/slate UI.
+- Use a clean medical palette with dark neutral shell, green/teal brand signal, red/amber/green operational status colors, and white/very light cool surfaces.
+- Keep all colors in `:root`.
+
+## Full Role List
+
+| Role | ID | Responsibilities |
+|---|---|---|
+| Service Engineer | service | Creates technical cases, logs diagnostics/repair duration, uploads signed documents |
+| Service Manager | svcmgr | Approves parts requests, assigns engineers, controls service queue |
+| Sales / Sales Manager | sales | Commercial offers, contract upload/indexing, customer approval, invoice handoff |
+| Finance | finance | Generates/uploads invoices, manages payment status (paid/pending/canceled) |
+| Office Manager | office | Customer registry, contacts, calendar, case creation, reminders to engineers |
+| Logistics Manager | logistics | Parts delivery, vendor returns, logistics issue resolution |
+| Warehouse | warehouse | Stock confirmation, parts arrival, inventory management |
+| Manager | manager | Read-only overview across all modules and reports |
+| Admin | admin | Full control, user permission grid, case close, contract archive management |
+
+Admin assigns permissions via a per-user checkbox grid. One user can hold multiple roles.
+
+---
+
+## Pipeline Types
+
+### Type A — Repair Without Service Contract
+
+```
+Technical Case → Diagnostics (duration entry) → Parts check
+  → [if parts needed] Parts Request → Service Manager approves → Logistics/Warehouse fulfills → Engineer notified
+  → Commercial Offer (customer must confirm: cost and what will be changed)
+  → Repair (duration entry)
+  → Work Act generation → Signature collected → Upload signed document into system
+  → INVOICE NEEDED status → Finance generates/uploads invoice PDF
+  → Engineer downloads → collects signature → uploads signed invoice
+  → Admin review: [Diagnostics ✓][Commercial offer ✓][Repair ✓][System working ✓]
+  → Approval Required → Admin Approves → ARCHIVED
+```
+
+### Type B — Repair With Service Contract
+
+```
+Technical Case → Diagnostics → Parts check (if needed)
+  → Repair (system shows contract balance; warns if repair cost > remaining balance)
+  → Work Act → Signature → Upload
+  → Admin review → ARCHIVED
+```
+
+Contract balance logic: contract has a total amount (e.g. €100,000) and duration (e.g. 36 months). Each repair deducts the consumed amount. Visible in repair workflow and contract view: remaining balance / consumed / work history.
+
+### Type C — New System Installation
+
+```
+Sales: Commercial Offer → Customer approval
+  → Contract indexing (fields + warranty dates + comments section for any missing field info)
+  → Installation (engineer)
+  → Acceptance Act generation → Signature → Upload
+  → WARRANTY STARTS from upload date (not from admin approval date)
+  → Admin verification (manual check only) → ARCHIVED
+  → Calendar syncs warranty expiry date
+```
+
+### Type D — PM Periodic Maintenance
+
+```
+System AUTO generates PM case from contract
+  → PM submodule status: [Scheduled / Unscheduled / Problem]
+  → Date distribution: even split over contract period
+    (rule: N visits / M months, evenly spaced — e.g. 4x/year = one per quarter; stacking consecutive months not allowed)
+  → User can move date within same month → main calendar auto-updates
+  → Service work → Work Act → Admin review → ARCHIVED
+```
+
+---
+
+## Document Types
+
+Work Act / Diagnostic Report / Commercial Offer / Contract Annex / Warranty Confirmation / Parts Request / Vendor Return Note / Acceptance Report / Invoice
+
+Document pipeline: `Draft → Review → Customer → Signature → Approved → Archived`
+
+Rejection path: `Rejected → Draft` (comment required). Permanent rejection: comment + Admin resolves.
+
+Create (from Carbone template, mock in prototype) or Upload (external document with indexed metadata).
+
+Upload metadata fields (indexed for global search): location · contract reference · date · executor · who signed · short description.
+
+Search: filter chips (type / owner / status / customer / date range) + free text field + Search / Cancel buttons.
+
+---
+
+## Support Portal — Client Fault Reporting
+
+Each installed system record has a **Support** tab with three sub-tabs:
+
+### Settings sub-tab
+- **Support Page Is Enabled** checkbox — when checked, the system generates unique URLs for this installed system
+- **Group Name** — groups multiple systems under one support URL (e.g. all systems at one hospital department)
+- **Image (override)** — optional custom image for the support page
+
+### Emails sub-tab
+- **Company Emails** — Viva Medical internal recipients for new case notifications
+- **Manufacturer Emails** — manufacturer rep notification on new fault
+- **Hospital Emails** — hospital-side contact who gets confirmation when case is created
+
+### Web Links sub-tab
+- **System link** — unique URL for this specific installed system (with Copy button)
+- **Hospital link** — URL scoped to all systems at the hospital
+- **Group link** — URL scoped to all systems in the group
+
+### Support page flow
+When a hospital staff member visits the system link:
+1. Page shows: system name, model, location (pre-filled from system record, no login required)
+2. Staff fills in: short problem description + optional contact name
+3. Submit → new Technical Case is auto-created in the system
+4. Case is pre-filled with: system info / hospital / problem description / source = "Support portal"
+5. Case status: **New / Unassigned**
+6. Admin receives notification → assigns case to engineer → normal service pipeline continues
+
+In the prototype: the Support tab UI is shown on the Equipment detail page. The public support page is a planned sub-page (no authentication). Mock case creation on submit.
+
+---
+
+## Parts Flow
+
+```
+Engineer identifies part needed (during diagnostics)
+→ Parts request created with situation description
+→ Service Manager approves
+→ Logistics / Warehouse fulfills
+→ Parts arrive → Warehouse confirms → Engineer notified
+→ Engineer specifies delivery:
+   [Pick up from warehouse]  OR  [Deliver to site: address + contact person (saveable to registry)]
+   Recipient: named engineer OR local person at site
+→ Repair proceeds
+```
+
+Vendor return: triggered by "repair exchange" in Work Act. Logistics creates return case. Engineer specifies destination: bad-parts spot or warehouse re-stock.
+
+Delivery address registry: hospital address + contact person saved from customer registry. Autofill suggestions when entering address on future parts requests.
+
+---
+
+## Calendar
+
+- Colour-coded by user
+- Filters: user / date range / equipment / service contract
+- Permission-based: user sees own events; with permission sees assigned users; Admin sees all and can assign
+- Event types: Service case / Diagnostics / Repair / PM visit / Sales meeting / Equipment demo / Contract validity period
+- PM date distribution: even split over contract period; user can move date within same month; main calendar auto-updates
+- Contract validity visible when filtering by contract
+
+---
+
+## Reminders
+
+Sidebar strip (list type). Each entry: `place / case open date / status` with colour indicator (red/yellow/green/gray). Office Manager and users with permissions can send reminders to engineers (collect signature, upload document).
+
+---
+
+## Implementation Phases
+
+### Phase 1: Static Docker Shell
+
+- Create `src/` structure.
+- Create initial HTML shell.
+- Create CSS files.
+- Create Dockerfile and docker-compose.
+- Serve the static app through nginx.
+
+### Phase 2: Core Pages
+
+- Add Command Center, Service, Sales, Documents, and Admin pages.
+- Add demo data.
+- Add navigation and reusable render helpers.
+
+### Phase 3: Service Wizard
+
+- Add new service job modal.
+- Add decision cards, diagnostics/repair duration fields, and checklist.
+- Add final submit behavior to insert demo job.
+
+### Phase 4: Document Pipeline
+
+- Add document status transitions.
+- Add document table filtering.
+- Add status monitoring and overdue indicators.
+- Add mock template generation UI for future Carbone integration.
+
+Current prototype step:
+
+- Documents page has owner filtering, selected document details, `Review next`, and `Advance` actions that move demo documents through Draft, Review, Customer, Signature, Approved, and Archived stages in memory.
+- Template generation panel lets the user pick a planned template and output format, then marks the mock output as ready for the selected document.
+- Status monitoring now derives overdue document counts from demo due dates, shows overdue/due-today/customer/signature cards, and marks late table rows with an `Overdue` badge.
+
+### Phase 4B: Carbone Document Service
+
+- Add backend `document-service` container with Node.js, Carbone, LibreOffice, templates volume, and generated output volume.
+- Add document generation API for work acts, diagnostic reports, quotations, acceptance reports, and vendor return notes.
+- Add output format selection for DOCX/ODT/PDF.
+- Add download flow so the user can save generated files and send them through their local mail client.
+- Add document generation audit metadata to the app data model.
+
+This phase is intentionally after the static prototype, because Carbone is server-side and should not be bundled into the browser-only UI shell.
+
+### Phase 5: Polish And Verification
+
+- Review layout against `design_system.md`.
+- Run Docker locally.
+- If possible, use Playwright screenshot checks.
+- Update `CHANGELOG.md` after each meaningful phase.
+
+## Definition Of Done For First Prototype
+
+- Runs with `docker compose up -d --build`.
+- Shows Viva Medical internal business management shell.
+- Has Service, Sales, Documents, and Admin workflows visible.
+- Has a working New Service Job wizard.
+- Has document pipeline monitoring with demo status changes.
+- Code is split into clear modules.
+- All code comments are in English.
+- `CHANGELOG.md` documents the implemented changes.

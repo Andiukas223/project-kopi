@@ -1,0 +1,68 @@
+:root {
+  --brand: #118f7a;
+  --brand-dk: #0a6f61;
+  --brand-lt: #dff5ef;
+  --brand-mid: #64c8b6;
+  --dark: #20211f;
+  --dark-mid: #292b28;
+  --dark-soft: #373a35;
+  --bg: #f4f6f5;
+  --bg-card: #ffffff;
+  --wb: #eef7f5;
+  --wb-mid: #dcecea;
+  --wb-dark: #bfd8d2;
+  --blue: #2f6fb0;
+  --blue-lt: #e4eff9;
+  --text: #202724;
+  --text-mid: #5a6762;
+  --text-muted: #87918d;
+  --border: #dde4e1;
+  --border-mid: #b8c4bf;
+  --green: #21875b;
+  --green-lt: #e2f3eb;
+  --amber: #b7791f;
+  --amber-lt: #fff3d8;
+  --red: #b93c3c;
+  --red-lt: #fae4e4;
+  --red-mid: #d98282;
+  --r: 5px;
+  --r-lg: 8px;
+  --sh: 0 1px 4px rgba(32, 33, 31, .08);
+  --sh-md: 0 4px 14px rgba(32, 33, 31, .13);
+  --mono: "JetBrains Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.mono {
+  font-family: "JetBrains Mono", monospace;
+}
+

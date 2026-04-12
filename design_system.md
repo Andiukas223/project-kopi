@@ -669,3 +669,24 @@ The design is a **desktop-first internal tool**. No media queries are used. Resp
 - Focus state: `outline: none` with `border-color: --brand` replacement on focus
 - Colour is never the only indicator — alert tiles use both colour AND a left border width change AND a badge/icon
 - Font sizes never go below 9px (only in flow sub-labels, sparingly)
+
+---
+
+## 13. Project Override — Procedure Duration Fields
+
+For the Viva Medical business management prototype, diagnostics and repair steps no longer use live timer widgets.
+
+Use duration input fields instead:
+
+- Diagnostics step: `Diagnostics duration`
+- Repair step: `Repair duration`
+- Service flow labels for diagnostics and repair should read as duration entry points, not live timer nodes.
+- Accepted user-facing examples: `00:45`, `45 min`, `01:20`, `1h 20m`
+
+Implementation rules:
+
+- Do not use `Date.now()`, `setInterval`, running/stopped timer state, or start/stop buttons for these procedure steps.
+- The field is filled by the user after completing the procedure.
+- Use monospace font for the duration input value.
+- Keep the field inside a dark rectangular panel when using the wizard visual style.
+- Continue to use the general modal, wizard indicator, checklist, and decision-card rules from this document.
