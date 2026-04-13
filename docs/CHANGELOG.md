@@ -4,12 +4,12 @@ Visi reiksmingi sio projekto pakeitimai turi buti fiksuojami cia, kad kita sesij
 
 Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir trumpai.
 
-## [Unreleased]
+## [0.1.0] - 2026-04-13
 
 ### Added
 
-- Implementuotas Commercial Offers workspace `Template Generation` modulyje: source quotation selector, `Create offer draft` mygtukas, draft panel su scope textarea, line items lentele (add/remove eilutes, description ir amount), validity date, payment terms, notes ir `Create document draft` veiksmas. Sukurtas Draft dokumentas ikeltas i Documents pipeline kaip `Quotation` tipo irašas. `commercialOfferDrafts` kolekcija persisted per `localStorage`.
-- Implementuotas Work List Templates CRUD `Template Generation` modulyje: `+ New template` forma su name/category/serviceType/language/bodyText/workRows laukais; templates lentele su row-level `Duplicate` ir `Archive/Restore` mygtukais; selected template detail panel su Edit/Cancel/Save controls; inline work row add/remove/text-edit edit mode'e. `isActive` flag valdo archyvavima be trynimo.
+- Implementuotas Commercial Offers workspace `Template Generation` modulyje (B-22): source quotation selector, `Create offer draft` mygtukas, draft panel su scope textarea, line items lentele (add/remove eilutes, description ir amount), validity date, payment terms, notes ir `Create document draft` veiksmas. Sukurtas Draft dokumentas ikeltas i Documents pipeline kaip `Quotation` tipo irašas. `commercialOfferDrafts` kolekcija persisted per `localStorage`.
+- Implementuotas Work List Templates CRUD `Template Generation` modulyje (B-23): `+ New template` forma su name/category/serviceType/language/bodyText/workRows laukais; templates lentele su row-level `Duplicate` ir `Archive/Restore` mygtukais; selected template detail panel su Edit/Cancel/Save controls; inline work row add/remove/text-edit edit mode'e. `isActive` flag valdo archyvavima be trynimo.
 
 - Prideta `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`: read-only Tomis Work Act / Work List Template analize, atskirtas Work List Template vs document output template modelis, Work Act draft flow, Carbone payload kryptis ir nauji B-15/B-16 backlog punktai.
 - Patikslintas B-15 equipment pasirinkimo modelis: Work Act gali gauti equipment automatiskai is case/equipment konteksto arba tiesioginio kurimo metu leisti pasirinkti equipment per search/dropdown ir prideti work eilutes.
@@ -46,8 +46,6 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 - `interactions.js` `specifyDelivery`: pristatymo adresas visada grįždavo „Address to be confirmed" nes `equipment.find(eq => eq.serial === pr.partNumber)` niekada nesutapdavo (part number != serial). Pataisyta: `equipment.find(e => e.name === pr.equipment)` → `customers.find(c => c.id === eq?.customerId)`.
 - `render.js` line 1731: `t.toLowerCase().replace(" ", "-")` keisdavo tik pirmą tarpą. Pakeista į `replaceAll` — aktualu support sub-tab ID generavimui.
 - `documentPipeline.js`: trūkstamas `return;` po paskutinio `change` handlerio — pridėtas dėl konsistencijos.
-
-### Added
 
 - `design_system.md`, `PROJECT_PLAN.md`, `CHANGELOG.md` perkelti i `docs/` aplanka. Atnaujintos visos nuorodos `README.md`, `WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md` ir `PROJECT_PLAN.md` failuose. Nuo siol visa dokumentacija randama tik `docs/`.
 - Atnaujintas `docs/PROJECT_PLAN.md` § 18 su pilna dabartine busena, prioritetuotu backlog'u (B-01–B-14) ir dokumentavimo taisykle. Atnaujintas `docs/WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md`: fazes pazymetos Done/TODO, pridetas isorinis backlog blokas su ta pacia eilės tvarka.
@@ -118,3 +116,4 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 - 2026-04-11: `LOGO.odt` turi imontuota logo paveiksleli; rekomenduojama veliau eksportuoti i `assets/logo.svg` ir `assets/logo.png`.
 - 2026-04-12: `vivamedical.lt` analizuotas su Playwright. Jei ateityje informacijos truksta, reikia grizti i svetaine su Playwright, patikrinti gyva turini ir papildyti `docs/VIVAMEDICAL_WEBSITE.md`.
 - 2026-04-12: Prototipo kryptis patikslinta i moduliarine Docker paleidziama verslo valdymo sistema, orientuota i service, sales, admin ir dokumentu pipeline.
+- 2026-04-13: Visas Phase A prototipas (B-01–B-23) implementuotas ir pažymėtas kaip [0.1.0]. Laukia atviri klausimai: app pavadinimas, brand spalva, logo eksportas, UI kalba. Sekantis etapas — fodt template upload/export ir Phase B (backend) planavimas.

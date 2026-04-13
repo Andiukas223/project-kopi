@@ -1,6 +1,6 @@
 # Web Prototype Implementation Plan
 
-Date: 2026-04-12
+Date: 2026-04-13
 
 ## Goal
 
@@ -651,6 +651,7 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 
 ### Phase 4B: Role-Filtered Views ✅ DONE
 
+
 - 9 roles: service, svcmgr, sales, finance, office, logistics, warehouse, manager, admin.
 - Command Center: per-role stat cards + focus panels.
 - Service page: service engineer sees only own jobs; svcmgr sees parts approval queue.
@@ -658,6 +659,16 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 - Page header: "New service job" button hidden for roles that cannot create jobs.
 - Sales module: full quotation pipeline (Draft → Sent → Awaiting approval → Approved → Handed off / Rejected) with 4-tab detail (Offer / Contract / Approval / Handoff).
 - Finance module: invoice queue with job-linked invoice records, payment status, and mock Generate invoice / Mark paid / Mark cancelled actions.
+
+### Phase 5: Template Generation Workspaces ✅ DONE
+
+- `Template Generation` sidebar module and page added; `Documents` page no longer mixes template creation with repository/search.
+- Sub-tabs: Work Acts, Defect Acts, Commercial Offers, Work List Templates, Output Templates.
+- Work Acts workspace (B-19): source job selector, draft create, equipment search/add/remove, Work List Template picker, Work Description + Work Rows editor, generate Service act document draft into Documents.
+- Defect Acts workspace (B-20): source job selector, draft create, defect description / findings / correction / risk / acknowledgement editor, generate Defect act document draft into Documents.
+- Commercial Offers workspace (B-22): source quotation selector, draft create, scope text, line items table (add/remove, description, amount), validity date, payment terms, notes, `Create document draft` → Documents; `commercialOfferDrafts` collection persisted via `localStorage`.
+- Work List Templates CRUD (B-23): `+ New template` form with name/category/serviceType/language/bodyText/workRows; table with per-row Duplicate and Archive/Restore; selected template detail and edit panel with inline work row add/remove/text edit; `isActive` flag — non-destructive archiving.
+- Output Templates editor: structured section editors with merge fields, reset/save logic, `localStorage` persistence; section content passed through to `document-service` Carbone payload.
 
 ---
 
@@ -697,6 +708,15 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 | ~~B-19~~ | ~~**Work Acts workspace in Template Generation**~~ | **Done:** Work Acts tab now has a source service job selector, Work Act draft create flow, and the full Work Act builder: equipment selection, Work List Template apply, Work Description / Work: List editing, and Service act document draft creation. |
 | ~~B-20~~ | ~~**Defect Acts workspace in Template Generation**~~ | **Done:** Defect Acts tab now has a source service job selector, Defect Act draft create flow, defect description / engineer findings / recommended correction / risk / acknowledgement editing, and Defect act document draft creation back into Documents. |
 | ~~B-21~~ | ~~**Work Act builder UX labels and equipment search**~~ | **Done:** renamed Work List Template to Work List Template Name, replaced the Work Text term with Work Description, and replaced equipment checkboxes with search/dropdown, Add equipment, selected-equipment strip, and X remove controls. |
+| ~~B-22~~ | ~~**Commercial Offers workspace**~~ | **Done:** `Template Generation / Commercial Offers` tab has full create/edit flow: source quotation selector, draft create, scope/line items/validity/payment terms/notes editor, `Create document draft` action. `commercialOfferDrafts` collection with `localStorage` persistence. |
+| ~~B-23~~ | ~~**Work List Templates CRUD**~~ | **Done:** `Template Generation / Work List Templates` tab has `+ New template` form, selected template detail/edit panel, `Duplicate` and `Archive/Restore` buttons, inline work row add/remove/text-edit in edit mode. `isActive` flag controls archiving without deletion. |
+
+### Open — Next steps
+
+| ID | Task | Description |
+|---|---|---|
+| B-24 | **fodt template upload/export** | Add "Upload .fodt template" or "Export sections as .fodt" button in Output Templates tab. Requires `POST /template/upload` endpoint in `document-service`. Connects UI section editor content to actual `.fodt` files used by Carbone. |
+| B-25 | **Tomis comparison pass** | Re-examine Tomis read-only after B-17–B-21. Compare terminology, flow order, missing fields, density. Document differences in `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`. |
 
 ---
 
@@ -719,13 +739,27 @@ After every implementation session:
 
 ---
 
-## Definition Of Done For First Prototype
+## Definition Of Done For First Prototype ✅ ACHIEVED (2026-04-13)
 
-- Runs with `docker compose up -d --build`.
-- Shows Viva Medical internal business management shell.
-- Has Service, Sales, Documents, and Admin workflows visible.
-- Has a working New Service Job wizard.
-- Has document pipeline monitoring with demo status changes.
-- Code is split into clear modules.
-- All code comments are in English.
-- `docs/CHANGELOG.md` and `docs/PROJECT_PLAN.md` document implemented changes after every session.
+All original criteria met and exceeded:
+
+- ✅ Runs with `docker compose up -d --build` (nginx + document-service containers).
+- ✅ Shows Viva Medical internal business management shell with topbar, sidebar, 9-role switcher.
+- ✅ Service, Sales, Documents, Finance, Customers, Equipment, Parts, Admin, Calendar, Reports, Template Generation workflows all visible.
+- ✅ Working New Service Job wizard (8 steps, Pipeline type A/B/C/D routing).
+- ✅ Document pipeline monitoring: Draft → Review → Customer → Signature → Approved → Archived, plus rejection path and step-back.
+- ✅ Code split into clear modules: `app.js`, `data.js`, `state.js`, `render.js`, `interactions.js`, `navigation.js`, `documentPipeline.js`, `persistence.js`.
+- ✅ All code comments in English.
+- ✅ `docs/CHANGELOG.md` and `docs/PROJECT_PLAN.md` document implemented changes after every session.
+- ✅ `localStorage` persistence across page reloads.
+- ✅ Real Carbone document generation via `document-service` container with `.fodt` templates.
+- ✅ Template Generation module with Work Acts, Defect Acts, Commercial Offers, Work List Templates, and Output Templates workspaces.
+
+### Remaining open questions (user decision)
+
+| Question | Where it applies |
+|---|---|
+| App name in UI (`Viva Medical` / `Service IS` / other) | `src/index.html` topbar, all `pageHeader()` titles |
+| Brand colour from logo → `--brand` CSS variable | `src/styles/base.css` `:root` |
+| Logo export → `assets/logo.svg` | `src/index.html` topbar |
+| UI language (Lithuanian / English / mixed) | All of `render.js` |

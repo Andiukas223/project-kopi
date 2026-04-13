@@ -349,7 +349,7 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 
 ---
 
-## 18. Dabartinė būsena (2026-04-12)
+## 18. Dabartinė būsena (2026-04-13)
 
 ### Implementuota ✅
 
@@ -358,19 +358,28 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 | App shell — topbar, sidebar, navigacija | Dinamiški badges pagal rolę |
 | Command Center | 9 rolių filtruoti stat korteliai + focus panel |
 | Service puslapis | Jobs lentelė, PM submodule, svcmgr parts approval |
-| Sales puslapis | Quotation lentelė + 4-tab detalė (Offer/Contract/Approval/Handoff) |
-| Documents puslapis | Pipeline board, filtrai, overdue monitoring, template generation mock su vizualiniu preview + download |
+| Sales puslapis | Quotation lentelė + 4-tab detalė (Offer/Contract/Approval/Handoff); New quotation forma; Contract management edit mode |
+| Documents puslapis | Pipeline board, filtrai, overdue monitoring, document upload flow, document search; template generation perkeltas į Template Generation modulį |
 | Finance puslapis | Invoice sąrašas, susieti jobs/dokumentai, payment statusai ir mock Generate / Paid / Cancelled veiksmai |
 | Customers puslapis | Lentelė + detalės panel (kontaktai, mini-stat, equipment, contracts) |
 | Equipment puslapis | Lentelė + 4 tabai + Support Portal (Settings/Emails/Web Links + preview modal) |
-| Parts puslapis | Lentelė + stat korteliai + workflow mygtukai (Approve/Reject/Transit/Arrived/Deliver) |
+| Parts puslapis | Lentelė + stat korteliai + workflow mygtukai (Approve/Reject/Transit/Arrived/Deliver); vendor return flow; delivery address registry |
 | Reports puslapis | 4 stat korteliai, Jobs by stage bar chart, Document pipeline health, Contract utilisation |
 | Admin puslapis | User sąrašas + permission grid (checkbox) + role assignment |
-| Calendar puslapis | Mėnesio grid, Prev/Next navigacija, spalvoti events, PM schedule lentelė |
+| Calendar puslapis | Mėnesio grid, Prev/Next navigacija, spalvoti events, PM schedule lentelė, PM date reschedule |
 | Reminders strip | Sidebar spalvoti priminimai (overdue docs, parts, PM visits) |
 | New service job wizard | 8 žingsniai, Pipeline type routing (A/B/C/D), Contract balance info |
 | Role sistema | 9 rolės, role switcher, role-filtruoti vaizdai visuose moduliuose |
-| Document pipeline step | Advance + **Step back** (admin/svcmgr), generatedDocPreview state |
+| Document pipeline | Advance + Step back (admin/svcmgr), rejection path su privalomu komentaru, Back to Draft, generatedDocPreview |
+| localStorage persistence | Mutable kolekcijos (jobs, documents, equipment ir kt.) išsaugomos per puslapio reload |
+| Carbone document-service | Node.js + Carbone + LibreOffice Docker konteineris; `/health`, `/preview`, `/generate`, `/download` API; nginx proxy; `work-act.fodt`, `commercial-offer.fodt`, `defect-act.fodt`, `generic-document.fodt` šablonai |
+| **Template Generation modulis** | Atskiras sidebar modulis su 5 sub-tabs: Work Acts, Defect Acts, Commercial Offers, Work List Templates, Output Templates |
+| Work Acts workspace | Job selector, draft create, equipment search/add/remove, Work List Template picker, Work Description + Work Rows editor, Service act document draft → Documents |
+| Defect Acts workspace | Job selector, draft create, defect description/findings/correction/risk/acknowledgement editor, Defect act document draft → Documents |
+| Commercial Offers workspace | Source quotation selector, draft create, scope/line items/validity/payment terms/notes editor, `Create document draft` → Documents; `commercialOfferDrafts` kolekcija su localStorage |
+| Work List Templates CRUD | `+ New template` forma, detail/edit panel, `Duplicate`, `Archive/Restore`; inline work row add/remove/text-edit; `isActive` flag — ne destruktyvus archyvavimas |
+| Output Templates editor | Sekcijų redaktorius su merge fields, reset/save logika, localStorage; sekcijų turinys perduodamas į document-service payload |
+| Warranty/calendar sync | Acceptance report upload atnaujina equipment acceptance/warranty laukus ir sukuria warranty expiry event |
 
 ### Laukiantis darbas (backlog) — eilės tvarka
 
@@ -438,11 +447,43 @@ Svarbiausios isvados:
 
 Kitas chat turetu:
 
-1. Perskaityti `README.md` ir visus failus `docs/` aplanke: `PROJECT_PLAN.md`, `CHANGELOG.md`, `design_system.md`, `WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md`.
-2. Patikrinti `git status`.
-3. Jeigu vartotojas patvirtina MVP krypti, kurti `index.html` pagal `docs/design_system.md`.
-4. Kiekviena reiksminga pakeitima prideti i `docs/CHANGELOG.md` ir atnaujinti `docs/PROJECT_PLAN.md` § 18.
-5. Neliesti logo saltiniu, kol neaisku, kokiu web formatu reikia eksportuoti.
+1. Perskaityti visus failus `docs/` aplanke: `PROJECT_PLAN.md`, `CHANGELOG.md`, `WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md`, `DOCUMENT_GENERATION_TOMIS_FINDINGS.md`.
+2. Patikrinti `git status` ir `git log --oneline -5`.
+3. Phase A prototipas yra pilnai implementuotas (B-01–B-23). Visi backlog punktai pažymėti Done.
+4. Sekantys žingsniai apibrėžti § 19 "Atviri klausimai ir sekantys žingsniai".
+5. Kiekviena reikšmingą pakeitimą pridėti į `docs/CHANGELOG.md` ir atnaujinti `docs/PROJECT_PLAN.md` § 18.
+6. Neliesti logo šaltinių, kol neaišku, kokiu web formatu reikia eksportuoti.
+
+## 19. Atviri klausimai ir sekantys žingsniai
+
+### Atviri klausimai (reikia vartotojo sprendimo)
+
+Šie punktai blokuoja vizualinę polishą, bet nereikalauja kodo:
+
+| Klausimas | Kur naudojama |
+|---|---|
+| App pavadinimas (`Viva Medical` / `Service IS` / kitas) | `src/index.html` topbar, `pageHeader()` titulai visuose moduliuose |
+| Brand spalva iš logo → `--brand` CSS kintamasis | `src/styles/base.css` `:root` (dabar mėlyna placeholder spalva) |
+| Logo eksportas → `assets/logo.svg` | `src/index.html` topbar (dabar tekstinis wordmark) |
+| UI kalba (lietuviškas / angliškas / mišrus tekstas) | Visas `render.js` — dabar angliškas |
+
+### Techniniai next steps (po atvirų klausimų)
+
+| # | Užduotis | Aprašas |
+|---|---|---|
+| B-24 | **fodt template upload/export** | Output Templates tab'e pridėti "Upload .fodt template" arba "Export sections as .fodt" → `document-service` POST `/template/upload` endpoint. Susieja editor sekcijų turinį su realiais `.fodt` failais. |
+| B-25 | **Tomis comparison pass** | Re-examine Tomis read-only po B-17–B-21 implementacijos. Palyginti terminus, flow tvarką, trūkstamus laukus. Dokumentuoti `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`. |
+
+### Phase B planavimas (backend)
+
+Kai prototipas patvirtintas stakeholderių:
+
+- Frontend: React/Next.js arba kitas frameworkas.
+- Backend: Node.js API su realiais endpoints.
+- DB: PostgreSQL + Prisma ORM.
+- Auth: rolių ir teisių sistema pagal `allPermissions`.
+- Docker: `docker-compose.yml` su `web`, `api`, `db`, `document-service` servisais.
+- Migracijos ir seed duomenys iš dabartinio `data.js`.
 
 ## 10. Atnaujinta prototipo kryptis 2026-04-12
 
