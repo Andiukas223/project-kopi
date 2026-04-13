@@ -1,7 +1,17 @@
 services:
+  document-service:
+    build: ./document-service
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./document-service/templates:/app/templates:ro
+      - ./document-service/generated:/app/generated
+    restart: unless-stopped
+
   web:
     build: .
     ports:
       - "8080:80"
+    depends_on:
+      - document-service
     restart: unless-stopped
-

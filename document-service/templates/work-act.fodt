@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" office:version="1.2" office:mimetype="application/vnd.oasis.opendocument.text">
+  <office:styles>
+    <style:style style:name="Standard" style:family="paragraph"><style:text-properties fo:font-size="10pt"/></style:style>
+    <style:style style:name="Title" style:family="paragraph"><style:text-properties fo:font-size="18pt" fo:font-weight="bold"/></style:style>
+    <style:style style:name="Section" style:family="paragraph"><style:text-properties fo:font-size="12pt" fo:font-weight="bold"/></style:style>
+  </office:styles>
+  <office:body>
+    <office:text>
+      <text:p text:style-name="Title">VIVA MEDICAL - ATLIKTU DARBU AKTAS</text:p>
+      <text:p>Dokumento Nr.: {d.documentId}</text:p>
+      <text:p>Akto Nr.: {d.workActNumber}</text:p>
+      <text:p>Data: {d.generatedAt}</text:p>
+      <text:p>Klientas: {d.customer}</text:p>
+      <text:p>Adresas: {d.customerAddress}</text:p>
+      <text:p>Kontaktas: {d.contact}</text:p>
+      <text:p>Darbų / case Nr.: {d.jobId}</text:p>
+      <text:p text:style-name="Section">Įranga</text:p>
+      <text:p>{d.equipmentItemsText}</text:p>
+      <text:p text:style-name="Section">Atliktų darbų tekstas</text:p>
+      <text:p>{d.notes}</text:p>
+      <text:p text:style-name="Section">Darbų sąrašas</text:p>
+      <text:p>{d.workActRowsText}</text:p>
+      <text:p text:style-name="Section">Papildomi laukai</text:p>
+      <text:p>{d.fieldsText}</text:p>
+      <text:p text:style-name="Section">Dokumento tekstas</text:p>
+      <text:p>{d.templateSectionsText}</text:p>
+      <text:p>Serviso inžinierius: ________________________________</text:p>
+      <text:p>Kliento atstovas: ________________________________</text:p>
+    </office:text>
+  </office:body>
+</office:document>

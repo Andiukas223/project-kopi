@@ -8,6 +8,33 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 
 ### Added
 
+- Prideta `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`: read-only Tomis Work Act / Work List Template analize, atskirtas Work List Template vs document output template modelis, Work Act draft flow, Carbone payload kryptis ir nauji B-15/B-16 backlog punktai.
+- Patikslintas B-15 equipment pasirinkimo modelis: Work Act gali gauti equipment automatiskai is case/equipment konteksto arba tiesioginio kurimo metu leisti pasirinkti equipment per search/dropdown ir prideti work eilutes.
+- Implementuotas B-15 Work Act draft + Work List Template flow: Service job detaleje galima sukurti Work Act draft, auto-prefill'inti job equipment, papildomai rinktis kliento equipment per search/dropdown, pritaikyti Work List Template, redaguoti `Work Description` ir `Work: List` eilutes, sukurti Service act dokumento draft ir perduoti Work Act rows/equipment i `document-service` payload.
+- Implementuotas B-16 Standardized document output templates: `document-service/templates` turi atskirus Carbone output sablonus Work Act, Commercial Offer ir Defect Act dokumentams; backend `templateMap` naudoja atskirus failus, payload papildytas equipment/work rows, quotation ir defect laukais, o Documents UI turi Commercial offer / Defect act pasirinkimus.
+- Pradetas realus output template editor: Work Act, Commercial Offer ir Defect Act turi strukturuotus sekciju editorius su merge fields, reset/save logika, `localStorage` persistence, `templateSections` perdavimu i `document-service` payload ir sekciju teksto renderinimu sugeneruotame output faile.
+- Patobulintas `localStorage` load merge: nauji default demo/template irasai nebepametami, kai narsykle turi sena issaugota demo busena.
+- Papildyta dokumentacija del Tomis krypties: `Documents` turi tapti dokumentu talpykla/paieskos moduliu, `Template Generation` turi buti atskiras generavimo/editoriu modulis, o dizaino principai turi palaikyti moduliu atskiruma, lengva modernu UI ir neperkrauta vartotojo patirti.
+- Implementuotas B-17 pirmas split: pridetas atskiras `Template Generation` sidebar modulis ir puslapis, o `Documents` puslapyje template generation panelis iskeliamas, paliekant dokumentu repository/search/detail/upload role.
+- Implementuotas B-18 Template Generation sub-tabs: naujame modulyje atskirti `Work Acts`, `Defect Acts`, `Commercial Offers`, `Work List Templates` ir `Output Templates`; output template tab'e paliktas Carbone generavimo/editoriaus panelis, o kiti tab'ai rodo atskira kontekstini workspace.
+- Implementuotas B-19 Work Acts workspace perkeltas i `Template Generation`: Work Acts tab'e galima pasirinkti source service job, sukurti Work Act draft, pasirinkti equipment, pritaikyti Work List Template, redaguoti Work Description / Work: List ir kurti dokumento draft.
+- Implementuotas B-20 Defect Acts workspace: `Template Generation` Defect Acts tab'e galima pasirinkti source service job, sukurti Defect Act draft, pildyti defect description / engineer findings / recommended correction / risk / customer acknowledgement ir sukurti Defect act dokumento draft i `Documents`.
+- Patobulintas Work Act builder UX: `Work List Template` label pakeistas i `Work List Template Name`, `Work Description` label'is naudojamas vietoje seno Work Text termino, o equipment pasirinkimas pakeistas is checkbox saraso i paieskos/dropdown + `Add equipment` + pasirinktu equipment juosta su `X` pasalinimu.
+- Implementuoti B-03 ir B-04: Service puslapyje pridetas job detail panelis su susietais dokumentais ir parts requests; pridetas Finance puslapis su invoice sarasu, payment statusais ir mock Generate invoice / Mark paid / Mark cancelled veiksmais.
+
+- Implementuotas B-02 Document rejection path: Review / Customer / Signature dokumentai turi Reject veiksma su privalomu komentaru, dokumentas pereina i `Rejected`, komentaras rodomas dokumento detaleje, o `Back to Draft` grazina dokumenta i Draft tolimesniam taisymui.
+- Implementuotas B-05 Document upload flow: Documents puslapyje pridetas `Upload document` veiksmas su metadata forma (type, job ref, customer, who signed, due date, description), kuri sukuria nauja Draft dokumenta pipeline'e ir rodo upload metadata detaleje.
+- Implementuotas B-06 Document search: Documents lentele turi laisvo teksto paieska, type/status/customer/date filtrus ir `Search` / `Cancel` veiksmus.
+- Implementuotas B-07 PM date reschedule: PM submodulio lenteles datos laukai leidzia perkelti vizita tik to paties menesio ribose, rodo moved/error busena ir per `computePmSchedule()` atnaujina Calendar PM ivykius.
+- Implementuotas B-08 Sales: New quotation: Sales puslapyje `New quotation` atidaro mini forma (customer, equipment, type, amount, due, notes) ir sukuria Draft QTE irasa atmintyje.
+- Implementuotas B-09 Vendor return flow: Parts detaleje `Create vendor return` sukuria vendor return case, jis rodomas Parts vendor return queue ir Logistics role queue / badge.
+- Implementuotas B-10 Contract management: Sales puslapyje pridetas atskiras kontraktu perziuros/redagavimo ekranas su value/consumed/remaining, periodu, PM dazniu, statusu ir notes.
+- Implementuotas B-11 Warranty/calendar sync: `Acceptance report` upload'as atnaujina susieto equipment acceptance/warranty laukus ir sukuria warranty expiry eventa kalendoriuje.
+- Implementuotas B-12 Parts delivery address registry: Parts delivery flow turi registry autofill forma su klientu adresu/kontaktu is Customers registro ir issaugo pasirinkta delivery adresa/kontakta i parts request.
+- Implementuotas B-13 localStorage persistence: demo UI state ir mutable duomenu kolekcijos saugomos `localStorage`, todel pakeitimai islieka po puslapio reload.
+- Implementuotas B-14 Carbone document service: pridetas Node.js `document-service` su Carbone/LibreOffice Docker konteineriu, `/health`, `/preview`, `/generate`, `/download` API, nginx `/api/documents/` proxy ir Documents UI `Generate via service` veiksmas.
+- Prideta template editor funkcija Documents modulyje: galima redaguoti pasirinkto template pavadinima, owner, output format ir body teksta; pakeitimai issaugomi `localStorage` ir perduodami i `document-service` generavimo payload.
+
 - Pridėta `docs/VM_WEB_CONTROL.md` — pilna `vm-web-control.cmd` / `.ps1` dokumentacija: paskirtis, visų komandų aprašas, veikimo logika, Docker konfigūracija (Dockerfile + docker-compose.yml), interaktyvus meniu, alternatyva be Docker, dažnos problemos ir sprendimai.
 
 ### Fixed

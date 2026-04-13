@@ -152,6 +152,8 @@ Primary navigation:
 - Service
 - Sales
 - Documents
+- Template Generation
+- Finance
 - Customers
 - Equipment
 - Parts
@@ -310,16 +312,19 @@ Primary actions:
 
 ### Documents
 
-Purpose: central document creation and processing monitor.
+Purpose: document repository, search, status tracking, and file custody.
 
 Components:
 
-- Document pipeline cards.
-- Filters by document type, owner, status, and due date.
-- Table with document ID, job ID, customer, owner, status, and next action.
+- Repository summary cards.
+- Filters by document type, owner, status, due date, customer, job, equipment, generated/uploaded/signed state.
+- Table with document ID, job ID, customer, equipment, owner, status, source, signed state, and file action.
 - Detail panel for selected document.
-- Templates tab for future Carbone-based LibreOffice/Microsoft Office template generation.
-- Mock generation panel for selecting a template and output format (`docx`, `odt`, `pdf`).
+- Upload external document panel.
+- Download/open generated or uploaded document action.
+- Audit/history section for generated, uploaded, signed, archived, and rejected events.
+
+Documents must not become the main template editing workspace. Template generation can link back to Documents after a generated file is saved.
 
 Pipeline stages:
 
@@ -329,6 +334,27 @@ Pipeline stages:
 - Signature
 - Approved
 - Archived
+
+### Template Generation
+
+Purpose: document creation workspace separated from the document repository.
+
+Components:
+
+- Work Acts workspace: draft list, create from job/equipment/manual, equipment search/add/remove, Work List Template Name picker, Work Description and Work Rows editor, generate output.
+- Defect Acts workspace: create from job/equipment/manual, defect description, findings, recommended correction, generate output.
+- Commercial Offers workspace: sales scope, pricing, validity, approval text, generate output.
+- Work List Templates registry: equipment/procedure-specific checklist templates used as isolated copies inside Work Acts.
+- Output Templates editor: standardized printable forms for Work Act, Commercial Offer, Defect Act, and future documents.
+- Preview and generate panel for `pdf`, `docx`, and `odt`.
+
+Primary actions:
+
+- Create draft
+- Apply work list template
+- Generate document
+- Save generated file into Documents
+- Edit output template
 
 ### Customers
 
@@ -603,8 +629,8 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 
 ### Phase 2: Core Pages ✅ DONE
 
-- Command Center, Service, Sales, Documents, Customers, Equipment, Parts, Reports, Admin, Calendar pages.
-- Full demo data in `data.js` (jobs, documents, equipment, customers, contracts, quotations, partsRequests, users, templates, calendarEvents).
+- Command Center, Service, Sales, Documents, Finance, Customers, Equipment, Parts, Reports, Admin, Calendar pages.
+- Full demo data in `data.js` (jobs, documents, invoices, equipment, customers, contracts, quotations, partsRequests, users, templates, calendarEvents).
 - Navigation, role switcher, dynamic sidebar badges.
 
 ### Phase 3: Service Wizard ✅ DONE
@@ -620,7 +646,7 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 - `Draft → Review → Customer → Signature → Approved → Archived` stage transitions (Advance button).
 - Document step-back — admin/svcmgr can move one stage backward.
 - Owner filter, `Review next`, overdue monitoring (due-today / customer / signature cards, red row indicator).
-- Template generation mock: select template, output format, click Generate → styled document preview with filled fields, signature lines, `.txt` download, Reset button.
+- Template generation: select template, output format, edit template metadata/body, click Generate -> styled document preview with filled fields, signature lines, `.txt` download, or service-generated DOCX/ODT/PDF through `document-service`.
 - Five per-template renderers: Service act, Diagnostic report, Quotation, Acceptance report, Vendor return note.
 
 ### Phase 4B: Role-Filtered Views ✅ DONE
@@ -631,6 +657,7 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 - Documents page: default filter by role (service/svcmgr → Service, sales → Sales, finance → Finance).
 - Page header: "New service job" button hidden for roles that cannot create jobs.
 - Sales module: full quotation pipeline (Draft → Sent → Awaiting approval → Approved → Handed off / Rejected) with 4-tab detail (Offer / Contract / Approval / Handoff).
+- Finance module: invoice queue with job-linked invoice records, payment status, and mock Generate invoice / Mark paid / Mark cancelled actions.
 
 ---
 
@@ -640,31 +667,48 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 
 | ID | Task | Description |
 |---|---|---|
-| B-02 | **Document rejection path** | "Reject" button on Review / Customer / Signature stages → `Rejected` status with comment input → back to Draft. Needs inline comment field or modal. |
-| B-03 | **Service job detail panel** | Clicking a row in the jobs table should open a right-side detail panel: job info, current stage, linked documents, linked parts requests. Currently no such panel exists. |
-| B-04 | **Finance module** | New Finance page: invoice list linked to jobs, payment status (Paid / Pending / Cancelled), mock "Generate invoice", "Mark paid" / "Mark cancelled" workflow buttons. |
+| ~~B-02~~ | ~~**Document rejection path**~~ | Done: Review / Customer / Signature documents can be rejected with a required comment, move to `Rejected`, show the latest rejection note, then return to Draft with `Back to Draft`. |
+| ~~B-03~~ | ~~**Service job detail panel**~~ | Done: clicking a Service job row opens a right-side detail panel with job info, current stage, linked documents, and linked parts requests. |
+| ~~B-04~~ | ~~**Finance module**~~ | Done: Finance page added with job-linked invoice list, payment status (Paid / Pending / Cancelled), and mock "Generate invoice", "Mark paid", "Mark cancelled" actions. |
 
 ### Priority 2 — Data completeness and UX
 
 | ID | Task | Description |
 |---|---|---|
-| B-05 | **Document upload flow** | "Upload document" button → metadata form (type, job ref, customer, who signed, description) → inserts document record into pipeline. |
-| B-06 | **Document search** | Free-text search + multi-filter chips (type / owner / status / customer / date range) in the documents table. |
-| B-07 | **PM date reschedule** | In PM submodule: allow moving a PM visit date (constraint: same month only). Updates calendar on change. |
-| B-08 | **Sales: New quotation** | "New quotation" button with a mini form (customer, equipment, type, amount) → creates a Draft QTE entry in memory. |
-| B-09 | **Vendor return flow** | From Parts module: "Create vendor return" button → creates return case → visible in Logistics queue. |
+| ~~B-05~~ | ~~**Document upload flow**~~ | Done: `Upload document` opens a metadata form (type, job ref, customer, who signed, due date, description) and inserts a Draft document record into the pipeline. |
+| ~~B-06~~ | ~~**Document search**~~ | Done: free-text search plus type/status/customer/date filters in the documents table with `Search` / `Cancel` actions. |
+| ~~B-07~~ | ~~**PM date reschedule**~~ | Done: PM submodule date fields allow moving a visit within the same month only and update Calendar PM events. |
+| ~~B-08~~ | ~~**Sales: New quotation**~~ | ~~"New quotation" button with a mini form (customer, equipment, type, amount) → creates a Draft QTE entry in memory.~~ **Done:** `New quotation` opens a mini form and creates a selected Draft QTE entry in memory. |
+| ~~B-09~~ | ~~**Vendor return flow**~~ | ~~From Parts module: "Create vendor return" button → creates return case → visible in Logistics queue.~~ **Done:** Parts detail creates a vendor return case that appears in the Parts vendor return queue and Logistics role queue / badge. |
 
 ### Priority 3 — Later / deferred
 
 | ID | Task | Description |
 |---|---|---|
-| B-10 | **Contract management** | Dedicated contract view/edit screen in Sales module. Contracts currently read-only. |
-| B-11 | **Warranty/calendar sync** | Type C installation: acceptance act upload auto-populates warranty expiry date in calendar. |
-| B-12 | **Parts delivery address registry** | Autofill suggestions when entering delivery address on parts requests (populated from customer registry). |
-| B-13 | **localStorage persistence** | Optional: persist in-memory state across page reloads. |
-| B-14 | **Carbone document service** | Phase 4C: backend container with Node.js + Carbone + LibreOffice; real DOCX/ODT/PDF generation replacing mock. API endpoints: preview, generate, download. Audit trail metadata. |
+| ~~B-10~~ | ~~**Contract management**~~ | ~~Dedicated contract view/edit screen in Sales module. Contracts currently read-only.~~ **Done:** Sales module has a contract management view with edit mode, validation, and automatic `remaining = value - consumed` recalculation. |
+| ~~B-11~~ | ~~**Warranty/calendar sync**~~ | ~~Type C installation: acceptance act upload auto-populates warranty expiry date in calendar.~~ **Done:** `Acceptance report` upload updates linked equipment acceptance/warranty fields and creates a warranty expiry event in Calendar. |
+| ~~B-12~~ | ~~**Parts delivery address registry**~~ | ~~Autofill suggestions when entering delivery address on parts requests (populated from customer registry).~~ **Done:** Parts delivery flow has a registry autofill form with customer address/contact suggestions and saves the selected delivery address/contact to the parts request. |
+| ~~B-13~~ | ~~**localStorage persistence**~~ | ~~Optional: persist in-memory state across page reloads.~~ **Done:** UI state and mutable demo collections are saved to `localStorage`, so changes survive page reloads. |
+| ~~B-14~~ | ~~**Carbone document service**~~ | ~~Phase 4C: backend container with Node.js + Carbone + LibreOffice; real DOCX/ODT/PDF generation replacing mock. API endpoints: preview, generate, download. Audit trail metadata.~~ **Done:** added the `document-service` container with Carbone/LibreOffice API (`/health`, `/preview`, `/generate`, `/download`), nginx proxy, and Documents UI `Generate via service` action. |
+| ~~B-15~~ | ~~**Work Act draft + Work List Template flow**~~ | **Done:** Service job detail can create a Work Act draft, preselect job equipment, search/add extra customer equipment, apply a Work List Template as an isolated copy, edit `Work Description` / `Work: List`, and create a Service act document draft. |
+| ~~B-16~~ | ~~**Standardized document output templates**~~ | **Done:** Carbone output templates are now separate from the Work List Template registry; added `work-act.fodt`, `commercial-offer.fodt`, `defect-act.fodt`, backend `templateMap`, Documents UI `Commercial offer` / `Defect act` options, and payload fields for equipment/work rows, quotation, defect, and signature content. |
+| ~~B-17~~ | ~~**Template Generation module split**~~ | **Done:** added a dedicated `Template Generation` sidebar module/page and removed the template generation panel from `Documents`, keeping Documents focused on repository/search/detail/upload. Next: split Template Generation into Work Acts, Defect Acts, Commercial Offers, Work List Templates, and Output Templates sub-tabs. |
+| ~~B-18~~ | ~~**Template Generation sub-tabs**~~ | **Done:** added Template Generation sub-tabs for Work Acts, Defect Acts, Commercial Offers, Work List Templates, and Output Templates. Output Templates keeps the current Carbone generation/editor panel; the other tabs establish separate Tomis-aligned workspaces. |
+| ~~B-19~~ | ~~**Work Acts workspace in Template Generation**~~ | **Done:** Work Acts tab now has a source service job selector, Work Act draft create flow, and the full Work Act builder: equipment selection, Work List Template apply, Work Description / Work: List editing, and Service act document draft creation. |
+| ~~B-20~~ | ~~**Defect Acts workspace in Template Generation**~~ | **Done:** Defect Acts tab now has a source service job selector, Defect Act draft create flow, defect description / engineer findings / recommended correction / risk / acknowledgement editing, and Defect act document draft creation back into Documents. |
+| ~~B-21~~ | ~~**Work Act builder UX labels and equipment search**~~ | **Done:** renamed Work List Template to Work List Template Name, replaced the Work Text term with Work Description, and replaced equipment checkboxes with search/dropdown, Add equipment, selected-equipment strip, and X remove controls. |
 
 ---
+
+## Tomis Document Generation Findings
+
+Detailed read-only findings are documented in `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`.
+
+Core decision:
+- Work List Template = equipment/procedure checklist copied into a concrete Work Act.
+- Document Output Template = standardized printable form rendered by Carbone/LibreOffice.
+- Work Act generation flow implemented: Draft record -> auto-prefill equipment from case/equipment or manual equipment search/add/remove -> apply Work List Template -> edit isolated work rows/work description -> generate output document draft.
+- The current generic template editor is temporary and should be superseded by the Work Act-specific workflow.
 
 ## Documentation Rule
 

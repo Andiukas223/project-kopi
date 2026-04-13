@@ -12,8 +12,10 @@
 |---|---|
 | `vm-web-control.cmd` | Windows paleidiklis — atveria PowerShell ir perduoda argumentus |
 | `vm-web-control.ps1` | Pagrindinis PowerShell skriptas su visa valdymo logika |
-| `Dockerfile` | nginx:1.27-alpine konteineris, kopijuoja `src/` į `/usr/share/nginx/html/` |
-| `docker-compose.yml` | Vienintelis `web` servisas, port `8080:80`, `restart: unless-stopped` |
+| `Dockerfile` | nginx:1.27-alpine konteineris, kopijuoja `src/` į `/usr/share/nginx/html/` ir naudoja `nginx.conf` API proxy |
+| `nginx.conf` | `/api/documents/` proxy į `document-service:3001`, visa kita serve'inama kaip statinis frontend |
+| `docker-compose.yml` | `web` servisas (`8080:80`) + `document-service` servisas (`3001:3001`), abu `restart: unless-stopped` |
+| `document-service/` | Node.js + Carbone + LibreOffice dokumentų generavimo servisas su `templates/` ir `generated/` katalogais |
 
 ---
 
@@ -63,7 +65,7 @@ vm-web-control.cmd open
 ```
 vm-web-control.cmd %*
   └─ powershell -NoProfile -ExecutionPolicy Bypass -File vm-web-control.ps1 [action]
-       └─ docker compose up -d --build   (on / restart)
+       └─ docker compose up -d --build   (on / restart; web + document-service)
        └─ docker compose down            (off / restart)
        └─ docker compose ps              (status)
        └─ docker compose logs --tail 80  (logs)
@@ -97,25 +99,38 @@ Project: C:\...\project kopi
 
 ```dockerfile
 FROM nginx:1.27-alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY src/ /usr/share/nginx/html/
 EXPOSE 80
 ```
 
-Visi `src/` failo turinys (HTML, CSS, JS) kopijuojamas į nginx statinių failų šaknį. Kiekvieną kartą paleidus `on` arba `restart`, konteineris rebuild'inamas su naujausiais `src/` pakeitimais.
+Visi `src/` failo turinys (HTML, CSS, JS) kopijuojamas į nginx statinių failų šaknį. `nginx.conf` papildomai proxy'ina `/api/documents/` užklausas į `document-service`. Kiekvieną kartą paleidus `on` arba `restart`, konteineriai rebuild'inami su naujausiais pakeitimais.
 
 ### docker-compose.yml
 
 ```yaml
 services:
+  document-service:
+    build: ./document-service
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./document-service/templates:/app/templates:ro
+      - ./document-service/generated:/app/generated
+    restart: unless-stopped
+
   web:
     build: .
     ports:
       - "8080:80"
+    depends_on:
+      - document-service
     restart: unless-stopped
 ```
 
 - Port: `http://localhost:8080/`
-- `restart: unless-stopped` — konteineris automatiškai paleidžiamas iš naujo po Docker Desktop perkrovimo, nebent jis buvo sustabdytas rankiniu būdu su `off`.
+- `restart: unless-stopped` — konteineriai automatiškai paleidžiami iš naujo po Docker Desktop perkrovimo, nebent jie buvo sustabdyti rankiniu būdu su `off`.
+- `document-service` — Carbone dokumentų generavimo API. Per web UI kviečiama per `/api/documents/*`, tiesiogiai pasiekiama per `http://localhost:3001/health`.
 
 ---
 

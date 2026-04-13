@@ -1,5 +1,6 @@
 import { qs, qsa } from "./dom.js";
-import { documents, jobs, partsRequests, roles } from "./data.js";
+import { documents, invoices, jobs, partsRequests, roles, vendorReturns } from "./data.js";
+import { saveDemoState } from "./persistence.js";
 import { renderPage, renderRemindersStrip } from "./render.js";
 import { setPage, setRole, state } from "./state.js";
 
@@ -10,6 +11,7 @@ export function renderApp() {
   updateRoleLabel();
   updateReminders();
   updateSidebarBadges();
+  saveDemoState();
 }
 
 // Update sidebar badge counts to reflect role-relevant queue depths.
@@ -35,6 +37,7 @@ function updateSidebarBadges() {
     ? partsRequests.filter((pr) => pr.status === "Pending approval").length
     : ["logistics", "warehouse"].includes(r)
       ? partsRequests.filter((pr) => ["In transit", "Arrived at warehouse"].includes(pr.status)).length
+        + (r === "logistics" ? vendorReturns.filter((vr) => vr.status !== "Closed").length : 0)
       : 0;
 
   // Documents badge — overdue docs relevant to this role
@@ -42,11 +45,14 @@ function updateSidebarBadges() {
   const docsCount = docsOwnerLabel
     ? documents.filter((d) => d.owner === docsOwnerLabel && !["Approved", "Archived"].includes(d.pipelineStep)).length
     : overdueCount;
+  const financeCount = invoices.filter((inv) => inv.paymentStatus === "Pending").length;
 
   setBadge("sb-command",   overdueCount,  "warn");
   setBadge("sb-service",   serviceCount,  "warn");
   setBadge("sb-parts",     partsCount,    "warn");
   setBadge("sb-documents", docsCount,     "warn");
+  setBadge("sb-templategen", 0, "warn");
+  setBadge("sb-finance",   financeCount,  "warn");
 }
 
 function ownerForRole(role) {
@@ -104,4 +110,3 @@ function updateRoleLabel() {
   const role = roles.find((item) => item.id === state.role);
   qs("#active-role-label").textContent = role ? role.label : "Workspace";
 }
-

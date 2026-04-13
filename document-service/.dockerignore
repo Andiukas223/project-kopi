@@ -1,0 +1,6 @@
+.git
+node_modules
+generated/*
+!generated/.gitkeep
+*.log
+npm-debug.log*

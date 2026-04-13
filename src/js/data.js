@@ -578,6 +578,11 @@ export const partsRequests = [
 ];
 
 // ---------------------------------------------------------------------------
+// Vendor return cases created from Parts requests / repair exchange handling.
+// ---------------------------------------------------------------------------
+export const vendorReturns = [];
+
+// ---------------------------------------------------------------------------
 // Service jobs
 // ---------------------------------------------------------------------------
 export const jobs = [
@@ -678,15 +683,296 @@ export const documents = [
 ];
 
 // ---------------------------------------------------------------------------
-// Document templates (Carbone mock — real generation is backend phase 4B)
+// Finance invoices. Finance owns invoice generation/upload and payment status.
+// ---------------------------------------------------------------------------
+export const invoices = [
+  {
+    id: "INV-9001",
+    jobId: "VM-SV-1024",
+    documentId: null,
+    customer: "Vilnius Clinical Hospital",
+    owner: "V. Klimaite",
+    amount: 1250,
+    currency: "EUR",
+    invoiceNo: null,
+    status: "Draft",
+    paymentStatus: "Pending",
+    due: "2026-04-22",
+    generatedAt: null,
+    notes: "Diagnostics and initial corrective work. Generate invoice after service act review."
+  },
+  {
+    id: "INV-9002",
+    jobId: "VM-SV-1026",
+    documentId: "DOC-3110",
+    customer: "Kaunas Diagnostics",
+    owner: "V. Klimaite",
+    amount: 1850,
+    currency: "EUR",
+    invoiceNo: "VM-2026-0410",
+    status: "Generated",
+    paymentStatus: "Pending",
+    due: "2026-04-20",
+    generatedAt: "2026-04-10",
+    notes: "Valve assembly replacement pending customer payment."
+  },
+  {
+    id: "INV-9003",
+    jobId: "VM-SV-1027",
+    documentId: "DOC-3111",
+    customer: "Northway Clinic",
+    owner: "V. Klimaite",
+    amount: 32000,
+    currency: "EUR",
+    invoiceNo: "VM-2026-0328",
+    status: "Generated",
+    paymentStatus: "Paid",
+    due: "2026-04-12",
+    generatedAt: "2026-03-28",
+    notes: "Installation invoice paid. Acceptance report waiting for signature."
+  },
+  {
+    id: "INV-9004",
+    jobId: "VM-SV-1025",
+    documentId: null,
+    customer: "Baltic Cardio Center",
+    owner: "V. Klimaite",
+    amount: 4200,
+    currency: "EUR",
+    invoiceNo: null,
+    status: "Draft",
+    paymentStatus: "Cancelled",
+    due: "2026-04-18",
+    generatedAt: null,
+    notes: "Customer requested revised quotation before invoicing."
+  }
+];
+
+// ---------------------------------------------------------------------------
+// Document templates (Carbone mock; real generation is backend phase 4B)
 // ---------------------------------------------------------------------------
 export const templates = [
-  { id: "tpl-service-act",  name: "Service act",        format: "ODT/DOCX/PDF", owner: "Service" },
-  { id: "tpl-diagnostic",   name: "Diagnostic report",  format: "ODT/DOCX/PDF", owner: "Service" },
-  { id: "tpl-quotation",    name: "Quotation",           format: "DOCX/PDF",     owner: "Sales"   },
-  { id: "tpl-acceptance",   name: "Acceptance report",  format: "ODT/PDF",      owner: "Admin"   },
-  { id: "tpl-vendor-return",name: "Vendor return note", format: "DOCX/PDF",     owner: "Service" }
+  {
+    id: "tpl-service-act",
+    name: "Service act",
+    format: "ODT/DOCX/PDF",
+    owner: "Service",
+    body: "Work act for service visits. Include customer, equipment, serial number, work performed, parts used, duration, engineer, and customer signature.",
+    defaultBody: "Work act for service visits. Include customer, equipment, serial number, work performed, parts used, duration, engineer, and customer signature."
+  },
+  {
+    id: "tpl-diagnostic",
+    name: "Diagnostic report",
+    format: "ODT/DOCX/PDF",
+    owner: "Service",
+    body: "Diagnostic report for technical cases. Include reported symptom, inspection notes, root cause, recommended action, risk level, and diagnosing engineer.",
+    defaultBody: "Diagnostic report for technical cases. Include reported symptom, inspection notes, root cause, recommended action, risk level, and diagnosing engineer."
+  },
+  {
+    id: "tpl-quotation",
+    name: "Commercial offer",
+    format: "DOCX/PDF",
+    owner: "Sales",
+    body: "Commercial offer for service, parts, PM contract, or installation. Include scope, equipment, price, validity date, payment terms, and approval signature.",
+    defaultBody: "Commercial offer for service, parts, PM contract, or installation. Include scope, equipment, price, validity date, payment terms, and approval signature."
+  },
+  {
+    id: "tpl-defect-act",
+    name: "Defect act",
+    format: "ODT/DOCX/PDF",
+    owner: "Service",
+    body: "Defect act for equipment findings. Include customer, equipment, serial number, reported defect, engineer findings, recommended correction, and customer acknowledgement.",
+    defaultBody: "Defect act for equipment findings. Include customer, equipment, serial number, reported defect, engineer findings, recommended correction, and customer acknowledgement."
+  },
+  {
+    id: "tpl-acceptance",
+    name: "Acceptance report",
+    format: "ODT/PDF",
+    owner: "Admin",
+    body: "Installation acceptance report. Include installed equipment, serial number, installation date, acceptance criteria, training confirmation, and warranty start.",
+    defaultBody: "Installation acceptance report. Include installed equipment, serial number, installation date, acceptance criteria, training confirmation, and warranty start."
+  },
+  {
+    id: "tpl-vendor-return",
+    name: "Vendor return note",
+    format: "DOCX/PDF",
+    owner: "Service",
+    body: "Vendor return note for defective or incorrect parts. Include part number, description, job reference, reason for return, destination, and authorisation.",
+    defaultBody: "Vendor return note for defective or incorrect parts. Include part number, description, job reference, reason for return, destination, and authorisation."
+  }
 ];
+
+export const documentTemplateBlueprints = {
+  "tpl-service-act": {
+    title: "Work Act editor",
+    mergeFields: ["documentId", "workActNumber", "generatedAt", "customer", "customerAddress", "contact", "jobId", "equipmentItemsText", "notes", "workActRowsText", "owner"],
+    sections: [
+      {
+        id: "header",
+        label: "Header",
+        value: "VIVA MEDICAL - ATLIKTU DARBU AKTAS\nAkto Nr.: {d.workActNumber}\nData: {d.generatedAt}"
+      },
+      {
+        id: "customer",
+        label: "Customer block",
+        value: "Klientas: {d.customer}\nAdresas: {d.customerAddress}\nKontaktas: {d.contact}"
+      },
+      {
+        id: "equipment",
+        label: "Equipment block",
+        value: "Susijes darbas: {d.jobId}\nIranga:\n{d.equipmentItemsText}"
+      },
+      {
+        id: "work",
+        label: "Work block",
+        value: "Atlikti darbai:\n{d.notes}\n\nDarbu sarasas:\n{d.workActRowsText}"
+      },
+      {
+        id: "signatures",
+        label: "Signatures",
+        value: "Atsakingas inzinierius: ________________________________\nKliento atstovas: ________________________________"
+      }
+    ]
+  },
+  "tpl-quotation": {
+    title: "Commercial Offer editor",
+    mergeFields: ["documentId", "generatedAt", "customer", "customerAddress", "contact", "jobId", "equipment", "serial", "notes", "quotationAmount", "quotationDue", "owner"],
+    sections: [
+      {
+        id: "header",
+        label: "Header",
+        value: "VIVA MEDICAL - KOMERCINIS PASIULYMAS\nPasiulymo Nr.: {d.documentId}\nData: {d.generatedAt}"
+      },
+      {
+        id: "customer",
+        label: "Customer block",
+        value: "Klientas: {d.customer}\nAdresas: {d.customerAddress}\nKontaktas: {d.contact}"
+      },
+      {
+        id: "scope",
+        label: "Scope",
+        value: "Susijes darbas: {d.jobId}\nIranga: {d.equipment}\nSerijos Nr.: {d.serial}\n\nApimtis:\n{d.notes}"
+      },
+      {
+        id: "terms",
+        label: "Price and terms",
+        value: "Suma: {d.quotationAmount}\nGalioja iki: {d.quotationDue}"
+      },
+      {
+        id: "signatures",
+        label: "Signatures",
+        value: "Parenge: ________________________________\nKliento patvirtinimas: ________________________________"
+      }
+    ]
+  },
+  "tpl-defect-act": {
+    title: "Defect Act editor",
+    mergeFields: ["documentId", "generatedAt", "customer", "customerAddress", "contact", "jobId", "equipment", "serial", "defectDescription", "owner"],
+    sections: [
+      {
+        id: "header",
+        label: "Header",
+        value: "VIVA MEDICAL - DEFEKTINIS AKTAS\nAkto Nr.: {d.documentId}\nData: {d.generatedAt}"
+      },
+      {
+        id: "customer",
+        label: "Customer block",
+        value: "Klientas: {d.customer}\nAdresas: {d.customerAddress}\nKontaktas: {d.contact}"
+      },
+      {
+        id: "equipment",
+        label: "Equipment block",
+        value: "Susijes darbas: {d.jobId}\nIranga: {d.equipment}\nSerijos Nr.: {d.serial}"
+      },
+      {
+        id: "defect",
+        label: "Defect block",
+        value: "Gedimo / defekto aprasymas:\n{d.defectDescription}"
+      },
+      {
+        id: "signatures",
+        label: "Signatures",
+        value: "Atsakingas asmuo: ________________________________\nKliento atstovas: ________________________________"
+      }
+    ]
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Work List Templates copied into concrete Work Act drafts.
+// These are equipment/procedure checklists, not final Carbone document layouts.
+// ---------------------------------------------------------------------------
+export const workListTemplates = [
+  {
+    id: "wlt-ultrasound-pm",
+    name: "Ultrasound PM / technine prieziura",
+    equipmentCategory: "Ultrasound",
+    serviceType: "PM",
+    language: "lt",
+    bodyText: "Technines prieziuros metu atlikti ultragarso sistemos patikrinimai.",
+    workRows: [
+      "Vizualiai patikrintas aparatas, laidai, davikliai ir maitinimo kabeliai.",
+      "Isvalytas aparatas, oro filtrai ir isoriniai pavirsiai.",
+      "Patikrintas sistemos uzsikrovimas, data/laikas ir klaidu pranesimai.",
+      "Patikrintas vaizdo gavimas su turimais davikliais.",
+      "Patikrintas spausdintuvas / eksportas, jeigu taikoma.",
+      "Aparatas paliktas veikiantis ir tinkamas naudojimui."
+    ]
+  },
+  {
+    id: "wlt-endoscopy-pm",
+    name: "Endoscope washer PM / technine prieziura",
+    equipmentCategory: "Endoscopy",
+    serviceType: "PM",
+    language: "lt",
+    bodyText: "Technines prieziuros metu atlikti endoskopu plovyklos patikrinimai.",
+    workRows: [
+      "Vizualiai patikrinta irangos bukle, pajungimai ir saugumo zymejimai.",
+      "Patikrinti filtrai, vandens padavimas ir drenazo sistema.",
+      "Patikrintas ciklo paleidimas ir ciklo pabaigos registravimas.",
+      "Patikrinti chemijos lygiai ir dozavimo grandine.",
+      "Patikrinti klaidu pranesimai ir sistemos zurnalas.",
+      "Iranga palikta veikianti ir tinkama naudojimui."
+    ]
+  },
+  {
+    id: "wlt-patient-lift-check",
+    name: "Patient lift safety check",
+    equipmentCategory: "Patient Handling",
+    serviceType: "Service",
+    language: "lt",
+    bodyText: "Atliktas paciento keltuvo funkciniu ir saugos tasku patikrinimas.",
+    workRows: [
+      "Vizualiai patikrinta konstrukcija, ratai, stabdziai ir dirzai.",
+      "Patikrintas valdymo pultas ir avarinis sustabdymas.",
+      "Patikrintas akumuliatoriaus ikrovimas ir kroviklio veikimas.",
+      "Atliktas pakelimo / nuleidimo funkcijos bandymas be apkrovos.",
+      "Patikrinti saugos lipdukai ir identifikaciniai duomenys.",
+      "Iranga palikta saugi naudojimui arba pazymeti apribojimai komentaruose."
+    ]
+  },
+  {
+    id: "wlt-generic-service",
+    name: "Bendrinis serviso darbu sarasas",
+    equipmentCategory: "General",
+    serviceType: "Service",
+    language: "lt",
+    bodyText: "Atlikti bendriniai serviso darbai pagal registruota gedima.",
+    workRows: [
+      "Išklausytas vartotojo gedimo aprasymas ir patikrinta registruota problema.",
+      "Atlikta irangos apziura ir funkcine diagnostika.",
+      "Atlikti korekciniai darbai arba pateiktos rekomendacijos.",
+      "Patikrintas irangos veikimas po atliktu darbu.",
+      "Klientas informuotas apie atliktus darbus ir tolimesnius veiksmus."
+    ]
+  }
+];
+
+// Work Act drafts generated from service jobs or created manually in the UI.
+export const workActs = [];
+
+// Defect Act drafts generated from service jobs or created manually in the UI.
+export const defectActs = [];
 
 // ---------------------------------------------------------------------------
 // Pipeline stages for document pipeline board

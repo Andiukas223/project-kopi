@@ -28,6 +28,21 @@ Dokumentas apibrezia labai konkretu UI kontrakta:
 
 Svarbi interpretacija: dokumentas yra geriausiai tinkamas MVP/prototipui. Velesnei produkcinei sistemai reikes atskiro sprendimo del backend, autentifikacijos, duomenu bazes, teisiu ir Docker deployment.
 
+### Lengvo modernaus dizaino principai
+
+Sistema turi atrodyti lengva, moderni ir neperkrauta, net kai duomenu ir workflow daug. Pagrindine kryptis: kiekvienas modulis turi viena aiskia paskirti, o naudotojas vienu metu turi matyti tik tam veiksmui reikalinga informacija.
+
+- Moduliu atskirumas: `Documents` turi buti dokumentu talpykla ir paieskos vieta; `Template Generation` turi buti atskiras dokumentu kurimo ir sablonu darbo modulis; `Registers` turi laikyti registrinius template/us ir klasifikatorius.
+- Vienas pagrindinis veiksmas ekrane: kiekviename modulyje turi buti aiskus primary action, o antriniai veiksmai turi buti ramesni ir neuzgozti pagrindines uzduoties.
+- Progressive disclosure: advanced laukai, debug JSON, template payload, audit trail ir techniniai nustatymai turi buti paslepiami po tabsais, details blokais arba atskiromis paneliu sekcijomis.
+- Vizualinis lengvumas: naudoti daug balto/sviesaus pavirsiaus, ramias linijas, ribota akcentu kieki, statuso spalvas tik statusams, o ne dekorui.
+- Neperkrautos korteles: korteles naudoti tik santraukoms, pasikartojantiems items ir aiškiems objektams; nesudeti korteliu i korteles ir nedaryti kiekvienos formos grupes atskiru floating card.
+- Stabilus layout: lenteles, toolbars, tabsai ir detail paneliai turi tureti stabilias dimensijas, kad statusai, hover busenos ar ilgesni tekstai nejudintu viso ekrano.
+- Role-aware tankis: service, sales, finance ir admin mato skirtingus akcentus; nereikia viename ekrane rodyti visu komandu veiksmu, jei roliui jie nera aktualus.
+- Lengvas skenavimas: top area = summary/filters, middle = list/workspace, right/bottom = selected item detail. Vengti viename skydelyje maisyti registry, generation, archive ir settings logika.
+- Terminai turi buti produkto terminai, ne UI paaiskinimai: `Work Act`, `Work List Template`, `Output Template`, `Generated document`, `Uploaded document`, `Signed document`.
+- Kai workflow sudetingas, naudoti sub-tabs arba stepper, o ne ilga viena forma.
+
 ### Logo failai
 
 Rasti failai:
@@ -345,6 +360,7 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 | Service puslapis | Jobs lentelė, PM submodule, svcmgr parts approval |
 | Sales puslapis | Quotation lentelė + 4-tab detalė (Offer/Contract/Approval/Handoff) |
 | Documents puslapis | Pipeline board, filtrai, overdue monitoring, template generation mock su vizualiniu preview + download |
+| Finance puslapis | Invoice sąrašas, susieti jobs/dokumentai, payment statusai ir mock Generate / Paid / Cancelled veiksmai |
 | Customers puslapis | Lentelė + detalės panel (kontaktai, mini-stat, equipment, contracts) |
 | Equipment puslapis | Lentelė + 4 tabai + Support Portal (Settings/Emails/Web Links + preview modal) |
 | Parts puslapis | Lentelė + stat korteliai + workflow mygtukai (Approve/Reject/Transit/Arrived/Deliver) |
@@ -363,31 +379,49 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 | # | Užduotis | Aprašas |
 |---|---|---|
 | ~~B-01~~ | ~~**Document step-back**~~ | ✅ Implementuota — Advance + Step back mygtukai dokumentų detalės panelėje. |
-| B-02 | **Document rejection path** | „Reject" mygtukas Review/Customer/Signature etapuose → `Rejected` statusas su komentaro lauku → grįžta į Draft. |
-| B-03 | **Service job detail panel** | Paspaudus jobs lentelės eilutę — dešinė detalės panelė: job info, stage, susieti dokumentai, susietos parts requests. Dabar tokio panel nėra. |
-| B-04 | **Finance modulis** | Atskiras Finance puslapis: invoice sąrašas (susietas su jobs), payment statusas (Paid/Pending/Cancelled), mock „Generate invoice", „Mark paid"/„Mark cancelled" mygtukai. |
+| ~~B-02~~ | ~~**Document rejection path**~~ | ✅ Implementuota — Review/Customer/Signature dokumentai turi Reject veiksma su privalomu komentaru, `Rejected` busena ir `Back to Draft` grizima. |
+| ~~B-03~~ | ~~**Service job detail panel**~~ | ✅ Implementuota — paspaudus Service jobs eilute rodoma desine detales panele: job info, current stage, susieti dokumentai ir parts requests. |
+| ~~B-04~~ | ~~**Finance modulis**~~ | ✅ Implementuota — pridetas Finance puslapis su invoice sarasu, job linkais, payment statusais ir mock `Generate invoice` / `Mark paid` / `Mark cancelled` veiksmais. |
 
 #### 🟡 Prioritetas 2 — Duomenų pilnumas ir UX
 
 | # | Užduotis | Aprašas |
 |---|---|---|
-| B-05 | **Document upload flow** | „Upload document" mygtukas → metadata forma (tipas, job ref, klientas, kas pasirašė, aprašas) → sukuria dokumento įrašą pipeline'e. |
-| B-06 | **Document search** | Pilno teksto paieška + multi-filter chips dokumentų lentelėje (tipas / owner / statusas / klientas / datos intervalas). |
-| B-07 | **PM date reschedule** | PM submodulyje leisti perkelti PM vizito datą (tik to paties mėnesio ribose). Atnaujina kalendarių. |
-| B-08 | **Sales: New quotation** | „New quotation" mygtukas su mini forma (klientas, įrenginys, tipas, suma) → sukuria Draft QTE įrašą. |
-| B-09 | **Vendor return flow** | Iš Parts modulio: „Create vendor return" mygtukas → sukuria return case → Logistics mato jį eilėje. |
+| ~~B-05~~ | ~~**Document upload flow**~~ | ✅ Implementuota — `Upload document` mygtukas atidaro metadata forma (tipas, job ref, klientas, kas pasirase, due date, aprasas) ir sukuria Draft dokumento irasa pipeline'e. |
+| ~~B-06~~ | ~~**Document search**~~ | ✅ Implementuota — laisvo teksto paieska + type/status/customer/date filtrai dokumentu lenteleje su `Search` / `Cancel` veiksmais. |
+| ~~B-07~~ | ~~**PM date reschedule**~~ | ✅ Implementuota — PM submodulyje datos laukas leidzia perkelti vizita tik to paties menesio ribose ir atnaujina Calendar PM ivykius. |
+| ~~B-08~~ | ~~**Sales: New quotation**~~ | ~~„New quotation" mygtukas su mini forma (klientas, įrenginys, tipas, suma) → sukuria Draft QTE įrašą.~~ **Done:** `New quotation` atidaro mini formą ir sukuria pasirinktą Draft QTE įrašą atmintyje. |
+| ~~B-09~~ | ~~**Vendor return flow**~~ | ~~Iš Parts modulio: „Create vendor return" mygtukas → sukuria return case → Logistics mato jį eilėje.~~ **Done:** Parts detaleje sukuriamas vendor return case, kuris matomas Parts vendor return queue ir Logistics role queue / badge. |
 
 #### 🟢 Prioritetas 3 — Lentynos (vėlesniam etapui)
 
 | # | Užduotis | Aprašas |
 |---|---|---|
-| B-10 | **Contract management** | Atskiras sutarties peržiūros/redagavimo vaizdas Sales modulyje. Dabar kontraktai tik rodomi. |
-| B-11 | **Warranty/calendar sync** | Tipo C instaliacijos acceptance akto įkėlimas auto-sinchronizuoja warranty expiry datą į kalendorių. |
-| B-12 | **Parts delivery address registry** | Autofill siūlymai įvedant pristatymo adresą, saugomi iš klientų registro. |
-| B-13 | **localStorage persistence** | Pasirinktinas — išsaugoti state tarp puslapio perkrovimų. |
-| B-14 | **Carbone document service** | Phase 4B: backend container su Node.js + Carbone + LibreOffice, realus DOCX/ODT/PDF generavimas. |
+| ~~B-10~~ | ~~**Contract management**~~ | ~~Atskiras sutarties peržiūros/redagavimo vaizdas Sales modulyje. Dabar kontraktai tik rodomi.~~ **Done:** Sales modulyje pridetas kontraktu management vaizdas su edit mode, validacija ir auto `remaining = value - consumed` perskaiciavimu. |
+| ~~B-11~~ | ~~**Warranty/calendar sync**~~ | ~~Tipo C instaliacijos acceptance akto įkėlimas auto-sinchronizuoja warranty expiry datą į kalendorių.~~ **Done:** `Acceptance report` upload'as atnaujina susieto equipment acceptance/warranty laukus ir sukuria warranty expiry eventa kalendoriuje. |
+| ~~B-12~~ | ~~**Parts delivery address registry**~~ | ~~Autofill siūlymai įvedant pristatymo adresą, saugomi iš klientų registro.~~ **Done:** Parts delivery flow turi registry autofill forma su klientu adresu/kontaktu is Customers registro ir issaugo pasirinkta delivery adresa/kontakta i parts request. |
+| ~~B-13~~ | ~~**localStorage persistence**~~ | ~~Pasirinktinas — išsaugoti state tarp puslapio perkrovimų.~~ **Done:** UI state ir mutable demo kolekcijos saugomos `localStorage`, todel pakeitimai islieka po puslapio reload. |
+| ~~B-14~~ | ~~**Carbone document service**~~ | ~~Phase 4B: backend container su Node.js + Carbone + LibreOffice, realus DOCX/ODT/PDF generavimas.~~ **Done:** pridetas `document-service` konteineris su Carbone/LibreOffice API (`/health`, `/preview`, `/generate`, `/download`), nginx proxy ir Documents UI `Generate via service` veiksmas. |
+| ~~B-15~~ | ~~**Work Act draft + Work List Template flow**~~ | **Done:** Service job detaleje sukuriamas Work Act draft, job equipment preselect'inamas automatiskai, galima per search/dropdown pasirinkti papildoma kliento equipment, pritaikyti Work List Template kaip izoliuota kopija, redaguoti `Work Description` / `Work: List` ir sukurti Service act dokumento draft. |
+| ~~B-16~~ | ~~**Standardized document output templates**~~ | **Done:** Carbone output sablonai atskirti nuo Work List Template registry; prideti `work-act.fodt`, `commercial-offer.fodt`, `defect-act.fodt`, backend `templateMap`, Documents UI `Commercial offer` / `Defect act` pasirinkimai ir payload laukai equipment/work rows, quotation, defect bei signatures turiniui. |
+| ~~B-17~~ | ~~**Template Generation module split**~~ | **Done:** pridetas `Template Generation` sidebar modulis ir puslapis; `Documents` nebemaiso template generation panelio su repository/search/detail/upload sritimi. Toliau reikia siame modulyje isskirti Work Acts, Defect Acts, Commercial Offers, Work List Templates ir Output Templates i atskirus sub-tabs. |
+| ~~B-18~~ | ~~**Template Generation sub-tabs**~~ | **Done:** `Template Generation` modulyje prideti sub-tabs: Work Acts, Defect Acts, Commercial Offers, Work List Templates ir Output Templates. Output Templates tab'e veikia dabartinis Carbone generavimo/editoriaus panelis; kiti tab'ai paruosia atskirus Tomis krypties workspace'us. |
+| ~~B-19~~ | ~~**Work Acts workspace in Template Generation**~~ | **Done:** Work Acts tab'e pridetas source service job selector, Work Act draft create flow ir pernaudotas pilnas Work Act builderis: equipment search/dropdown, Work List Template apply, Work Description / Work: List editorius ir Service act dokumento draft kurimas. |
+| ~~B-20~~ | ~~**Defect Acts workspace in Template Generation**~~ | **Done:** Defect Acts tab'e pridetas source service job selector, Defect Act draft create flow, defect description / engineer findings / recommended correction / risk / customer acknowledgement editorius ir Defect act dokumento draft kurimas i `Documents`. |
+| ~~B-21~~ | ~~**Work Act builder UX labels and equipment search**~~ | **Done:** `Work List Template` pervadintas i `Work List Template Name`, Work Text terminas pakeistas i `Work Description`, o equipment selection pakeistas i search/dropdown su `Add equipment` ir pasirinktu equipment juosta su `X` pasalinimu. |
 
 ---
+
+### Tomis dokumentu generavimo tyrimas
+
+Detalus read-only radiniu dokumentas: `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`.
+
+Svarbiausios isvados:
+- Work List Template = aparatu/proceduru checklist'as, kopijuojamas i konkretu Work Act.
+- Document Output Template = standartizuota spausdinama forma Carbone/LibreOffice generavimui.
+- Work Act flow igyvendintas: Draft record -> auto-prefill equipment is case/equipment arba manual equipment search/add/remove -> apply Work List Template -> edit isolated work rows/work description -> generate Work Act document draft.
+- `Documents` turi buti dokumentu talpykla ir paieskos vieta, o dokumentu generavimas turi persikelti i atskira `Template Generation` moduli.
+- Dabartinis generic template editor yra laikinas ir turi virsti `Template Generation / Output Templates` dalimi.
 
 ### Dokumentavimo taisyklė
 
