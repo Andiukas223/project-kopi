@@ -61,6 +61,16 @@ export const state = {
   templateGenDefectActJobId: "VM-SV-1024",
   workActError: "",
   defectActError: "",
+  selectedCommercialOfferDraftId: null,
+  templateGenCommercialOfferQuotationId: "QTE-501",
+  commercialOfferError: "",
+
+  // Work List Templates CRUD
+  selectedWltId: null,
+  wltEditMode: false,
+  wltNewOpen: false,
+  wltError: "",
+  wltNewError: "",
 
   // Sales module
   selectedQuotationId: "QTE-501",

@@ -8,6 +8,9 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 
 ### Added
 
+- Implementuotas Commercial Offers workspace `Template Generation` modulyje: source quotation selector, `Create offer draft` mygtukas, draft panel su scope textarea, line items lentele (add/remove eilutes, description ir amount), validity date, payment terms, notes ir `Create document draft` veiksmas. Sukurtas Draft dokumentas ikeltas i Documents pipeline kaip `Quotation` tipo irašas. `commercialOfferDrafts` kolekcija persisted per `localStorage`.
+- Implementuotas Work List Templates CRUD `Template Generation` modulyje: `+ New template` forma su name/category/serviceType/language/bodyText/workRows laukais; templates lentele su row-level `Duplicate` ir `Archive/Restore` mygtukais; selected template detail panel su Edit/Cancel/Save controls; inline work row add/remove/text-edit edit mode'e. `isActive` flag valdo archyvavima be trynimo.
+
 - Prideta `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`: read-only Tomis Work Act / Work List Template analize, atskirtas Work List Template vs document output template modelis, Work Act draft flow, Carbone payload kryptis ir nauji B-15/B-16 backlog punktai.
 - Patikslintas B-15 equipment pasirinkimo modelis: Work Act gali gauti equipment automatiskai is case/equipment konteksto arba tiesioginio kurimo metu leisti pasirinkti equipment per search/dropdown ir prideti work eilutes.
 - Implementuotas B-15 Work Act draft + Work List Template flow: Service job detaleje galima sukurti Work Act draft, auto-prefill'inti job equipment, papildomai rinktis kliento equipment per search/dropdown, pritaikyti Work List Template, redaguoti `Work Description` ir `Work: List` eilutes, sukurti Service act dokumento draft ir perduoti Work Act rows/equipment i `document-service` payload.

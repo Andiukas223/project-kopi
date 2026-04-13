@@ -1,5 +1,5 @@
 import {
-  allPermissions, calendarEvents, contracts, customers, defectActs, documents, equipment,
+  allPermissions, calendarEvents, commercialOfferDrafts, contracts, customers, defectActs, documents, equipment,
   documentTemplateBlueprints, invoices, jobs, partsRequests, pipelineStages, quotations, roles, templates, users, vendorReturns,
   workActs, workListTemplates
 } from "./data.js";
@@ -2708,59 +2708,311 @@ function defectActTextarea(act, field, label, placeholder) {
 }
 
 function commercialOffersWorkspace() {
+  const selectedQte = quotations.find((q) => q.id === state.templateGenCommercialOfferQuotationId) || quotations[0];
+  const selectedDraft = commercialOfferDrafts.find((d) => d.quotationId === selectedQte?.id) || null;
+
   return `
     <section class="panel">
       <div class="section-heading">
         <div>
           <div class="section-title">Commercial Offers</div>
-          <div class="filter-note">Sales-owned offer drafts and customer approval context. Generated files should save back into Documents.</div>
+          <div class="filter-note">Create Commercial Offer drafts from quotations. Edit scope, line items, and validity before generating the document.</div>
         </div>
-        <button class="btn primary" type="button" data-output-template-route="tpl-quotation">Open Commercial Offer output</button>
+        <button class="btn primary" type="button" data-output-template-route="tpl-quotation">Open output template</button>
       </div>
-      <table class="data-table">
-        <thead><tr><th>Offer</th><th>Customer</th><th>Equipment</th><th>Status</th><th>Amount</th><th>Due</th></tr></thead>
-        <tbody>
-          ${quotations.map((qte) => `
-            <tr>
-              <td class="mono">${escapeHtml(qte.id)}</td>
-              <td>${escapeHtml(qte.customer)}</td>
-              <td>${escapeHtml(qte.equipment)}</td>
-              <td>${statusChip(qte.status)}</td>
-              <td class="mono">${qte.amount.toLocaleString("lt-LT")} ${escapeHtml(qte.currency)}</td>
-              <td class="mono">${escapeHtml(qte.due)}</td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
+      <div class="work-act-template-row">
+        <label class="filter-control">
+          <span>Source quotation</span>
+          <select data-template-commercial-offer-quotation>
+            ${quotations.map((q) => `<option value="${escapeHtml(q.id)}" ${q.id === selectedQte?.id ? "selected" : ""}>${escapeHtml(q.id)} / ${escapeHtml(q.customer)} / ${escapeHtml(q.type)}</option>`).join("")}
+          </select>
+        </label>
+        <button class="btn primary" type="button" data-commercial-offer-create="${escapeHtml(selectedQte?.id || "")}">Create offer draft</button>
+      </div>
+      ${selectedQte ? `
+        <div class="detail-block">
+          <div class="detail-group-title">Selected offer draft</div>
+          ${commercialOfferDraftPanel(selectedQte, selectedDraft)}
+        </div>
+      ` : ""}
+      ${commercialOfferDrafts.length ? `
+        <div class="detail-block">
+          <div class="detail-group-title">All Commercial Offer drafts (${commercialOfferDrafts.length})</div>
+          <table class="data-table">
+            <thead><tr><th>No</th><th>Quotation</th><th>Customer</th><th>Equipment</th><th>Amount</th><th>Status</th></tr></thead>
+            <tbody>
+              ${commercialOfferDrafts.map((d) => `
+                <tr>
+                  <td class="mono">${escapeHtml(d.number)}</td>
+                  <td class="mono">${escapeHtml(d.quotationId)}</td>
+                  <td>${escapeHtml(d.customer)}</td>
+                  <td>${escapeHtml(d.equipment)}</td>
+                  <td class="mono">${(d.lineItems || []).reduce((sum, item) => sum + (item.amount || 0), 0).toLocaleString("lt-LT")} EUR</td>
+                  <td>${statusChip(d.status)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      ` : `
+        <div class="info-box">
+          <div class="info-title">No Commercial Offer drafts yet</div>
+          <div class="info-body">Select a quotation and click "Create offer draft" to start. Edit scope, line items, and validity before generating the document.</div>
+        </div>
+      `}
     </section>
   `;
 }
 
+function commercialOfferDraftPanel(qte, draft) {
+  if (!draft) {
+    return `
+      <div class="work-act-empty">
+        <p>Quotation context: <strong>${escapeHtml(qte.customer)}</strong> / ${escapeHtml(qte.equipment)} / ${qte.amount.toLocaleString("lt-LT")} ${escapeHtml(qte.currency)}</p>
+        <button class="btn primary" type="button" data-commercial-offer-create="${escapeHtml(qte.id)}">Create offer draft</button>
+      </div>
+    `;
+  }
+
+  const errorHtml = state.commercialOfferError && state.selectedCommercialOfferDraftId === draft.id
+    ? `<div class="form-error">${escapeHtml(state.commercialOfferError)}</div>` : "";
+
+  const lineItemsHtml = (draft.lineItems || []).map((item, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td><input type="text" value="${escapeHtml(item.description)}" data-commercial-offer-row-description="${escapeHtml(draft.id)}:${escapeHtml(item.id)}" style="width:100%"></td>
+      <td><input type="number" value="${item.amount}" data-commercial-offer-row-amount="${escapeHtml(draft.id)}:${escapeHtml(item.id)}" style="width:90px" min="0" step="0.01"></td>
+      <td>${escapeHtml(item.currency)}</td>
+      <td><button class="btn ghost compact" type="button" data-commercial-offer-remove-row="${escapeHtml(draft.id)}:${escapeHtml(item.id)}">✕</button></td>
+    </tr>
+  `).join("");
+
+  return `
+    <div class="work-act-builder">
+      <div class="doc-detail-grid compact">
+        ${detailItem("Draft number", draft.number)}
+        ${detailItem("Status", draft.status)}
+        ${detailItem("Date", draft.date)}
+        ${detailItem("Document", draft.generatedDocumentId || "Not generated")}
+      </div>
+      ${errorHtml}
+      <div class="doc-detail-grid compact">
+        ${detailItem("Customer", draft.customer)}
+        ${detailItem("Equipment", draft.equipment)}
+        ${detailItem("Type", draft.type)}
+        ${detailItem("Source quotation", draft.quotationId)}
+      </div>
+      <label class="field work-act-text">
+        <span>Scope</span>
+        <textarea rows="3" data-commercial-offer-field="${escapeHtml(draft.id)}:scopeText" placeholder="Describe the scope of this commercial offer">${escapeHtml(draft.scopeText || "")}</textarea>
+      </label>
+      <div class="work-act-section">
+        <div class="section-heading" style="margin-bottom:8px">
+          <div class="section-title">Line items</div>
+          <button class="btn ghost compact" type="button" data-commercial-offer-add-row="${escapeHtml(draft.id)}">+ Add row</button>
+        </div>
+        <table class="data-table">
+          <thead><tr><th>#</th><th>Description</th><th>Amount</th><th>Currency</th><th></th></tr></thead>
+          <tbody>${lineItemsHtml || `<tr><td colspan="5" style="color:var(--text-muted);padding:10px 14px">No line items. Add a row or generate directly from quotation.</td></tr>`}</tbody>
+        </table>
+      </div>
+      <div class="work-act-template-row" style="margin-top:8px">
+        <label class="filter-control">
+          <span>Validity date</span>
+          <input type="date" value="${escapeHtml(draft.validityDate || "")}" data-commercial-offer-field="${escapeHtml(draft.id)}:validityDate">
+        </label>
+        <label class="filter-control">
+          <span>Payment terms</span>
+          <input type="text" value="${escapeHtml(draft.paymentTerms || "")}" data-commercial-offer-field="${escapeHtml(draft.id)}:paymentTerms" placeholder="e.g. 30 days net">
+        </label>
+      </div>
+      <label class="field work-act-text">
+        <span>Notes</span>
+        <textarea rows="2" data-commercial-offer-field="${escapeHtml(draft.id)}:notes" placeholder="Internal or customer-facing notes">${escapeHtml(draft.notes || "")}</textarea>
+      </label>
+      <div style="margin-top:12px">
+        <button class="btn primary" type="button" data-commercial-offer-generate="${escapeHtml(draft.id)}">Create document draft</button>
+      </div>
+    </div>
+  `;
+}
+
 function workListTemplatesWorkspace() {
+  const selectedId = state.selectedWltId || workListTemplates[0]?.id;
+  const selected = workListTemplates.find((tpl) => tpl.id === selectedId);
+  const active = workListTemplates.filter((tpl) => tpl.isActive !== false);
+  const archived = workListTemplates.filter((tpl) => tpl.isActive === false);
+
   return `
     <section class="panel">
       <div class="section-heading">
         <div>
           <div class="section-title">Work List Templates</div>
-          <div class="filter-note">Equipment/procedure-specific checklists copied into Work Act drafts. These are not final printable document layouts.</div>
+          <div class="filter-note">Equipment/procedure-specific checklists. Select a template to edit, duplicate, or archive it.</div>
         </div>
-        <span class="chip pending">Registry</span>
+        <button class="btn primary" type="button" data-wlt-new-open>+ New template</button>
       </div>
+
+      ${state.wltNewOpen ? wltNewForm() : ""}
+
       <table class="data-table">
-        <thead><tr><th>Work List Template Name</th><th>Category</th><th>Service type</th><th>Language</th><th>Rows</th></tr></thead>
+        <thead><tr><th>Name</th><th>Category</th><th>Type</th><th>Lang</th><th>Rows</th><th></th></tr></thead>
         <tbody>
-          ${workListTemplates.map((tpl) => `
-            <tr>
+          ${active.map((tpl) => `
+            <tr class="${tpl.id === selectedId ? "selected" : ""}" style="cursor:pointer" data-wlt-select="${escapeHtml(tpl.id)}">
               <td>${escapeHtml(tpl.name)}</td>
               <td>${escapeHtml(tpl.equipmentCategory)}</td>
               <td>${escapeHtml(tpl.serviceType)}</td>
               <td class="mono">${escapeHtml(tpl.language)}</td>
               <td>${tpl.workRows.length}</td>
+              <td style="white-space:nowrap">
+                <button class="btn ghost compact" type="button" data-wlt-duplicate="${escapeHtml(tpl.id)}">Duplicate</button>
+                <button class="btn ghost compact" type="button" data-wlt-archive="${escapeHtml(tpl.id)}" style="color:var(--amber)">Archive</button>
+              </td>
+            </tr>
+          `).join("")}
+          ${archived.map((tpl) => `
+            <tr style="opacity:0.5;cursor:pointer" data-wlt-select="${escapeHtml(tpl.id)}">
+              <td><span style="text-decoration:line-through">${escapeHtml(tpl.name)}</span> <span class="chip" style="font-size:9px">Archived</span></td>
+              <td>${escapeHtml(tpl.equipmentCategory)}</td>
+              <td>${escapeHtml(tpl.serviceType)}</td>
+              <td class="mono">${escapeHtml(tpl.language)}</td>
+              <td>${tpl.workRows.length}</td>
+              <td style="white-space:nowrap">
+                <button class="btn ghost compact" type="button" data-wlt-archive="${escapeHtml(tpl.id)}" style="color:var(--green)">Restore</button>
+              </td>
             </tr>
           `).join("")}
         </tbody>
       </table>
+
+      ${selected ? `
+        <div class="detail-block" style="margin-top:16px">
+          <div class="section-heading" style="margin-bottom:8px">
+            <div class="detail-group-title">${escapeHtml(selected.name)}${selected.isActive === false ? " (Archived)" : ""}</div>
+            ${state.wltEditMode && state.selectedWltId === selected.id
+              ? `<div style="display:flex;gap:6px">
+                   <button class="btn ghost compact" type="button" data-wlt-edit-cancel>Cancel</button>
+                   <button class="btn primary compact" type="button" data-wlt-edit-save="${escapeHtml(selected.id)}">Save changes</button>
+                 </div>`
+              : `<button class="btn ghost compact" type="button" data-wlt-edit-open="${escapeHtml(selected.id)}">Edit</button>`
+            }
+          </div>
+          ${state.wltError ? `<div class="form-error">${escapeHtml(state.wltError)}</div>` : ""}
+          ${state.wltEditMode && state.selectedWltId === selected.id
+            ? wltEditPanel(selected)
+            : wltDetailPanel(selected)
+          }
+        </div>
+      ` : ""}
     </section>
+  `;
+}
+
+function wltNewForm() {
+  return `
+    <div class="detail-block" style="margin-bottom:12px">
+      <div class="detail-group-title">New Work List Template</div>
+      ${state.wltNewError ? `<div class="form-error">${escapeHtml(state.wltNewError)}</div>` : ""}
+      <div class="work-act-template-row" style="flex-wrap:wrap;gap:8px">
+        <label class="filter-control">
+          <span>Name</span>
+          <input type="text" id="wlt-new-name" placeholder="Template name">
+        </label>
+        <label class="filter-control">
+          <span>Equipment category</span>
+          <input type="text" id="wlt-new-category" placeholder="Ultrasound, General, ...">
+        </label>
+        <label class="filter-control">
+          <span>Service type</span>
+          <select id="wlt-new-service-type">
+            <option value="PM">PM</option>
+            <option value="Service">Service</option>
+            <option value="Installation">Installation</option>
+            <option value="Repair">Repair</option>
+          </select>
+        </label>
+        <label class="filter-control">
+          <span>Language</span>
+          <select id="wlt-new-language">
+            <option value="lt">lt</option>
+            <option value="en">en</option>
+          </select>
+        </label>
+      </div>
+      <label class="field work-act-text">
+        <span>Body text</span>
+        <textarea id="wlt-new-body" rows="2" placeholder="Summary sentence for this template"></textarea>
+      </label>
+      <div class="filter-note" style="margin:8px 0 4px">Work rows (one per line):</div>
+      <textarea id="wlt-new-rows" rows="4" style="width:100%;font-family:var(--mono);font-size:12px" placeholder="First row&#10;Second row&#10;Third row"></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn primary" type="button" data-wlt-new-save>Save template</button>
+        <button class="btn ghost" type="button" data-wlt-new-cancel>Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+function wltDetailPanel(tpl) {
+  return `
+    <div class="doc-detail-grid compact">
+      ${detailItem("Category", tpl.equipmentCategory)}
+      ${detailItem("Service type", tpl.serviceType)}
+      ${detailItem("Language", tpl.language)}
+      ${detailItem("Rows", String(tpl.workRows.length))}
+    </div>
+    ${tpl.bodyText ? `<div class="info-box" style="margin-top:8px"><div class="info-body">${escapeHtml(tpl.bodyText)}</div></div>` : ""}
+    <div style="margin-top:10px">
+      <div class="filter-note" style="margin-bottom:6px">Work rows:</div>
+      <ol style="margin:0;padding-left:20px;font-size:13px;line-height:1.7">
+        ${tpl.workRows.map((row) => `<li>${escapeHtml(row)}</li>`).join("")}
+      </ol>
+    </div>
+  `;
+}
+
+function wltEditPanel(tpl) {
+  return `
+    <div class="work-act-template-row" style="flex-wrap:wrap;gap:8px">
+      <label class="filter-control">
+        <span>Name</span>
+        <input type="text" id="wlt-edit-name" value="${escapeHtml(tpl.name)}">
+      </label>
+      <label class="filter-control">
+        <span>Equipment category</span>
+        <input type="text" id="wlt-edit-category" value="${escapeHtml(tpl.equipmentCategory)}">
+      </label>
+      <label class="filter-control">
+        <span>Service type</span>
+        <select id="wlt-edit-service-type">
+          ${["PM", "Service", "Installation", "Repair"].map((t) => `<option value="${t}" ${t === tpl.serviceType ? "selected" : ""}>${t}</option>`).join("")}
+        </select>
+      </label>
+      <label class="filter-control">
+        <span>Language</span>
+        <select id="wlt-edit-language">
+          ${["lt", "en"].map((l) => `<option value="${l}" ${l === tpl.language ? "selected" : ""}>${l}</option>`).join("")}
+        </select>
+      </label>
+    </div>
+    <label class="field work-act-text">
+      <span>Body text</span>
+      <textarea id="wlt-edit-body" rows="2">${escapeHtml(tpl.bodyText || "")}</textarea>
+    </label>
+    <div class="work-act-section" style="margin-top:8px">
+      <div class="section-heading" style="margin-bottom:6px">
+        <div class="filter-note">Work rows</div>
+        <button class="btn ghost compact" type="button" data-wlt-add-row="${escapeHtml(tpl.id)}">+ Add row</button>
+      </div>
+      ${tpl.workRows.map((row, index) => `
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span class="mono" style="min-width:20px;color:var(--text-muted)">${index + 1}.</span>
+          <input type="text" value="${escapeHtml(row)}" data-wlt-row-text="${escapeHtml(tpl.id)}:${index}" style="flex:1">
+          <button class="btn ghost compact" type="button" data-wlt-remove-row="${escapeHtml(tpl.id)}:${index}" style="color:var(--red)">✕</button>
+        </div>
+      `).join("")}
+    </div>
   `;
 }
 

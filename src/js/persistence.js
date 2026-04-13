@@ -1,5 +1,5 @@
 import {
-  calendarEvents, contracts, customers, defectActs, documents, equipment, invoices,
+  calendarEvents, commercialOfferDrafts, contracts, customers, defectActs, documents, equipment, invoices,
   jobs, partsRequests, quotations, templates, users, vendorReturns, workActs, workListTemplates
 } from "./data.js";
 import { state } from "./state.js";
@@ -8,6 +8,7 @@ const STORAGE_KEY = "vm-service-is-demo-state-v1";
 
 const collections = {
   calendarEvents,
+  commercialOfferDrafts,
   contracts,
   customers,
   defectActs,

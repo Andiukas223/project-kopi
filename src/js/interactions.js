@@ -2,7 +2,7 @@
 // Bound once on app init — delegates via data attributes on the document.
 
 import {
-  contracts, customers, defectActs, documents, equipment, invoices, jobs, partsRequests, quotations,
+  commercialOfferDrafts, contracts, customers, defectActs, documents, equipment, invoices, jobs, partsRequests, quotations,
   users, vendorReturns, workActs, workListTemplates
 } from "./data.js";
 import { saveDemoState } from "./persistence.js";
@@ -80,6 +80,86 @@ function handleClick(event) {
     state.generatedDocPreview = null;
     state.templateEditorError = "";
     renderAppCallback();
+    return;
+  }
+
+  // Work List Templates CRUD
+  const wltNewOpen = event.target.closest("[data-wlt-new-open]");
+  if (wltNewOpen) {
+    state.wltNewOpen = true;
+    state.wltNewError = "";
+    renderAppCallback();
+    return;
+  }
+
+  const wltNewCancel = event.target.closest("[data-wlt-new-cancel]");
+  if (wltNewCancel) {
+    state.wltNewOpen = false;
+    state.wltNewError = "";
+    renderAppCallback();
+    return;
+  }
+
+  const wltNewSave = event.target.closest("[data-wlt-new-save]");
+  if (wltNewSave) {
+    saveNewWlt();
+    return;
+  }
+
+  const wltSelect = event.target.closest("[data-wlt-select]");
+  if (wltSelect) {
+    state.selectedWltId = wltSelect.dataset.wltSelect;
+    state.wltEditMode = false;
+    state.wltError = "";
+    renderAppCallback();
+    return;
+  }
+
+  const wltEditOpen = event.target.closest("[data-wlt-edit-open]");
+  if (wltEditOpen) {
+    state.selectedWltId = wltEditOpen.dataset.wltEditOpen;
+    state.wltEditMode = true;
+    state.wltError = "";
+    renderAppCallback();
+    return;
+  }
+
+  const wltEditCancel = event.target.closest("[data-wlt-edit-cancel]");
+  if (wltEditCancel) {
+    state.wltEditMode = false;
+    state.wltError = "";
+    renderAppCallback();
+    return;
+  }
+
+  const wltEditSave = event.target.closest("[data-wlt-edit-save]");
+  if (wltEditSave) {
+    saveWltEdits(wltEditSave.dataset.wltEditSave);
+    return;
+  }
+
+  const wltDuplicate = event.target.closest("[data-wlt-duplicate]");
+  if (wltDuplicate) {
+    duplicateWlt(wltDuplicate.dataset.wltDuplicate);
+    return;
+  }
+
+  const wltArchive = event.target.closest("[data-wlt-archive]");
+  if (wltArchive) {
+    toggleWltArchive(wltArchive.dataset.wltArchive);
+    return;
+  }
+
+  const wltAddRow = event.target.closest("[data-wlt-add-row]");
+  if (wltAddRow) {
+    addWltRow(wltAddRow.dataset.wltAddRow);
+    return;
+  }
+
+  const wltRemoveRow = event.target.closest("[data-wlt-remove-row]");
+  if (wltRemoveRow) {
+    const [tplId, indexStr] = wltRemoveRow.dataset.wltRemoveRow.split(":");
+    removeWltRow(tplId, parseInt(indexStr, 10));
     return;
   }
 
@@ -179,6 +259,31 @@ function handleClick(event) {
   const defectActGenerate = event.target.closest("[data-defect-act-generate]");
   if (defectActGenerate) {
     createDefectActDocumentDraft(defectActGenerate.dataset.defectActGenerate);
+    return;
+  }
+
+  const commercialOfferCreate = event.target.closest("[data-commercial-offer-create]");
+  if (commercialOfferCreate) {
+    createCommercialOfferDraft(commercialOfferCreate.dataset.commercialOfferCreate);
+    return;
+  }
+
+  const commercialOfferAddRow = event.target.closest("[data-commercial-offer-add-row]");
+  if (commercialOfferAddRow) {
+    addCommercialOfferRow(commercialOfferAddRow.dataset.commercialOfferAddRow);
+    return;
+  }
+
+  const commercialOfferRemoveRow = event.target.closest("[data-commercial-offer-remove-row]");
+  if (commercialOfferRemoveRow) {
+    const [draftId, rowId] = commercialOfferRemoveRow.dataset.commercialOfferRemoveRow.split(":");
+    removeCommercialOfferRow(draftId, rowId);
+    return;
+  }
+
+  const commercialOfferGenerate = event.target.closest("[data-commercial-offer-generate]");
+  if (commercialOfferGenerate) {
+    createCommercialOfferDocumentDraft(commercialOfferGenerate.dataset.commercialOfferGenerate);
     return;
   }
 
@@ -489,6 +594,13 @@ function handleChange(event) {
     return;
   }
 
+  if (event.target.matches("[data-template-commercial-offer-quotation]")) {
+    state.templateGenCommercialOfferQuotationId = event.target.value;
+    state.commercialOfferError = "";
+    renderAppCallback();
+    return;
+  }
+
   if (event.target.matches("[data-defect-act-risk]")) {
     updateDefectActField(event.target.dataset.defectActRisk, "riskLevel", event.target.value);
     return;
@@ -536,6 +648,38 @@ function handleInput(event) {
     const [actId, field] = event.target.dataset.defectActField.split(":");
     updateDefectActField(actId, field, event.target.value, false);
     saveDemoState();
+    return;
+  }
+
+  if (event.target.matches("[data-commercial-offer-field]")) {
+    const [draftId, field] = event.target.dataset.commercialOfferField.split(":");
+    updateCommercialOfferField(draftId, field, event.target.value, false);
+    saveDemoState();
+    return;
+  }
+
+  if (event.target.matches("[data-commercial-offer-row-description]")) {
+    const [draftId, rowId] = event.target.dataset.commercialOfferRowDescription.split(":");
+    updateCommercialOfferRow(draftId, rowId, { description: event.target.value }, false);
+    saveDemoState();
+    return;
+  }
+
+  if (event.target.matches("[data-commercial-offer-row-amount]")) {
+    const [draftId, rowId] = event.target.dataset.commercialOfferRowAmount.split(":");
+    const amount = parseFloat(event.target.value) || 0;
+    updateCommercialOfferRow(draftId, rowId, { amount }, false);
+    saveDemoState();
+    return;
+  }
+
+  if (event.target.matches("[data-wlt-row-text]")) {
+    const [tplId, indexStr] = event.target.dataset.wltRowText.split(":");
+    const tpl = workListTemplates.find((t) => t.id === tplId);
+    if (tpl) {
+      tpl.workRows[parseInt(indexStr, 10)] = event.target.value;
+      saveDemoState();
+    }
   }
 }
 
@@ -925,6 +1069,263 @@ function defectActDescription(act) {
     `Risk: ${act.riskLevel || "-"}`,
     act.customerAcknowledgement ? `Customer acknowledgement: ${act.customerAcknowledgement}` : ""
   ].filter(Boolean).join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Commercial Offer draft helpers
+// ---------------------------------------------------------------------------
+function createCommercialOfferDraft(quotationId) {
+  const qte = quotations.find((q) => q.id === quotationId);
+  if (!qte) return;
+
+  const existing = commercialOfferDrafts.find((d) => d.quotationId === quotationId);
+  if (existing) {
+    state.selectedCommercialOfferDraftId = existing.id;
+    state.templateGenCommercialOfferQuotationId = quotationId;
+    state.commercialOfferError = "";
+    renderAppCallback();
+    return;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const draftId = `CO-${Date.now()}`;
+  commercialOfferDrafts.unshift({
+    id: draftId,
+    number: `VM-CO-${String(commercialOfferDrafts.length + 1).padStart(4, "0")}`,
+    date: today,
+    quotationId: qte.id,
+    customer: qte.customer,
+    customerId: qte.customerId,
+    equipment: qte.equipment,
+    equipmentId: qte.equipmentId,
+    type: qte.type,
+    scopeText: qte.notes || "",
+    lineItems: [
+      {
+        id: `${draftId}-LI-1`,
+        description: `${qte.equipment} — ${qte.type}`,
+        amount: qte.amount,
+        currency: qte.currency || "EUR"
+      }
+    ],
+    validityDate: qte.due || "",
+    paymentTerms: "30 days net",
+    notes: "",
+    status: "Draft",
+    generatedDocumentId: null,
+    updatedAt: new Date().toISOString()
+  });
+
+  state.selectedCommercialOfferDraftId = draftId;
+  state.templateGenCommercialOfferQuotationId = quotationId;
+  state.commercialOfferError = "";
+  saveDemoState();
+  renderAppCallback();
+}
+
+function addCommercialOfferRow(draftId) {
+  const draft = commercialOfferDrafts.find((d) => d.id === draftId);
+  if (!draft) return;
+  draft.lineItems = draft.lineItems || [];
+  draft.lineItems.push({
+    id: `${draftId}-LI-${Date.now()}`,
+    description: "New line item",
+    amount: 0,
+    currency: "EUR"
+  });
+  draft.updatedAt = new Date().toISOString();
+  state.selectedCommercialOfferDraftId = draft.id;
+  state.commercialOfferError = "";
+  saveDemoState();
+  renderAppCallback();
+}
+
+function removeCommercialOfferRow(draftId, rowId) {
+  const draft = commercialOfferDrafts.find((d) => d.id === draftId);
+  if (!draft) return;
+  draft.lineItems = (draft.lineItems || []).filter((item) => item.id !== rowId);
+  draft.updatedAt = new Date().toISOString();
+  state.selectedCommercialOfferDraftId = draft.id;
+  state.commercialOfferError = "";
+  saveDemoState();
+  renderAppCallback();
+}
+
+function updateCommercialOfferField(draftId, field, value, shouldRender = true) {
+  const draft = commercialOfferDrafts.find((d) => d.id === draftId);
+  const allowedFields = ["scopeText", "validityDate", "paymentTerms", "notes"];
+  if (!draft || !allowedFields.includes(field)) return;
+  draft[field] = value;
+  draft.updatedAt = new Date().toISOString();
+  state.selectedCommercialOfferDraftId = draft.id;
+  state.commercialOfferError = "";
+  if (shouldRender) renderAppCallback();
+}
+
+function updateCommercialOfferRow(draftId, rowId, patch, shouldRender = true) {
+  const draft = commercialOfferDrafts.find((d) => d.id === draftId);
+  const row = draft?.lineItems?.find((item) => item.id === rowId);
+  if (!draft || !row) return;
+  Object.assign(row, patch);
+  draft.updatedAt = new Date().toISOString();
+  state.selectedCommercialOfferDraftId = draft.id;
+  state.commercialOfferError = "";
+  if (shouldRender) renderAppCallback();
+}
+
+function createCommercialOfferDocumentDraft(draftId) {
+  const draft = commercialOfferDrafts.find((d) => d.id === draftId);
+  if (!draft) return;
+  if (!draft.scopeText?.trim() && !(draft.lineItems?.length)) {
+    state.selectedCommercialOfferDraftId = draft.id;
+    state.commercialOfferError = "Add scope text or at least one line item before creating the document draft.";
+    renderAppCallback();
+    return;
+  }
+
+  if (!draft.generatedDocumentId) {
+    const docId = `DOC-${3108 + documents.length}`;
+    documents.unshift({
+      id: docId,
+      type: "Quotation",
+      jobId: draft.quotationId,
+      customer: draft.customer,
+      owner: "Sales",
+      status: "Draft",
+      due: draft.validityDate || draft.date,
+      pipelineStep: "Draft",
+      commercialOfferDraftId: draft.id
+    });
+    draft.generatedDocumentId = docId;
+  }
+
+  draft.status = "Document draft";
+  draft.updatedAt = new Date().toISOString();
+  state.selectedDocumentId = draft.generatedDocumentId;
+  state.selectedTemplateId = "tpl-quotation";
+  state.selectedCommercialOfferDraftId = draft.id;
+  state.commercialOfferError = "";
+  saveDemoState();
+  renderAppCallback();
+}
+
+// ---------------------------------------------------------------------------
+// Work List Template CRUD helpers
+// ---------------------------------------------------------------------------
+function saveNewWlt() {
+  const name = document.getElementById("wlt-new-name")?.value.trim() || "";
+  const category = document.getElementById("wlt-new-category")?.value.trim() || "";
+  const serviceType = document.getElementById("wlt-new-service-type")?.value || "Service";
+  const language = document.getElementById("wlt-new-language")?.value || "lt";
+  const bodyText = document.getElementById("wlt-new-body")?.value.trim() || "";
+  const rowsRaw = document.getElementById("wlt-new-rows")?.value || "";
+  const workRows = rowsRaw.split("\n").map((r) => r.trim()).filter(Boolean);
+
+  if (!name) {
+    state.wltNewError = "Template name is required.";
+    renderAppCallback();
+    return;
+  }
+  if (!workRows.length) {
+    state.wltNewError = "Add at least one work row.";
+    renderAppCallback();
+    return;
+  }
+
+  const newId = `wlt-${Date.now()}`;
+  workListTemplates.unshift({
+    id: newId,
+    name,
+    equipmentCategory: category || "General",
+    serviceType,
+    language,
+    bodyText,
+    workRows,
+    isActive: true
+  });
+
+  state.selectedWltId = newId;
+  state.wltNewOpen = false;
+  state.wltNewError = "";
+  state.wltEditMode = false;
+  saveDemoState();
+  renderAppCallback();
+}
+
+function saveWltEdits(tplId) {
+  const tpl = workListTemplates.find((t) => t.id === tplId);
+  if (!tpl) return;
+
+  const name = document.getElementById("wlt-edit-name")?.value.trim() || "";
+  const category = document.getElementById("wlt-edit-category")?.value.trim() || "";
+  const serviceType = document.getElementById("wlt-edit-service-type")?.value || tpl.serviceType;
+  const language = document.getElementById("wlt-edit-language")?.value || tpl.language;
+  const bodyText = document.getElementById("wlt-edit-body")?.value.trim() || "";
+
+  if (!name) {
+    state.wltError = "Template name is required.";
+    renderAppCallback();
+    return;
+  }
+
+  tpl.name = name;
+  tpl.equipmentCategory = category || tpl.equipmentCategory;
+  tpl.serviceType = serviceType;
+  tpl.language = language;
+  tpl.bodyText = bodyText;
+
+  state.wltEditMode = false;
+  state.wltError = "";
+  saveDemoState();
+  renderAppCallback();
+}
+
+function duplicateWlt(tplId) {
+  const tpl = workListTemplates.find((t) => t.id === tplId);
+  if (!tpl) return;
+
+  const newId = `wlt-${Date.now()}`;
+  workListTemplates.splice(workListTemplates.indexOf(tpl) + 1, 0, {
+    ...JSON.parse(JSON.stringify(tpl)),
+    id: newId,
+    name: `${tpl.name} (copy)`,
+    isActive: true
+  });
+
+  state.selectedWltId = newId;
+  state.wltEditMode = false;
+  state.wltError = "";
+  saveDemoState();
+  renderAppCallback();
+}
+
+function toggleWltArchive(tplId) {
+  const tpl = workListTemplates.find((t) => t.id === tplId);
+  if (!tpl) return;
+  tpl.isActive = tpl.isActive === false ? true : false;
+  state.selectedWltId = tplId;
+  state.wltEditMode = false;
+  state.wltError = "";
+  saveDemoState();
+  renderAppCallback();
+}
+
+function addWltRow(tplId) {
+  const tpl = workListTemplates.find((t) => t.id === tplId);
+  if (!tpl) return;
+  tpl.workRows.push("New work row");
+  state.selectedWltId = tplId;
+  saveDemoState();
+  renderAppCallback();
+}
+
+function removeWltRow(tplId, index) {
+  const tpl = workListTemplates.find((t) => t.id === tplId);
+  if (!tpl || index < 0 || index >= tpl.workRows.length) return;
+  tpl.workRows.splice(index, 1);
+  state.selectedWltId = tplId;
+  saveDemoState();
+  renderAppCallback();
 }
 
 // ---------------------------------------------------------------------------

@@ -409,6 +409,8 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 | ~~B-19~~ | ~~**Work Acts workspace in Template Generation**~~ | **Done:** Work Acts tab'e pridetas source service job selector, Work Act draft create flow ir pernaudotas pilnas Work Act builderis: equipment search/dropdown, Work List Template apply, Work Description / Work: List editorius ir Service act dokumento draft kurimas. |
 | ~~B-20~~ | ~~**Defect Acts workspace in Template Generation**~~ | **Done:** Defect Acts tab'e pridetas source service job selector, Defect Act draft create flow, defect description / engineer findings / recommended correction / risk / customer acknowledgement editorius ir Defect act dokumento draft kurimas i `Documents`. |
 | ~~B-21~~ | ~~**Work Act builder UX labels and equipment search**~~ | **Done:** `Work List Template` pervadintas i `Work List Template Name`, Work Text terminas pakeistas i `Work Description`, o equipment selection pakeistas i search/dropdown su `Add equipment` ir pasirinktu equipment juosta su `X` pasalinimu. |
+| ~~B-22~~ | ~~**Commercial Offers workspace**~~ | **Done:** `Template Generation / Commercial Offers` tab turi pilna kūrimo/redagavimo flow: source quotation selector, draft create, scope/line items/validity/payment terms/notes editor, `Create document draft` veiksmas. `commercialOfferDrafts` kolekcija su `localStorage` persistencija. |
+| ~~B-23~~ | ~~**Work List Templates CRUD**~~ | **Done:** `Template Generation / Work List Templates` tab turi `+ New template` forma, selected template detail/edit panel, `Duplicate` ir `Archive/Restore` mygtukus, inline work row add/remove/text-edit edit mode'e. `isActive` flag valdo archyvavima be trynimo. |
 
 ---
 

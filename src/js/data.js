@@ -974,6 +974,9 @@ export const workActs = [];
 // Defect Act drafts generated from service jobs or created manually in the UI.
 export const defectActs = [];
 
+// Commercial Offer drafts generated from quotations or created manually in the UI.
+export const commercialOfferDrafts = [];
+
 // ---------------------------------------------------------------------------
 // Pipeline stages for document pipeline board
 // ---------------------------------------------------------------------------
