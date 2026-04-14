@@ -21,5 +21,18 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Runtime storage: keep folder placeholder, ignore uploaded/generated data
+document-service/storage/*
+!document-service/storage/.gitkeep
+
+# Local agent / plugin tooling
+.agents/
+.claude/
+caveman/
+
+# Local screenshots and test reports
+output/
+test-results/
+
 # Playwright CLI local session artifacts
 .playwright-cli/

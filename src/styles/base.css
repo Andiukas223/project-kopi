@@ -1,35 +1,86 @@
 :root {
-  --brand: #118f7a;
-  --brand-dk: #0a6f61;
+  color-scheme: light;
+  --brand: #0a6f61;
+  --brand-dk: #064f46;
   --brand-lt: #dff5ef;
-  --brand-mid: #64c8b6;
+  --brand-mid: #4fbbaa;
   --dark: #20211f;
   --dark-mid: #292b28;
   --dark-soft: #373a35;
   --bg: #f4f6f5;
   --bg-card: #ffffff;
+  --bg-soft: #f7faf9;
   --wb: #eef7f5;
   --wb-mid: #dcecea;
   --wb-dark: #bfd8d2;
-  --blue: #2f6fb0;
+  --blue: #215888;
   --blue-lt: #e4eff9;
   --text: #202724;
   --text-mid: #5a6762;
-  --text-muted: #87918d;
+  --text-muted: #596861;
   --border: #dde4e1;
   --border-mid: #b8c4bf;
-  --green: #21875b;
+  --green: #116a42;
   --green-lt: #e2f3eb;
-  --amber: #b7791f;
+  --amber: #8a560f;
   --amber-lt: #fff3d8;
-  --red: #b93c3c;
+  --red: #a53333;
   --red-lt: #fae4e4;
   --red-mid: #d98282;
+  --issue-red: #d71920;
+  --issue-red-dk: #b9141a;
+  --issue-red-lt: #fff1f1;
+  --on-dark: #ffffff;
+  --on-accent: #ffffff;
+  --paper-bg: #ffffff;
+  --paper-text: #111827;
+  --paper-muted: #5b6472;
+  --paper-border: #a9b0bd;
+  --print-desk: #d9dde5;
   --r: 5px;
   --r-lg: 8px;
   --sh: 0 1px 4px rgba(32, 33, 31, .08);
   --sh-md: 0 4px 14px rgba(32, 33, 31, .13);
   --mono: "JetBrains Mono", monospace;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --brand: #35c3aa;
+  --brand-dk: #8ce6d7;
+  --brand-lt: #123d37;
+  --brand-mid: #59d0be;
+  --dark: #171916;
+  --dark-mid: #1d211d;
+  --dark-soft: #283028;
+  --bg: #101310;
+  --bg-card: #191e1a;
+  --bg-soft: #202820;
+  --wb: #202820;
+  --wb-mid: #29342c;
+  --wb-dark: #3a493f;
+  --blue: #8ebff0;
+  --blue-lt: #172d42;
+  --text: #f0f5f1;
+  --text-mid: #c6d0ca;
+  --text-muted: #95a39b;
+  --border: #2e3a33;
+  --border-mid: #52645a;
+  --green: #83dba5;
+  --green-lt: #153726;
+  --amber: #f1c76e;
+  --amber-lt: #3b2f14;
+  --red: #f18b8b;
+  --red-lt: #442126;
+  --red-mid: #d46c75;
+  --issue-red: #ff5f67;
+  --issue-red-dk: #ff8b91;
+  --issue-red-lt: #4a2024;
+  --on-dark: #f5faf7;
+  --on-accent: #071411;
+  --print-desk: #252a2f;
+  --sh: 0 1px 5px rgba(0, 0, 0, .38);
+  --sh-md: 0 8px 24px rgba(0, 0, 0, .42);
 }
 
 * {
@@ -58,6 +109,24 @@ textarea {
   font: inherit;
 }
 
+input,
+select,
+textarea {
+  background: var(--bg-card);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+option {
+  background: var(--bg-card);
+  color: var(--text);
+}
+
+::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
 button {
   cursor: pointer;
 }
@@ -65,4 +134,3 @@ button {
 .mono {
   font-family: "JetBrains Mono", monospace;
 }
-

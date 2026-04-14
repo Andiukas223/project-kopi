@@ -169,10 +169,10 @@ function detectPipelineType() {
 }
 
 const pipelineTypeMeta = {
-  A: { label: "Pipeline A — Repair (no contract)",           desc: "Diagnostics → Quotation required → Parts → Repair → Invoice → Signature → Archive",   color: "#e8f0ff", border: "#2f6fb0" },
-  B: { label: "Pipeline B — Repair (service contract)",      desc: "Diagnostics → Parts → Repair — deducts from contract balance → Work Act → Archive",    color: "#e2f3eb", border: "#21875b" },
-  C: { label: "Pipeline C — New installation",               desc: "Commercial Offer → Contract indexing → Installation → Acceptance Act → Warranty start", color: "#fff3d8", border: "#b7791f" },
-  D: { label: "Pipeline D — PM periodic maintenance",        desc: "Auto-generated from contract → PM schedule → Service → Work Act → Archive",            color: "#ede7f6", border: "#512da8" }
+  A: { label: "Pipeline A — Repair (no contract)",           desc: "Diagnostics → Quotation required → Parts → Repair → Invoice → Signature → Archive",   color: "var(--blue-lt)",  border: "var(--blue)" },
+  B: { label: "Pipeline B — Repair (service contract)",      desc: "Diagnostics → Parts → Repair — deducts from contract balance → Work Act → Archive",    color: "var(--green-lt)", border: "var(--green)" },
+  C: { label: "Pipeline C — New installation",               desc: "Commercial Offer → Contract indexing → Installation → Acceptance Act → Warranty start", color: "var(--amber-lt)", border: "var(--amber)" },
+  D: { label: "Pipeline D — PM periodic maintenance",        desc: "Auto-generated from contract → PM schedule → Service → Work Act → Archive",            color: "var(--wb)",       border: "var(--text-muted)" }
 };
 
 function contractStep() {

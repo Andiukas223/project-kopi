@@ -36,6 +36,18 @@ export function loadPersistedDemoState() {
     const snapshot = JSON.parse(raw);
     if (snapshot?.state && typeof snapshot.state === "object") {
       Object.assign(state, snapshot.state);
+      state.feedbackOpen = false;
+      state.feedbackSelecting = false;
+      state.feedbackAnnotating = false;
+      state.feedbackCaptureDataUrl = "";
+      state.feedbackScreenshotDataUrl = "";
+      state.feedbackCommentDraft = "";
+      state.feedbackError = "";
+      state.feedbackSavedNotice = "";
+      state.feedbackBackendStatus = "";
+      state.documentUploadOpen = false;
+      state.documentUploadTargetId = null;
+      state.documentUploadError = "";
     }
 
     if (snapshot?.collections && typeof snapshot.collections === "object") {

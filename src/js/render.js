@@ -1,5 +1,5 @@
 import {
-  allPermissions, calendarEvents, commercialOfferDrafts, contracts, customers, defectActs, documents, equipment,
+  allPermissions, bugReports, calendarEvents, commercialOfferDrafts, companyProfiles, contracts, customers, defectActs, documents, equipment,
   documentTemplateBlueprints, invoices, jobs, partsRequests, pipelineStages, quotations, roles, templates, users, vendorReturns,
   workActs, workListTemplates
 } from "./data.js";
@@ -87,8 +87,8 @@ const moduleSpecs = {
     purpose: "Central document lifecycle management. All document types flow through here. Supports generate-from-template (Carbone mock now, real backend later) and upload-external-document workflows. Signed documents are uploaded back into the same job flow.",
     roles: "All roles create documents of their own type. Admin has full pipeline control. All roles can upload external documents with metadata. Rejection with comment can be raised by any reviewer; permanent resolution by Admin.",
     submodules: "Pipeline view · Document table with filters · Selected document detail panel · Template generation panel (Carbone mock) · Upload panel (create or upload external) · Global search with indexed metadata",
-    pipeline: "Draft → Review → Customer → Signature → Approved → Archived\nReject path: Rejected → Draft (comment required, visible in document history)\nPermanent rejection: add comment explaining why → Admin resolves and closes issue\nSigned doc return: engineer/sales downloads generated doc → collects physical signature → re-uploads into same document record",
-    actions: "Create (from template) · Upload external document · Advance pipeline stage · Reject with comment · Archive · Search with filters · Download generated file",
+    pipeline: "Draft → Review → Customer → Signature → Approved\nReject path: Rejected → Draft (comment required, visible in document history)\nPermanent rejection: add comment explaining why → Admin resolves and closes issue\nSigned doc return: engineer/sales downloads generated doc → collects physical signature → re-uploads into same document record",
+    actions: "Create (from template) · Upload external document · Upload signed copy · Finish document · Reject with comment · Search with filters · Download generated file",
     planned: "Global search with indexed metadata (location / contract / date / executor / who signed / description) · Search UI: filter chips + text field + Search / Cancel buttons · Carbone backend integration for real document generation · Rejection comment thread · Re-upload signed version flow"
   },
   templategen: {
@@ -426,7 +426,7 @@ function todayOnly() {
 }
 
 function documentIsOpen(doc) {
-  return !closedDocumentStages.includes(doc.pipelineStep);
+  return !documentIsDone(doc) && !closedDocumentStages.includes(doc.pipelineStep);
 }
 
 function documentIsOverdue(doc) {
@@ -454,15 +454,29 @@ function dueCell(doc) {
   return `<span class="due-cell"><span class="mono">${escapeHtml(doc.due)}</span>${badge}</span>`;
 }
 
-function documentActionLabel(doc) {
-  if (doc.pipelineStep === "Rejected") return "Back to Draft";
-  if (doc.pipelineStep === "Archived") return "Archived";
-  if (doc.pipelineStep === "Approved") return "Archive";
-  return "Advance";
+function documentStageForUi(doc) {
+  const stage = doc?.pipelineStep || doc?.status || "";
+  return stage === "Archived" ? "Approved" : stage;
 }
 
-function documentActionDisabled(doc) {
-  return doc.pipelineStep === "Archived";
+function documentStatusForUi(doc) {
+  if (documentIsDone(doc)) return "Done";
+  if (documentHasSignedUpload(doc)) return "Signed";
+  if (documentNeedsSignedUpload(doc, documentGeneratedFileFor(doc))) return "Needs upload";
+  const status = doc?.status || documentStageForUi(doc);
+  return status === "Archived" ? "Approved" : status;
+}
+
+function documentHasSignedUpload(doc) {
+  return Boolean(doc?.signedUploadedAt || doc?.signedFile);
+}
+
+function documentIsDone(doc) {
+  return Boolean(doc?.finishedAt || doc?.caseClosed || doc?.status === "Done");
+}
+
+function documentNeedsSignedUpload(doc, generatedFile = null) {
+  return Boolean(doc && !documentIsDone(doc) && !documentHasSignedUpload(doc) && (generatedFile?.fileName || generatedFile?.downloadUrl));
 }
 
 function jobsTable(rows = jobs) {
@@ -502,44 +516,145 @@ function jobsTable(rows = jobs) {
 
 function documentsTable(rows = documents) {
   return `
-    <section class="table-card">
+    <section class="table-card documents-table">
       <div class="table-toolbar">
-        <span>${rows.length} documents in pipeline</span>
-        <button class="btn ghost" type="button" data-doc-review-next>Review next</button>
+        <span>${rows.length} documents</span>
       </div>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Document</th>
-            <th>Type</th>
-            <th>Job</th>
-            <th>Owner</th>
-            <th>Status</th>
-            <th>Due</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.map((doc) => `
-            <tr class="${doc.id === state.selectedDocumentId ? "selected" : ""} ${documentIsOverdue(doc) ? "overdue" : ""}" data-doc-row="${escapeHtml(doc.id)}">
-              <td class="mono">${escapeHtml(doc.id)}</td>
-              <td>${escapeHtml(doc.type)}</td>
-              <td class="mono">${escapeHtml(doc.jobId)}</td>
-              <td>${escapeHtml(doc.owner)}</td>
-              <td>${statusChip(doc.status)}</td>
-              <td>${dueCell(doc)}</td>
-              <td>
-                <div class="table-actions">
-                  <button class="btn ghost compact" type="button" data-doc-select="${escapeHtml(doc.id)}">Open</button>
-                  ${rejectableDocumentStages.includes(doc.pipelineStep) ? `<button class="btn ghost compact danger" type="button" data-doc-reject-start="${escapeHtml(doc.id)}">Reject</button>` : ""}
-                  <button class="btn dark compact" type="button" data-doc-advance="${escapeHtml(doc.id)}" ${documentActionDisabled(doc) ? "disabled" : ""}>${documentActionLabel(doc)}</button>
-                </div>
-              </td>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Document</th>
+              <th>Type</th>
+              <th>Job</th>
+              <th>Customer</th>
+              <th>Owner</th>
+              <th>Status</th>
+              <th>Due</th>
+              <th>Delivery</th>
+              <th>File</th>
+              <th>File ID</th>
+              <th>Signed / Uploaded</th>
+              <th>Last activity</th>
+              <th>Action</th>
             </tr>
-          `).join("")}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            ${rows.map((doc) => {
+              const generatedFile = documentGeneratedFileFor(doc);
+              return `
+                <tr class="${doc.id === state.selectedDocumentId ? "selected" : ""} ${documentIsOverdue(doc) ? "overdue" : ""}" data-doc-row="${escapeHtml(doc.id)}">
+                  <td class="mono">${escapeHtml(doc.id)}</td>
+                  <td>${escapeHtml(doc.type)}</td>
+                  <td class="mono">${escapeHtml(doc.jobId)}</td>
+                  <td>${escapeHtml(doc.customer || "Not assigned")}</td>
+                  <td>${escapeHtml(doc.owner)}</td>
+                  <td>${statusChip(documentStatusForUi(doc))}</td>
+                  <td>${dueCell(doc)}</td>
+                  <td>${documentDeliveryCell(doc, generatedFile)}</td>
+                  <td>${documentFileCell(doc, generatedFile)}</td>
+                  <td class="mono">${escapeHtml(documentFileIdCell(doc, generatedFile))}</td>
+                  <td>${documentSignedUploadCell(doc)}</td>
+                  <td>${documentActivityCell(doc)}</td>
+                  <td>
+                    <div class="table-actions">
+                      <button class="btn primary compact" type="button" data-doc-view="${escapeHtml(doc.id)}">View</button>
+                      <button class="btn ghost compact" type="button" data-doc-edit="${escapeHtml(doc.id)}">Edit</button>
+                      ${documentDownloadUrl(doc, generatedFile) ? `<a class="btn ghost compact" href="${escapeHtml(documentDownloadUrl(doc, generatedFile))}" target="_blank" rel="noopener">Download</a>` : ""}
+                      ${rejectableDocumentStages.includes(doc.pipelineStep) ? `<button class="btn ghost compact danger" type="button" data-doc-reject-start="${escapeHtml(doc.id)}">Reject</button>` : ""}
+                      ${documentWorkflowActions(doc, generatedFile)}
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+      ${documentRejectInlinePanel()}
     </section>
+  `;
+}
+
+function documentWorkflowActions(doc, generatedFile) {
+  if (documentIsDone(doc)) {
+    return `<button class="btn done compact" type="button" disabled>DONE</button>`;
+  }
+
+  if (documentHasSignedUpload(doc)) {
+    return `<button class="btn warn compact" type="button" data-doc-finish="${escapeHtml(doc.id)}">Finish</button>`;
+  }
+
+  if (documentNeedsSignedUpload(doc, generatedFile)) {
+    return `<button class="btn warn compact" type="button" data-doc-upload-signed-open="${escapeHtml(doc.id)}">Upload signed</button>`;
+  }
+
+  if (doc.pipelineStep === "Rejected") {
+    return `<button class="btn dark compact" type="button" data-doc-back-draft="${escapeHtml(doc.id)}">Back to Draft</button>`;
+  }
+
+  return "";
+}
+
+function documentDeliveryCell(doc, generatedFile) {
+  if (documentIsDone(doc)) return `<span class="doc-signal done">Case/ticket closed</span>`;
+  if (documentHasSignedUpload(doc)) return `<span class="doc-signal signed">Signed copy uploaded</span>`;
+  if (documentNeedsSignedUpload(doc, generatedFile)) return `<span class="doc-signal warn">Upload signed copy</span>`;
+  return escapeHtml(doc.deliveryStatus || (generatedFile ? "Generated" : doc.uploadedFile ? "Uploaded" : "Not generated"));
+}
+
+function documentFileCell(doc, generatedFile) {
+  const generatedName = generatedFileDisplayName(generatedFile);
+  const signedName = doc.signedFile?.fileName || (doc.signedUploadedAt ? doc.uploadedFile?.fileName : "");
+  const uploadName = !signedName ? doc.uploadedFile?.fileName || "" : "";
+  const items = [];
+  if (generatedName) items.push(`<span class="doc-table-file"><strong>Generated:</strong> ${escapeHtml(generatedName)}</span>`);
+  if (signedName) items.push(`<span class="doc-table-file"><strong>Signed:</strong> ${escapeHtml(signedName)}</span>`);
+  if (uploadName) items.push(`<span class="doc-table-file">${escapeHtml(uploadName)}</span>`);
+  return items.length ? items.join("") : `<span class="muted">No file</span>`;
+}
+
+function documentFileIdCell(doc, generatedFile) {
+  const generatedId = generatedFile?.fileId || generatedFile?.id || "";
+  const signedId = doc.signedFile?.fileId || doc.signedFile?.id || "";
+  return [generatedId, signedId].filter(Boolean).join(" / ") || doc.uploadedFile?.fileId || doc.uploadedFile?.id || "-";
+}
+
+function documentSignedUploadCell(doc) {
+  const items = [];
+  if (documentIsDone(doc)) items.push(`DONE: ${doc.finishedAt.slice(0, 10)}`);
+  if (doc.signedBy) items.push(`Signed: ${doc.signedBy}`);
+  if (doc.signedUploadedAt) items.push(`Uploaded: ${doc.signedUploadedAt.slice(0, 10)}`);
+  else if (doc.uploadedAt) items.push(`Uploaded: ${doc.uploadedAt.slice(0, 10)}`);
+  if (doc.warrantySynced) items.push(`Warranty: ${doc.warrantyExpiryDate || "synced"}`);
+  return items.length ? escapeHtml(items.join(" / ")) : `<span class="muted">-</span>`;
+}
+
+function documentActivityCell(doc) {
+  const latest = doc.deliveryAudit?.[0];
+  if (latest) {
+    const at = latest.at ? latest.at.slice(0, 16).replace("T", " ") : "";
+    return `<span class="doc-table-note">${escapeHtml([latest.action, at, latest.note || latest.fileName || ""].filter(Boolean).join(" / "))}</span>`;
+  }
+  if (doc.description) return `<span class="doc-table-note">${escapeHtml(doc.description)}</span>`;
+  return `<span class="muted">-</span>`;
+}
+
+function documentDownloadUrl(doc, generatedFile) {
+  return generatedFile?.downloadUrl || doc.uploadedFile?.downloadUrl || "";
+}
+
+function documentRejectInlinePanel() {
+  const doc = documents.find((item) => item.id === state.rejectingDocumentId);
+  if (!doc) return "";
+  return `
+    <div class="document-inline-panel">
+      <div>
+        <div class="detail-group-title">Reject ${escapeHtml(doc.id)}</div>
+        <div class="filter-note">Add the correction note without opening a separate selected-document panel.</div>
+      </div>
+      ${rejectDocumentForm(doc)}
+    </div>
   `;
 }
 
@@ -548,7 +663,7 @@ function pipelineBoard() {
   return `
     <div class="pipeline">
       ${boardStages.map((stage) => {
-        const count = documents.filter((doc) => doc.pipelineStep === stage).length;
+        const count = documents.filter((doc) => documentStageForUi(doc) === stage).length;
         return `
           <div class="pipeline-stage">
             <strong>${stage}</strong>
@@ -561,8 +676,8 @@ function pipelineBoard() {
 }
 
 function documentMonitoringPanel() {
-  const waitingCustomer = documents.filter((doc) => doc.pipelineStep === "Customer").length;
-  const waitingSignature = documents.filter((doc) => doc.pipelineStep === "Signature").length;
+  const waitingCustomer = documents.filter((doc) => documentStageForUi(doc) === "Customer").length;
+  const waitingSignature = documents.filter((doc) => documentStageForUi(doc) === "Signature").length;
   return `
     <section class="monitor-grid" aria-label="Document monitoring">
       ${monitorCard("Overdue", overdueDocuments().length, "Owners must follow up", "danger")}
@@ -586,14 +701,14 @@ function monitorCard(label, value, note, tone) {
 function documentFilters() {
   const owners = ["All", ...new Set(documents.map((doc) => doc.owner))];
   const types = ["All", ...new Set(documents.map((doc) => doc.type))];
-  const statuses = ["All", ...new Set(documents.map((doc) => doc.pipelineStep))];
+  const statuses = ["All", ...new Set(documents.map(documentStageForUi).filter(Boolean))];
   const customersList = ["All", ...new Set(documents.map((doc) => doc.customer))];
   return `
     <section class="panel slim">
       <div class="doc-filter-row">
         <div>
-          <div class="section-title">Document queue</div>
-          <div class="filter-note">Filter by owner and move documents through the processing pipeline.</div>
+          <div class="section-title">Document repository</div>
+          <div class="filter-note">Search, filter, upload, preview, and manage document files.</div>
         </div>
         <label class="filter-control" for="doc-owner-filter">
           <span>Owner</span>
@@ -651,11 +766,12 @@ function documentDetailPanel(doc) {
   if (!doc) return "";
   const isRejecting = state.rejectingDocumentId === doc.id;
   const latestRejection = doc.rejectionHistory?.[0];
+  const generatedFile = documentGeneratedFileFor(doc);
   return `
     <section class="panel">
       <div class="section-heading">
         <div class="section-title">Selected document</div>
-        ${statusChip(doc.status)}
+        ${statusChip(documentStatusForUi(doc))}
       </div>
       <div class="doc-detail-grid">
         ${detailItem("Document", doc.id)}
@@ -664,17 +780,45 @@ function documentDetailPanel(doc) {
         ${detailItem("Customer", doc.customer)}
         ${detailItem("Owner", doc.owner)}
         ${detailItem("Due", `${doc.due}${documentIsOverdue(doc) ? " / Overdue" : documentIsDueToday(doc) ? " / Today" : ""}`)}
+        ${detailItem("Delivery", doc.deliveryStatus || (generatedFile ? "Generated" : "Not generated"))}
+        ${generatedFile ? detailItem("Generated file", generatedFileDisplayName(generatedFile)) : ""}
+        ${generatedFile?.fileId ? detailItem("File id", generatedFile.fileId) : ""}
+        ${doc.signedFile ? detailItem("Signed file", doc.signedFile.fileName || "Signed upload") : ""}
+        ${doc.finishedAt ? detailItem("Case/ticket", `Closed ${doc.finishedAt.slice(0, 10)}`) : ""}
       </div>
+      <div class="doc-action-row">
+        <button class="btn primary" type="button" data-doc-preview-open="${escapeHtml(doc.id)}">Open preview</button>
+        ${generatedFile?.downloadUrl ? `<button class="btn dark" type="button" data-doc-preview-open="${escapeHtml(doc.id)}">Open generated PDF</button>` : ""}
+        ${documentWorkflowActions(doc, generatedFile)}
+      </div>
+      ${documentDeliveryAuditBlock(doc)}
       ${doc.uploaded ? uploadedMetadataBlock(doc) : ""}
       ${doc.pipelineStep === "Rejected" || latestRejection ? rejectionHistoryBlock(doc, latestRejection) : ""}
-      ${rejectableDocumentStages.includes(doc.pipelineStep) || doc.pipelineStep === "Rejected" ? `
+      ${rejectableDocumentStages.includes(doc.pipelineStep) ? `
         <div class="doc-action-row">
-          ${rejectableDocumentStages.includes(doc.pipelineStep) ? `<button class="btn ghost danger" type="button" data-doc-reject-start="${escapeHtml(doc.id)}">${isRejecting ? "Edit rejection" : "Reject"}</button>` : ""}
-          <button class="btn dark" type="button" data-doc-advance="${escapeHtml(doc.id)}">${documentActionLabel(doc)}</button>
+          <button class="btn ghost danger" type="button" data-doc-reject-start="${escapeHtml(doc.id)}">${isRejecting ? "Edit rejection" : "Reject"}</button>
         </div>
       ` : ""}
       ${isRejecting ? rejectDocumentForm(doc) : ""}
     </section>
+  `;
+}
+
+function documentDeliveryAuditBlock(doc) {
+  if (!doc.deliveryAudit?.length) return "";
+  return `
+    <div class="detail-block">
+      <div class="detail-group-title">Delivery audit</div>
+      <div class="delivery-audit-list">
+        ${doc.deliveryAudit.slice(0, 4).map((entry) => `
+          <div class="delivery-audit-row">
+            <span>${escapeHtml(entry.action)}</span>
+            <strong>${escapeHtml(entry.at ? entry.at.slice(0, 16).replace("T", " ") : "")}</strong>
+            <em>${escapeHtml(entry.note || entry.fileName || "")}</em>
+          </div>
+        `).join("")}
+      </div>
+    </div>
   `;
 }
 
@@ -686,6 +830,8 @@ function uploadedMetadataBlock(doc) {
         ${detailItem("Who signed", doc.signedBy || "Not recorded")}
         ${detailItem("Uploaded", doc.uploadedAt ? doc.uploadedAt.slice(0, 10) : "Not recorded")}
         ${detailItem("Description", doc.description || "Uploaded external document")}
+        ${doc.uploadedFile ? detailItem("File", doc.uploadedFile.fileName || "Uploaded file") : ""}
+        ${doc.uploadedFile?.downloadUrl ? `<a class="btn ghost compact" href="${escapeHtml(doc.uploadedFile.downloadUrl)}">Download uploaded file</a>` : ""}
         ${doc.warrantySynced ? detailItem("Warranty sync", `${doc.warrantyEquipmentId} / expiry ${doc.warrantyExpiryDate}`) : ""}
         ${doc.calendarEventId ? detailItem("Calendar event", doc.calendarEventId) : ""}
       </div>
@@ -708,46 +854,67 @@ const documentTypeOptions = [
 
 function documentUploadPanel() {
   if (!state.documentUploadOpen) return "";
-  const defaultJob = jobs[0];
+  const targetDoc = documents.find((doc) => doc.id === state.documentUploadTargetId);
+  const defaultJob = targetDoc ? jobs.find((job) => job.id === targetDoc.jobId) : jobs[0];
   return `
     <section class="panel">
       <div class="section-heading">
-        <div class="section-title">Upload external document</div>
-        <span class="chip pending">Metadata</span>
+        <div>
+          <div class="section-title">${targetDoc ? `Upload signed copy for ${escapeHtml(targetDoc.id)}` : "Upload external document"}</div>
+          <div class="filter-note">${targetDoc ? "Use this after the generated document was printed/sent and signed by the customer." : "Create a new document record from an external file."}</div>
+        </div>
+        <span class="chip ${targetDoc ? "signature" : "pending"}">${targetDoc ? "Signed return" : "Metadata"}</span>
       </div>
+      ${targetDoc ? `
+        <div class="doc-return-summary">
+          ${detailItem("Document", targetDoc.id)}
+          ${detailItem("Type", targetDoc.type)}
+          ${detailItem("Job", targetDoc.jobId)}
+          ${detailItem("Customer", targetDoc.customer)}
+          ${detailItem("Generated file", generatedFileDisplayName(documentGeneratedFileFor(targetDoc)) || "Preview/download first")}
+        </div>
+      ` : ""}
       <div class="field-stack upload-form">
-        <div class="field">
-          <label for="doc-upload-type">Document type</label>
-          <select id="doc-upload-type">
-            ${documentTypeOptions.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join("")}
-          </select>
-        </div>
-        <div class="field">
-          <label for="doc-upload-job">Job ref</label>
-          <select id="doc-upload-job">
-            ${jobs.map((job) => `<option value="${escapeHtml(job.id)}">${escapeHtml(job.id)} / ${escapeHtml(job.customer)}</option>`).join("")}
-          </select>
-        </div>
-        <div class="field">
-          <label for="doc-upload-customer">Customer</label>
-          <input id="doc-upload-customer" value="${escapeHtml(defaultJob?.customer || "")}" placeholder="Customer name">
-        </div>
+        ${targetDoc ? "" : `
+          <div class="field">
+            <label for="doc-upload-type">Document type</label>
+            <select id="doc-upload-type">
+              ${documentTypeOptions.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field">
+            <label for="doc-upload-job">Job ref</label>
+            <select id="doc-upload-job">
+              ${jobs.map((job) => `<option value="${escapeHtml(job.id)}">${escapeHtml(job.id)} / ${escapeHtml(job.customer)}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field">
+            <label for="doc-upload-customer">Customer</label>
+            <input id="doc-upload-customer" value="${escapeHtml(defaultJob?.customer || "")}" placeholder="Customer name">
+          </div>
+        `}
         <div class="field">
           <label for="doc-upload-signed-by">Who signed</label>
-          <input id="doc-upload-signed-by" placeholder="Name or department">
+          <input id="doc-upload-signed-by" placeholder="Name or department" value="${escapeHtml(targetDoc ? "Customer representative" : "")}">
         </div>
         <div class="field">
-          <label for="doc-upload-due">Due date</label>
-          <input id="doc-upload-due" type="date" value="${escapeHtml(new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10))}">
+          <label for="doc-upload-file">${targetDoc ? "Signed file" : "File"}</label>
+          <input id="doc-upload-file" type="file" accept=".pdf,.odt,.docx,.doc,.png,.jpg,.jpeg,.webp">
         </div>
+        ${targetDoc ? "" : `
+          <div class="field">
+            <label for="doc-upload-due">Due date</label>
+            <input id="doc-upload-due" type="date" value="${escapeHtml(new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10))}">
+          </div>
+        `}
         <div class="field full">
           <label for="doc-upload-description">Short description</label>
-          <textarea id="doc-upload-description" rows="3" placeholder="Location, contract reference, date, executor, or other indexed metadata"></textarea>
+          <textarea id="doc-upload-description" rows="3" placeholder="${targetDoc ? "Optional note about signature / received copy" : "Location, contract reference, date, executor, or other indexed metadata"}">${targetDoc ? "Signed document returned by customer." : ""}</textarea>
         </div>
       </div>
       ${state.documentUploadError ? `<div class="form-error">${escapeHtml(state.documentUploadError)}</div>` : ""}
       <div class="doc-action-row">
-        <button class="btn primary" type="button" data-doc-upload-submit>Create pipeline record</button>
+        <button class="btn primary" type="button" data-doc-upload-submit>${targetDoc ? "Upload signed copy" : "Upload and create record"}</button>
         <button class="btn ghost" type="button" data-doc-upload-cancel>Cancel</button>
       </div>
     </section>
@@ -811,7 +978,7 @@ function serviceFlow() {
     ["action",   "Parts",      "EDD"],
     ["duration", "Repair",     "Duration"],
     ["process",  "Work act",   "Draft"],
-    ["end",      "Finished",   "Archive"]
+    ["end",      "Finished",   "Done"]
   ];
   return `
     <div class="flow-row">
@@ -914,6 +1081,17 @@ function templateEditorPanel(template) {
         <div class="template-merge-fields" aria-label="Available merge fields">
           ${blueprint.mergeFields.map((field) => `<code>{d.${escapeHtml(field)}}</code>`).join("")}
         </div>
+        <div class="template-file-tools">
+          <div>
+            <div class="detail-group-title">FODT template file</div>
+            <div class="filter-note">${escapeHtml(state.templateFileStatus || "Export editor sections as .fodt or upload a .fodt file for this output template.")}</div>
+          </div>
+          <button class="btn" type="button" data-template-fodt-export="${escapeHtml(template.id)}">Export sections as .fodt</button>
+          <label class="btn ghost template-upload-label">
+            Upload .fodt template
+            <input type="file" accept=".fodt" data-template-fodt-upload="${escapeHtml(template.id)}">
+          </label>
+        </div>
         <div class="template-section-list">
           ${sections.map((section) => `
             <label class="template-section-editor" for="tpl-section-${escapeHtml(section.id)}">
@@ -929,6 +1107,7 @@ function templateEditorPanel(template) {
         </div>
       `}
       ${state.templateEditorError ? `<div class="form-error">${escapeHtml(state.templateEditorError)}</div>` : ""}
+      ${state.templateFileError ? `<div class="form-error">${escapeHtml(state.templateFileError)}</div>` : ""}
       <div class="template-editor-actions">
         <button class="btn primary" type="button" data-template-editor-save>Save template</button>
         <button class="btn ghost" type="button" data-template-editor-reset>Reset template</button>
@@ -1045,6 +1224,7 @@ function docPreviewPanel(doc, template, preview) {
         ${body}
       </div>
       <div class="doc-preview-actions">
+        <button class="btn primary compact" type="button" data-doc-preview-open="${escapeHtml(doc?.id || "")}">Open print preview</button>
         <a class="btn primary compact" href="${dlHref}" download="${escapeHtml((doc?.id || "doc") + "-mock.txt")}">Download mock (.txt)</a>
         ${preview?.serviceDownloadUrl ? `<a class="btn dark compact" href="${escapeHtml(preview.serviceDownloadUrl)}">Download service file</a>` : ""}
         <button class="btn ghost compact" type="button" data-reset-preview>Reset</button>
@@ -1150,6 +1330,18 @@ function docPreviewBody(templateId, doc, job, cust, eq, dateStr, workAct = null,
       ${dpfRow("Recommended correction", defectAct?.recommendedCorrection || "To be completed by engineer.")}
       ${dpfRow("Risk level", defectAct?.riskLevel || "ā€”")}
       ${defectAct?.customerAcknowledgement ? dpfRow("Customer acknowledgement", defectAct.customerAcknowledgement) : ""}
+      ${defectAct?.actualVisits?.length ? `
+        <div class="dpf-section">Actual Visits</div>
+        ${defectAct.actualVisits.map((visit) => dpfRow(
+          [visit.da ? "DA" : "", visit.wa ? "WA" : "", visit.plannedStart || "Visit"].filter(Boolean).join(" / "),
+          [
+            visit.workHours !== "" && visit.workHours != null ? `Work ${visit.workHours} h` : "",
+            visit.travelHours !== "" && visit.travelHours != null ? `Travel ${visit.travelHours} h` : "",
+            visit.completed ? "Completed" : "Open",
+            visit.comments || ""
+          ].filter(Boolean).join(" / ")
+        )).join("")}
+      ` : ""}
       ${dpfRow("Engineer", owner)}
       <div class="dpf-section">Signatures</div>
       <div class="dpf-sig-row">
@@ -1402,7 +1594,7 @@ function roleFocusPanel() {
           <span class="role-tag ${r}">${r}</span>
         </div>
         ${ownerDocs.length
-          ? documentsTableRows(ownerDocs)
+          ? documentsTableRows(ownerDocs, { salesActions: true })
           : `<div class="modal-placeholder">No ${ownerLabel.toLowerCase()} documents in pipeline.</div>`}
       </section>
     `;
@@ -1507,13 +1699,14 @@ function jobsTableRows(rows, options = {}) {
 }
 
 // Inline documents table body for focus panels.
-function documentsTableRows(rows) {
+function documentsTableRows(rows, options = {}) {
   if (!rows.length) return `<div class="modal-placeholder">No documents to display.</div>`;
+  const showSalesActions = Boolean(options.salesActions);
   return `
     <table class="data-table">
       <thead>
         <tr>
-          <th>Doc ID</th><th>Type</th><th>Customer</th><th>Stage</th><th>Due</th>
+          <th>Doc ID</th><th>Type</th><th>Customer</th><th>Stage</th><th>Due</th>${showSalesActions ? "<th>Action</th>" : ""}
         </tr>
       </thead>
       <tbody>
@@ -1522,13 +1715,30 @@ function documentsTableRows(rows) {
             <td class="mono">${escapeHtml(doc.id)}</td>
             <td>${escapeHtml(doc.type)}</td>
             <td>${escapeHtml(doc.customer)}</td>
-            <td>${statusChip(doc.pipelineStep)}</td>
+            <td>${statusChip(documentStageForUi(doc))}</td>
             <td>${dueCell(doc)}</td>
+            ${showSalesActions ? `
+              <td>
+                <div class="table-actions">
+                  <button class="btn ghost compact" type="button" data-doc-view="${escapeHtml(doc.id)}">View</button>
+                  <button class="btn ghost compact" type="button" data-doc-edit="${escapeHtml(doc.id)}">Edit</button>
+                  ${salesInvoiceAction(doc)}
+                </div>
+              </td>
+            ` : ""}
           </tr>
         `).join("")}
       </tbody>
     </table>
   `;
+}
+
+function salesInvoiceAction(doc) {
+  const invoice = invoices.find((item) => item.documentId === doc.id || item.jobId === doc.jobId || item.customer === doc.customer);
+  if (invoice?.status === "Generated") {
+    return `<button class="btn done compact" type="button" disabled>${escapeHtml(invoice.invoiceNo || "Invoice generated")}</button>`;
+  }
+  return `<button class="btn warn compact" type="button" data-doc-generate-invoice="${escapeHtml(doc.id)}">Generate invoice</button>`;
 }
 
 // Compact parts table for svcmgr approval queue and logistics focus panels.
@@ -1719,6 +1929,7 @@ function workActDraftPanelLegacy(job, act) {
   const candidateEquipment = workActCandidateEquipment(job);
   const selectedEquipment = act.equipmentItems || [];
   const selectedTemplate = workListTemplates.find((tpl) => tpl.id === act.workTemplateId) || null;
+  const generatedFile = act.generatedFile || null;
   const rows = act.workRows || [];
 
   return `
@@ -1728,8 +1939,11 @@ function workActDraftPanelLegacy(job, act) {
         ${detailItem("Status", act.status)}
         ${detailItem("Source", act.source || "Manual")}
         ${detailItem("Template", selectedTemplate?.name || "Not selected")}
+        ${generatedFile ? detailItem("Generated file", generatedFileDisplayName(generatedFile)) : ""}
+        ${generatedFile?.fileId ? detailItem("File id", generatedFile.fileId) : ""}
       </div>
       ${state.workActError && state.selectedWorkActId === act.id ? `<div class="form-error">${escapeHtml(state.workActError)}</div>` : ""}
+      ${workActOptionsPanel(act)}
       <div class="work-act-section">
         <div class="detail-group-title">Equipment selection</div>
         <div class="work-act-equipment-list">
@@ -1752,12 +1966,14 @@ function workActDraftPanelLegacy(job, act) {
           <span>Work List Template Name</span>
           <select data-work-act-template="${escapeHtml(act.id)}">
             <option value="">Not selected</option>
-            ${workListTemplates.map((tpl) => `<option value="${escapeHtml(tpl.id)}" ${tpl.id === act.workTemplateId ? "selected" : ""}>${escapeHtml(tpl.name)}</option>`).join("")}
+            ${workListTemplateOptionsForAct(act).map((tpl) => `<option value="${escapeHtml(tpl.id)}" ${tpl.id === act.workTemplateId ? "selected" : ""}>${escapeHtml(tpl.name)}</option>`).join("")}
           </select>
         </label>
         <button class="btn" type="button" data-work-act-apply-template="${escapeHtml(act.id)}">Apply template</button>
         <button class="btn ghost" type="button" data-work-act-add-row="${escapeHtml(act.id)}">Add work row</button>
         <button class="btn primary" type="button" data-work-act-generate="${escapeHtml(act.id)}">Create document draft</button>
+        ${act.generatedDocumentId ? `<button class="btn dark" type="button" data-generate-service-document="${escapeHtml(act.generatedDocumentId)}">Generate PDF file</button>` : ""}
+        ${act.generatedDocumentId ? `<button class="btn dark" type="button" data-doc-preview-open="${escapeHtml(act.generatedDocumentId)}">Open preview</button>` : ""}
       </div>
       <label class="field work-act-text">
         <span>Work Description</span>
@@ -1784,6 +2000,7 @@ function workActDraftPanel(job, act) {
   const candidateEquipment = workActCandidateEquipment(job);
   const selectedEquipment = act.equipmentItems || [];
   const selectedTemplate = workListTemplates.find((tpl) => tpl.id === act.workTemplateId) || null;
+  const generatedFile = act.generatedFile || null;
   const rows = act.workRows || [];
 
   return `
@@ -1793,11 +2010,14 @@ function workActDraftPanel(job, act) {
         ${detailItem("Status", act.status)}
         ${detailItem("Source", act.source || "Manual")}
         ${detailItem("Template", selectedTemplate?.name || "Not selected")}
+        ${generatedFile ? detailItem("Generated file", generatedFileDisplayName(generatedFile)) : ""}
+        ${generatedFile?.fileId ? detailItem("File id", generatedFile.fileId) : ""}
       </div>
       ${state.workActError && state.selectedWorkActId === act.id ? `<div class="form-error">${escapeHtml(state.workActError)}</div>` : ""}
+      ${workActOptionsPanel(act)}
       <div class="work-act-section">
         <div class="detail-group-title">Equipment selection</div>
-        <div class="work-act-equipment-picker">
+        <div class="work-act-equipment-picker tg-search-band">
           <label class="filter-control">
             <span>Search equipment</span>
             <input list="work-act-equipment-options-${escapeHtml(act.id)}"
@@ -1807,7 +2027,7 @@ function workActDraftPanel(job, act) {
               ${candidateEquipment.map((eq) => `<option value="${escapeHtml(workActEquipmentOptionLabel(eq))}"></option>`).join("")}
             </datalist>
           </label>
-          <button class="btn" type="button" data-work-act-equipment-add="${escapeHtml(act.id)}">Add equipment</button>
+          <button class="btn compact" type="button" data-work-act-equipment-add="${escapeHtml(act.id)}">Add equipment</button>
         </div>
         <div class="work-act-selected-equipment">
           ${selectedEquipment.length ? selectedEquipment.map((item) => `
@@ -1821,17 +2041,21 @@ function workActDraftPanel(job, act) {
           `).join("") : `<div class="modal-placeholder">No equipment selected yet.</div>`}
         </div>
       </div>
-      <div class="work-act-section work-act-template-row">
+      <div class="tg-command-bar compact">
         <label class="filter-control">
           <span>Work List Template Name</span>
           <select data-work-act-template="${escapeHtml(act.id)}">
             <option value="">Not selected</option>
-            ${workListTemplates.map((tpl) => `<option value="${escapeHtml(tpl.id)}" ${tpl.id === act.workTemplateId ? "selected" : ""}>${escapeHtml(tpl.name)}</option>`).join("")}
+            ${workListTemplateOptionsForAct(act).map((tpl) => `<option value="${escapeHtml(tpl.id)}" ${tpl.id === act.workTemplateId ? "selected" : ""}>${escapeHtml(tpl.name)}</option>`).join("")}
           </select>
         </label>
-        <button class="btn" type="button" data-work-act-apply-template="${escapeHtml(act.id)}">Apply template</button>
-        <button class="btn ghost" type="button" data-work-act-add-row="${escapeHtml(act.id)}">Add work row</button>
-        <button class="btn primary" type="button" data-work-act-generate="${escapeHtml(act.id)}">Create document draft</button>
+        <div class="tg-action-cluster">
+          <button class="btn ghost compact" type="button" data-work-act-apply-template="${escapeHtml(act.id)}">Apply template</button>
+          <button class="btn ghost compact" type="button" data-work-act-add-row="${escapeHtml(act.id)}">Add row</button>
+          <button class="btn primary compact" type="button" data-work-act-generate="${escapeHtml(act.id)}">Create draft</button>
+          ${act.generatedDocumentId ? `<button class="btn dark compact" type="button" data-generate-service-document="${escapeHtml(act.generatedDocumentId)}">Generate PDF</button>` : ""}
+          ${act.generatedDocumentId ? `<button class="btn ghost compact" type="button" data-doc-preview-open="${escapeHtml(act.generatedDocumentId)}">Preview</button>` : ""}
+        </div>
       </div>
       <label class="field work-act-text">
         <span>Work Description</span>
@@ -1841,6 +2065,63 @@ function workActDraftPanel(job, act) {
         <div class="detail-group-title">Work: List (${rows.length})</div>
         ${rows.length ? workActRowsTable(act) : `<div class="modal-placeholder">Apply a template or add a row.</div>`}
       </div>
+    </div>
+  `;
+}
+
+function workActOptionsPanel(act) {
+  const options = {
+    includePersonName: true,
+    includeSignature: true,
+    includeWorkingHours: true,
+    includeSystemIdentity: true,
+    includeSystemName: true,
+    equipmentWorking: true,
+    readyForUse: false,
+    oldPartReturned: false,
+    hygieneStandard: false,
+    showTravelHours: false,
+    showStartedCompletedTime: false,
+    useThreeSideTemplate: false,
+    ...(act.reportOptions || {})
+  };
+  const serviceUsers = users.filter((user) => user.roles?.some((role) => ["service", "svcmgr", "admin"].includes(role)));
+  const optionRows = [
+    ["equipmentWorking", "Equipment working"],
+    ["readyForUse", "Ready for use"],
+    ["oldPartReturned", "Old part returned to manufacturer"],
+    ["hygieneStandard", "Hygiene Standard"],
+    ["includePersonName", "Include person name"],
+    ["includeSignature", "Include signature"],
+    ["includeWorkingHours", "Include working hours"],
+    ["showTravelHours", "Show travel hours in report"],
+    ["showStartedCompletedTime", "Show started / completed time"],
+    ["includeSystemIdentity", "Include system identity"],
+    ["includeSystemName", "Include system name"],
+    ["useThreeSideTemplate", "Use three side template"]
+  ];
+
+  return `
+    <div class="work-act-section work-act-options-panel">
+      <div>
+        <div class="detail-group-title">Options / print settings</div>
+        <div class="filter-note">Compact print flags for the final Work Act output.</div>
+      </div>
+      <label class="filter-control">
+        <span>Entry Person</span>
+        <select data-work-act-entry-person="${escapeHtml(act.id)}">
+          ${serviceUsers.map((user) => `<option value="${escapeHtml(user.name)}" ${options.entryPerson === user.name ? "selected" : ""}>${escapeHtml(user.name)}</option>`).join("")}
+        </select>
+      </label>
+      <fieldset class="work-act-option-grid">
+        <legend class="sr-only">Work Act print settings</legend>
+        ${optionRows.map(([key, label]) => `
+          <label class="work-act-option">
+            <input type="checkbox" data-work-act-option="${escapeHtml(act.id)}:${escapeHtml(key)}" ${options[key] ? "checked" : ""}>
+            <span>${escapeHtml(label)}</span>
+          </label>
+        `).join("")}
+      </fieldset>
     </div>
   `;
 }
@@ -1883,7 +2164,8 @@ function linkedDocumentList(rows) {
         <div class="linked-row">
           <span>${escapeHtml(doc.id)}</span>
           <span>${escapeHtml(doc.type)}</span>
-          ${statusChip(doc.pipelineStep)}
+          ${statusChip(documentStageForUi(doc))}
+          <button class="btn ghost compact" type="button" data-doc-preview-open="${escapeHtml(doc.id)}">Preview</button>
         </div>
       `).join("")}
     </div>
@@ -2247,6 +2529,7 @@ function salesPage() {
   const awaitingCount = quotations.filter((q) => q.status === "Awaiting approval").length;
   const approvedCount = quotations.filter((q) => q.status === "Approved").length;
   const handedCount   = quotations.filter((q) => q.status === "Handed off").length;
+  const salesDocs = documents.filter((doc) => doc.owner === "Sales");
 
   return `
     ${pageHeader("sales")}
@@ -2269,6 +2552,16 @@ function salesPage() {
         <div class="panel split-right">
           ${qte ? salesDetailPanel(qte) : `<div class="modal-placeholder">Select a quotation to view details.</div>`}
         </div>
+      </section>
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <div class="section-title">Sales document list</div>
+            <div class="filter-note">Use the same document return flow, with invoice generation available for sales-owned records.</div>
+          </div>
+          <span class="role-tag sales">sales</span>
+        </div>
+        ${documentsTableRows(salesDocs, { salesActions: true })}
       </section>
       ${newQuotationPanel()}
       ${salesContractManagement()}
@@ -2347,7 +2640,7 @@ function financeDetailPanel(inv) {
           <div class="linked-row">
             <span>${escapeHtml(doc.id)}</span>
             <span>${escapeHtml(doc.type)}</span>
-            ${statusChip(doc.pipelineStep)}
+            ${statusChip(documentStageForUi(doc))}
           </div>
         </div>
       ` : `<div class="modal-placeholder">Generate invoice to create a Finance document record.</div>`}
@@ -2408,7 +2701,7 @@ function applyDocumentTableFilters(rows) {
   const query = state.documentSearchQuery.trim().toLowerCase();
   return rows.filter((doc) => {
     if (state.documentTypeFilter !== "All" && doc.type !== state.documentTypeFilter) return false;
-    if (state.documentStatusFilter !== "All" && doc.pipelineStep !== state.documentStatusFilter) return false;
+    if (state.documentStatusFilter !== "All" && documentStageForUi(doc) !== state.documentStatusFilter) return false;
     if (state.documentCustomerFilter !== "All" && doc.customer !== state.documentCustomerFilter) return false;
     if (state.documentDateFrom && doc.due < state.documentDateFrom) return false;
     if (state.documentDateTo && doc.due > state.documentDateTo) return false;
@@ -2419,7 +2712,8 @@ function applyDocumentTableFilters(rows) {
       doc.jobId,
       doc.customer,
       doc.owner,
-      doc.pipelineStep,
+      documentStageForUi(doc),
+      documentStatusForUi(doc),
       doc.signedBy,
       doc.description
     ].some((value) => String(value || "").toLowerCase().includes(query));
@@ -2435,26 +2729,13 @@ function documentsPage() {
     ? documents
     : documents.filter((doc) => doc.owner === effectiveFilter);
   const visibleDocs = applyDocumentTableFilters(filteredDocs);
-  const doc = selectedDocument();
 
   return `
     ${pageHeader("documents")}
     <div class="page-content">
-      <section class="panel">
-        <div class="section-heading"><div class="section-title">Pipeline stages</div></div>
-        ${pipelineBoard()}
-      </section>
-      ${documentMonitoringPanel()}
       ${documentFilters()}
       ${documentUploadPanel()}
-      <section class="two-col docs-layout">
-        <div>
-          ${documentsTable(visibleDocs)}
-        </div>
-        <div>
-          ${documentDetailPanel(doc)}
-        </div>
-      </section>
+      ${documentsTable(visibleDocs)}
       ${devSpecPanel("documents")}
     </div>
   `;
@@ -2462,22 +2743,11 @@ function documentsPage() {
 
 function templateGenerationPage() {
   const doc = selectedDocument();
-  const workActCount = workActs.length;
-  const defectActCount = defectActs.length;
-  const workListTemplateCount = workListTemplates.length;
-  const outputTemplateCount = templates.length;
   const activeTab = state.templateGenTab || "work-acts";
 
   return `
     ${pageHeader("templategen")}
     <div class="page-content">
-      <section class="tile-grid">
-        ${moduleTile("WA", "Work Acts", `${workActCount} drafts`)}
-        ${moduleTile("DA", "Defect Acts", `${defectActCount} drafts`)}
-        ${moduleTile("WL", "Work List Templates", `${workListTemplateCount} equipment checklists`)}
-        ${moduleTile("OT", "Output Templates", `${outputTemplateCount} document forms`)}
-        ${moduleTile("DOC", "Documents", "Generated files save back to repository")}
-      </section>
       <section class="panel">
         ${templateGenerationTabs(activeTab)}
       </section>
@@ -2515,11 +2785,15 @@ function templateGenerationTabContent(activeTab, doc) {
 }
 
 function workActsWorkspace() {
-  const rows = workActs.length ? workActs : [];
+  const rows = filteredWorkActs();
   const selectedJob = jobs.find((job) => job.id === state.templateGenWorkActJobId)
     || jobs.find((job) => job.id === state.selectedServiceJobId)
     || jobs[0];
-  const selectedAct = workActs.find((item) => item.jobId === selectedJob?.id) || null;
+  const selectedAct = workActs.find((item) => item.id === state.selectedWorkActId)
+    || workActs.find((item) => item.jobId === selectedJob?.id)
+    || null;
+  const groupedRows = groupWorkActsByEntryDate(rows);
+  const statusOptions = ["All", ...Array.from(new Set(workActs.map((act) => act.status || "Draft")))];
 
   return `
     <section class="panel">
@@ -2528,16 +2802,20 @@ function workActsWorkspace() {
           <div class="section-title">Work Acts</div>
           <div class="filter-note">Drafts are generated from service jobs or created manually. Work List Templates are copied into a concrete Work Act as isolated rows.</div>
         </div>
-        <button class="btn primary" type="button" data-output-template-route="tpl-service-act">Open Work Act output</button>
+        <div class="tg-heading-actions">
+          <button class="btn ghost compact" type="button" data-output-template-route="tpl-service-act">Open output template</button>
+        </div>
       </div>
-      <div class="work-act-template-row">
+      <div class="tg-command-bar">
         <label class="filter-control">
           <span>Source service job</span>
           <select data-template-work-act-job>
             ${jobs.map((job) => `<option value="${escapeHtml(job.id)}" ${job.id === selectedJob?.id ? "selected" : ""}>${escapeHtml(job.id)} / ${escapeHtml(job.customer)} / ${escapeHtml(job.equipment)}</option>`).join("")}
           </select>
         </label>
-        <button class="btn primary" type="button" data-work-act-create="${escapeHtml(selectedJob?.id || "")}">Create Work Act draft</button>
+        <div class="tg-action-cluster">
+          <button class="btn primary compact" type="button" data-work-act-create="${escapeHtml(selectedJob?.id || "")}">Create Work Act draft</button>
+        </div>
       </div>
       ${selectedJob ? `
         <div class="detail-block">
@@ -2545,24 +2823,24 @@ function workActsWorkspace() {
           ${workActDraftPanel(selectedJob, selectedAct)}
         </div>
       ` : ""}
-      ${rows.length ? `
+      ${workActs.length ? `
         <div class="detail-block">
-          <div class="detail-group-title">All Work Act drafts (${rows.length})</div>
-        <table class="data-table">
-          <thead><tr><th>No</th><th>Job</th><th>Customer</th><th>Equipment</th><th>Rows</th><th>Template</th></tr></thead>
-          <tbody>
-            ${rows.map((act) => `
-              <tr>
-                <td class="mono">${escapeHtml(act.number || act.id)}</td>
-                <td class="mono">${escapeHtml(act.jobId || "-")}</td>
-                <td>${escapeHtml(act.customer || "-")}</td>
-                <td>${escapeHtml((act.equipmentItems || []).map((item) => item.name).join(", ") || "-")}</td>
-                <td>${act.workRows?.length || 0}</td>
-                <td>${escapeHtml(workListTemplates.find((tpl) => tpl.id === act.workTemplateId)?.name || "Not selected")}</td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
+          <div class="detail-group-title">All Work Act drafts (${rows.length} of ${workActs.length})</div>
+          <div class="tg-filter-strip work-act-list-filters">
+            <label class="filter-control doc-search-text">
+              <span>Search</span>
+              <input type="search" data-work-act-search value="${escapeHtml(state.workActSearchQuery)}" placeholder="Number, job, customer, equipment">
+            </label>
+            <label class="filter-control">
+              <span>Status</span>
+              <select data-work-act-status-filter>
+                ${statusOptions.map((status) => `<option value="${escapeHtml(status)}" ${state.workActStatusFilter === status ? "selected" : ""}>${escapeHtml(status)}</option>`).join("")}
+              </select>
+            </label>
+            <div></div>
+            <div class="tg-section-subtitle">Results update while typing.</div>
+          </div>
+          ${rows.length ? workActsGroupedTable(groupedRows, selectedAct?.id) : `<div class="modal-placeholder">No Work Acts match the current filters.</div>`}
         </div>
       ` : `
         <div class="info-box">
@@ -2574,12 +2852,98 @@ function workActsWorkspace() {
   `;
 }
 
+function filteredWorkActs() {
+  const query = String(state.workActSearchQuery || "").trim().toLowerCase();
+  const status = state.workActStatusFilter || "All";
+  return workActs.filter((act) => {
+    const equipmentText = (act.equipmentItems || []).map((item) => `${item.name} ${item.serial} ${item.location}`).join(" ");
+    const haystack = [
+      act.number,
+      act.jobId,
+      act.customer,
+      act.type,
+      act.status,
+      act.workText,
+      act.workDescription,
+      equipmentText,
+      workActContractLabel(act)
+    ].filter(Boolean).join(" ").toLowerCase();
+    return (!query || haystack.includes(query)) && (status === "All" || act.status === status);
+  });
+}
+
+function groupWorkActsByEntryDate(rows) {
+  return rows.reduce((groups, act) => {
+    const label = workActDateGroup(act.date);
+    const existing = groups.find((group) => group.label === label);
+    if (existing) existing.rows.push(act);
+    else groups.push({ label, rows: [act] });
+    return groups;
+  }, []);
+}
+
+function workActDateGroup(dateValue) {
+  if (!dateValue) return "Entry Date: No date";
+  const today = new Date();
+  const date = new Date(`${dateValue}T00:00:00`);
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const diffDays = Math.round((todayStart - date) / 86400000);
+  if (diffDays === 0) return "Entry Date: Today";
+  if (diffDays === 1) return "Entry Date: Yesterday";
+  if (diffDays > 1 && diffDays <= 7) return "Entry Date: Last Week";
+  if (diffDays > 7 && diffDays <= 31) return "Entry Date: Last Month";
+  if (diffDays > 31) return "Entry Date: Older";
+  return "Entry Date: Future";
+}
+
+function workActsGroupedTable(groups, selectedActId) {
+  return `
+    <table class="data-table work-act-list-table">
+      <thead>
+        <tr><th>Work Act Nr.</th><th>Work</th><th>Equipment</th><th>Systems</th><th>Hospital</th><th>Type</th><th>Contract</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        ${groups.map((group) => `
+          <tr class="work-act-group-row"><td colspan="8">${escapeHtml(group.label)}: ${group.rows.length} work act(s)</td></tr>
+          ${group.rows.map((act) => {
+            const equipmentNames = (act.equipmentItems || []).map((item) => item.name).join(", ") || "-";
+            const systems = (act.equipmentItems || []).map((item) => item.serial).filter(Boolean).join(" / ") || "-";
+            return `
+              <tr class="${act.id === selectedActId ? "selected" : ""}" data-work-act-select="${escapeHtml(act.id)}">
+                <td class="mono">${escapeHtml(act.number || act.id)}</td>
+                <td>${escapeHtml(act.workText || act.workDescription || "-")}</td>
+                <td>${escapeHtml(equipmentNames)}</td>
+                <td>${escapeHtml(systems)}</td>
+                <td>${escapeHtml(act.customer || "-")}</td>
+                <td>${escapeHtml(act.type || "-")}</td>
+                <td>${escapeHtml(workActContractLabel(act))}</td>
+                <td>${escapeHtml(act.status || "Draft")}</td>
+              </tr>
+            `;
+          }).join("")}
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function workActContractLabel(act) {
+  const eqId = act.equipmentItems?.[0]?.equipmentId;
+  const contract = contracts.find((item) => (
+    item.customer === act.customer &&
+    (!eqId || item.equipmentId === eqId || item.equipment === act.equipmentItems?.[0]?.name)
+  ));
+  return act.contract || contract?.id || "Recommended";
+}
+
 function defectActsWorkspace(doc) {
   const rows = defectActs.length ? defectActs : [];
   const selectedJob = jobs.find((job) => job.id === state.templateGenDefectActJobId)
     || jobs.find((job) => job.id === state.selectedServiceJobId)
     || jobs[0];
-  const selectedAct = defectActs.find((item) => item.jobId === selectedJob?.id) || null;
+  const selectedAct = defectActs.find((item) => item.id === state.selectedDefectActId)
+    || defectActs.find((item) => item.jobId === selectedJob?.id)
+    || null;
 
   return `
     <section class="panel">
@@ -2588,16 +2952,20 @@ function defectActsWorkspace(doc) {
           <div class="section-title">Defect Acts</div>
           <div class="filter-note">Use this workspace for defect description, engineer findings, recommended correction, and customer acknowledgement.</div>
         </div>
-        <button class="btn primary" type="button" data-output-template-route="tpl-defect-act">Open Defect Act output</button>
+        <div class="tg-heading-actions">
+          <button class="btn ghost compact" type="button" data-output-template-route="tpl-defect-act">Open output template</button>
+        </div>
       </div>
-      <div class="work-act-template-row">
+      <div class="tg-command-bar">
         <label class="filter-control">
           <span>Source service job</span>
           <select data-template-defect-act-job>
             ${jobs.map((job) => `<option value="${escapeHtml(job.id)}" ${job.id === selectedJob?.id ? "selected" : ""}>${escapeHtml(job.id)} / ${escapeHtml(job.customer)} / ${escapeHtml(job.equipment)}</option>`).join("")}
           </select>
         </label>
-        <button class="btn primary" type="button" data-defect-act-create="${escapeHtml(selectedJob?.id || "")}">Create Defect Act draft</button>
+        <div class="tg-action-cluster">
+          <button class="btn primary compact" type="button" data-defect-act-create="${escapeHtml(selectedJob?.id || "")}">Create Defect Act draft</button>
+        </div>
       </div>
       ${selectedJob ? `
         <div class="detail-block">
@@ -2608,15 +2976,16 @@ function defectActsWorkspace(doc) {
       ${rows.length ? `
         <div class="detail-block">
           <div class="detail-group-title">All Defect Act drafts (${rows.length})</div>
-          <table class="data-table">
-            <thead><tr><th>No</th><th>Job</th><th>Customer</th><th>Equipment</th><th>Risk</th><th>Status</th></tr></thead>
+          <table class="data-table defect-act-table">
+            <thead><tr><th>No</th><th>Job</th><th>Customer</th><th>Equipment</th><th>Visits</th><th>Risk</th><th>Status</th></tr></thead>
             <tbody>
               ${rows.map((act) => `
-                <tr>
+                <tr data-defect-act-select="${escapeHtml(act.id)}">
                   <td class="mono">${escapeHtml(act.number || act.id)}</td>
                   <td class="mono">${escapeHtml(act.jobId || "-")}</td>
                   <td>${escapeHtml(act.customer || "-")}</td>
                   <td>${escapeHtml(act.equipment || "-")}</td>
+                  <td>${escapeHtml(String(act.actualVisits?.length || 0))}</td>
                   <td>${escapeHtml(act.riskLevel || "-")}</td>
                   <td>${statusChip(act.status || "Draft")}</td>
                 </tr>
@@ -2681,19 +3050,68 @@ function defectActDraftPanel(job, act) {
         ${detailItem("Serial", act.serial || job.serial || "Pending")}
         ${detailItem("Owner", act.owner || job.owner || "Service")}
       </div>
-      <div class="work-act-section work-act-template-row">
+      <div class="tg-command-bar compact">
         <label class="filter-control">
           <span>Risk level</span>
           <select data-defect-act-risk="${escapeHtml(act.id)}">
             ${["Low", "Medium", "High", "Critical"].map((risk) => `<option value="${escapeHtml(risk)}" ${risk === act.riskLevel ? "selected" : ""}>${escapeHtml(risk)}</option>`).join("")}
           </select>
         </label>
-        <button class="btn primary" type="button" data-defect-act-generate="${escapeHtml(act.id)}">Create document draft</button>
+        <div class="tg-action-cluster">
+          <button class="btn ghost compact" type="button" data-defect-act-add-visit="${escapeHtml(act.id)}">Add visit</button>
+          <button class="btn ghost compact" type="button" data-defect-act-create-offer="${escapeHtml(act.id)}">Part offer</button>
+          <button class="btn primary compact" type="button" data-defect-act-generate="${escapeHtml(act.id)}">Create draft</button>
+        </div>
       </div>
+      ${defectActVisitsTable(act)}
       ${defectActTextarea(act, "defectDescription", "Defect description", "Customer-reported defect or observed problem")}
       ${defectActTextarea(act, "engineerFindings", "Engineer findings", "Inspection findings, root cause, measurements")}
       ${defectActTextarea(act, "recommendedCorrection", "Recommended correction", "Repair, replacement, quotation, or monitoring recommendation")}
       ${defectActTextarea(act, "customerAcknowledgement", "Customer acknowledgement", "Optional customer-facing note")}
+    </div>
+  `;
+}
+
+function defectActVisitsTable(act) {
+  const visits = act.actualVisits || [];
+  return `
+    <div class="work-act-section">
+      <div class="detail-group-title">Actual Visits</div>
+      ${visits.length ? `
+        <table class="data-table defect-visit-table">
+          <thead>
+            <tr>
+              <th>DA</th>
+              <th>WA</th>
+              <th>Planned Start</th>
+              <th>Work (h)</th>
+              <th>Travel (h)</th>
+              <th>Completed</th>
+              <th>Comments</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${visits.map((visit) => `
+              <tr>
+                <td><input type="checkbox" ${visit.da ? "checked" : ""} data-defect-act-visit-check="${escapeHtml(act.id)}:${escapeHtml(visit.id)}:da"></td>
+                <td><input type="checkbox" ${visit.wa ? "checked" : ""} data-defect-act-visit-check="${escapeHtml(act.id)}:${escapeHtml(visit.id)}:wa"></td>
+                <td><input class="inline-input" type="date" value="${escapeHtml(visit.plannedStart || "")}" data-defect-act-visit-field="${escapeHtml(act.id)}:${escapeHtml(visit.id)}:plannedStart"></td>
+                <td><input class="inline-input" type="number" min="0" step="0.25" value="${escapeHtml(visit.workHours ?? "")}" data-defect-act-visit-field="${escapeHtml(act.id)}:${escapeHtml(visit.id)}:workHours"></td>
+                <td><input class="inline-input" type="number" min="0" step="0.25" value="${escapeHtml(visit.travelHours ?? "")}" data-defect-act-visit-field="${escapeHtml(act.id)}:${escapeHtml(visit.id)}:travelHours"></td>
+                <td><input type="checkbox" ${visit.completed ? "checked" : ""} data-defect-act-visit-check="${escapeHtml(act.id)}:${escapeHtml(visit.id)}:completed"></td>
+                <td><input class="inline-input wide" type="text" value="${escapeHtml(visit.comments || "")}" data-defect-act-visit-field="${escapeHtml(act.id)}:${escapeHtml(visit.id)}:comments"></td>
+                <td><button class="btn ghost compact" type="button" data-defect-act-remove-visit="${escapeHtml(act.id)}:${escapeHtml(visit.id)}">Remove</button></td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      ` : `
+        <div class="info-box">
+          <div class="info-title">No visits yet</div>
+          <div class="info-body">Add visit rows for DA/WA, planned start, work and travel hours, completed state, and comments.</div>
+        </div>
+      `}
     </div>
   `;
 }
@@ -2709,7 +3127,12 @@ function defectActTextarea(act, field, label, placeholder) {
 
 function commercialOffersWorkspace() {
   const selectedQte = quotations.find((q) => q.id === state.templateGenCommercialOfferQuotationId) || quotations[0];
-  const selectedDraft = commercialOfferDrafts.find((d) => d.quotationId === selectedQte?.id) || null;
+  const offerRows = filteredCommercialOfferDrafts();
+  const selectedDraft = commercialOfferDrafts.find((d) => d.id === state.selectedCommercialOfferDraftId)
+    || commercialOfferDrafts.find((d) => d.quotationId === selectedQte?.id)
+    || offerRows[0]
+    || null;
+  const entryPeople = ["all", ...new Set(commercialOfferDrafts.map((draft) => draft.entryPerson).filter(Boolean))];
 
   return `
     <section class="panel">
@@ -2718,16 +3141,44 @@ function commercialOffersWorkspace() {
           <div class="section-title">Commercial Offers</div>
           <div class="filter-note">Create Commercial Offer drafts from quotations. Edit scope, line items, and validity before generating the document.</div>
         </div>
-        <button class="btn primary" type="button" data-output-template-route="tpl-quotation">Open output template</button>
+        <div class="tg-heading-actions">
+          <button class="btn ghost compact" type="button" data-output-template-route="tpl-quotation">Open output template</button>
+        </div>
       </div>
-      <div class="work-act-template-row">
+      <div class="tg-command-bar">
         <label class="filter-control">
           <span>Source quotation</span>
           <select data-template-commercial-offer-quotation>
             ${quotations.map((q) => `<option value="${escapeHtml(q.id)}" ${q.id === selectedQte?.id ? "selected" : ""}>${escapeHtml(q.id)} / ${escapeHtml(q.customer)} / ${escapeHtml(q.type)}</option>`).join("")}
           </select>
         </label>
-        <button class="btn primary" type="button" data-commercial-offer-create="${escapeHtml(selectedQte?.id || "")}">Create offer draft</button>
+        <div class="tg-action-cluster">
+          <button class="btn primary compact" type="button" data-commercial-offer-create="${escapeHtml(selectedQte?.id || "")}">Create offer draft</button>
+        </div>
+      </div>
+      <div class="tg-filter-strip commercial-offer-filters">
+        <label class="filter-control">
+          <span>Search</span>
+          <input type="search" value="${escapeHtml(state.commercialOfferSearchQuery || "")}" placeholder="Offer no, customer, equipment..." data-commercial-offer-search>
+        </label>
+        <label class="filter-control">
+          <span>Filter</span>
+          <select data-commercial-offer-status-filter>
+            ${[
+              ["active", "Active records"],
+              ["price-missing", "Price missing"],
+              ["archived", "Archived"],
+              ["all", "All records"]
+            ].map(([value, label]) => `<option value="${value}" ${state.commercialOfferStatusFilter === value ? "selected" : ""}>${label}</option>`).join("")}
+          </select>
+        </label>
+        <label class="filter-control">
+          <span>Entry person</span>
+          <select data-commercial-offer-entry-person-filter>
+            ${entryPeople.map((person) => `<option value="${escapeHtml(person)}" ${state.commercialOfferEntryPersonFilter === person ? "selected" : ""}>${escapeHtml(person === "all" ? "All entry persons" : person)}</option>`).join("")}
+          </select>
+        </label>
+        <div class="tg-section-subtitle">Filters apply instantly.</div>
       </div>
       ${selectedQte ? `
         <div class="detail-block">
@@ -2737,20 +3188,24 @@ function commercialOffersWorkspace() {
       ` : ""}
       ${commercialOfferDrafts.length ? `
         <div class="detail-block">
-          <div class="detail-group-title">All Commercial Offer drafts (${commercialOfferDrafts.length})</div>
-          <table class="data-table">
-            <thead><tr><th>No</th><th>Quotation</th><th>Customer</th><th>Equipment</th><th>Amount</th><th>Status</th></tr></thead>
+          <div class="detail-group-title">Commercial Offer list (${offerRows.length} / ${commercialOfferDrafts.length})</div>
+          <table class="data-table commercial-offer-table">
+            <thead><tr><th>Profile</th><th>Offer Nr.</th><th>Side</th><th>Equipment</th><th>Part Names</th><th>Invoice</th><th>Total Price</th><th>Currency</th><th>Entry Date</th></tr></thead>
             <tbody>
-              ${commercialOfferDrafts.map((d) => `
-                <tr>
+              ${offerRows.map((d) => `
+                <tr class="${d.id === selectedDraft?.id ? "selected" : ""}" data-commercial-offer-select="${escapeHtml(d.id)}" style="cursor:pointer">
+                  <td>${escapeHtml(d.profile || d.type || "Service")}</td>
                   <td class="mono">${escapeHtml(d.number)}</td>
-                  <td class="mono">${escapeHtml(d.quotationId)}</td>
-                  <td>${escapeHtml(d.customer)}</td>
+                  <td>${escapeHtml(d.side || "Customer")}</td>
                   <td>${escapeHtml(d.equipment)}</td>
-                  <td class="mono">${(d.lineItems || []).reduce((sum, item) => sum + (item.amount || 0), 0).toLocaleString("lt-LT")} EUR</td>
-                  <td>${statusChip(d.status)}</td>
+                  <td>${escapeHtml(commercialOfferPartNames(d))}</td>
+                  <td class="mono">${escapeHtml(d.invoiceId || "-")}</td>
+                  <td class="mono">${commercialOfferTotal(d).toLocaleString("lt-LT")}</td>
+                  <td>${escapeHtml(d.currency || d.lineItems?.[0]?.currency || "EUR")}</td>
+                  <td class="mono">${escapeHtml(d.entryDate || d.date || "-")}</td>
                 </tr>
               `).join("")}
+              ${offerRows.length ? "" : `<tr><td colspan="9" class="muted">No Commercial Offers match current filters.</td></tr>`}
             </tbody>
           </table>
         </div>
@@ -2789,6 +3244,13 @@ function commercialOfferDraftPanel(qte, draft) {
 
   return `
     <div class="work-act-builder">
+      <div class="section-heading" style="margin-bottom:8px">
+        <div>
+          <div class="detail-group-title">${escapeHtml(draft.number)}${draft.archived ? " (Archived)" : ""}</div>
+          <div class="filter-note">${escapeHtml(draft.customer)} / ${escapeHtml(draft.hospitalSystem || draft.equipment)}</div>
+        </div>
+        <button class="btn ghost compact" type="button" data-commercial-offer-archive="${escapeHtml(draft.id)}">${draft.archived ? "Restore" : "Move to Archive"}</button>
+      </div>
       <div class="doc-detail-grid compact">
         ${detailItem("Draft number", draft.number)}
         ${detailItem("Status", draft.status)}
@@ -2802,6 +3264,21 @@ function commercialOfferDraftPanel(qte, draft) {
         ${detailItem("Type", draft.type)}
         ${detailItem("Source quotation", draft.quotationId)}
       </div>
+      <div class="commercial-offer-meta-grid">
+        ${commercialOfferField(draft, "profile", "Profile", "Service")}
+        ${commercialOfferField(draft, "group", "Group", "Optional group")}
+        ${commercialOfferField(draft, "hospitalSystem", "Hospital / System", "Hospital / equipment")}
+        ${commercialOfferField(draft, "side", "Side", "Customer")}
+        ${commercialOfferField(draft, "contract", "Contract", "CTR-...")}
+        ${commercialOfferField(draft, "recipient", "Recipient", "Contact person")}
+        ${commercialOfferField(draft, "fax", "Fax", "Fax or email fallback")}
+        ${commercialOfferField(draft, "invoiceId", "Invoice", "INV-...")}
+        ${commercialOfferField(draft, "currency", "Currency", "EUR")}
+      </div>
+      <label class="field work-act-text">
+        <span>Offer Text (Header)</span>
+        <textarea rows="3" data-commercial-offer-field="${escapeHtml(draft.id)}:headerText" placeholder="Customer-facing offer header">${escapeHtml(draft.headerText || "")}</textarea>
+      </label>
       <label class="field work-act-text">
         <span>Scope</span>
         <textarea rows="3" data-commercial-offer-field="${escapeHtml(draft.id)}:scopeText" placeholder="Describe the scope of this commercial offer">${escapeHtml(draft.scopeText || "")}</textarea>
@@ -2816,7 +3293,11 @@ function commercialOfferDraftPanel(qte, draft) {
           <tbody>${lineItemsHtml || `<tr><td colspan="5" style="color:var(--text-muted);padding:10px 14px">No line items. Add a row or generate directly from quotation.</td></tr>`}</tbody>
         </table>
       </div>
-      <div class="work-act-template-row" style="margin-top:8px">
+      <label class="field work-act-text">
+        <span>Offer Text (Footer)</span>
+        <textarea rows="3" data-commercial-offer-field="${escapeHtml(draft.id)}:footerText" placeholder="Validity, order confirmation, return or payment wording">${escapeHtml(draft.footerText || "")}</textarea>
+      </label>
+      <div class="tg-filter-strip" style="margin-top:8px">
         <label class="filter-control">
           <span>Validity date</span>
           <input type="date" value="${escapeHtml(draft.validityDate || "")}" data-commercial-offer-field="${escapeHtml(draft.id)}:validityDate">
@@ -2825,23 +3306,62 @@ function commercialOfferDraftPanel(qte, draft) {
           <span>Payment terms</span>
           <input type="text" value="${escapeHtml(draft.paymentTerms || "")}" data-commercial-offer-field="${escapeHtml(draft.id)}:paymentTerms" placeholder="e.g. 30 days net">
         </label>
+        <div></div>
+        <div class="tg-section-subtitle">Commercial output uses these fields at generation time.</div>
       </div>
       <label class="field work-act-text">
         <span>Notes</span>
         <textarea rows="2" data-commercial-offer-field="${escapeHtml(draft.id)}:notes" placeholder="Internal or customer-facing notes">${escapeHtml(draft.notes || "")}</textarea>
       </label>
-      <div style="margin-top:12px">
-        <button class="btn primary" type="button" data-commercial-offer-generate="${escapeHtml(draft.id)}">Create document draft</button>
+      <div class="tg-action-cluster left" style="margin-top:12px">
+        <button class="btn ghost compact" type="button" data-commercial-offer-add-row="${escapeHtml(draft.id)}">Add work</button>
+        <button class="btn ghost compact" type="button" data-commercial-offer-add-row="${escapeHtml(draft.id)}">Add part</button>
+        <button class="btn ghost compact" type="button" data-commercial-offer-placeholder="Send to Hospital is planned for the send/email workflow.">Send to hospital</button>
+        <button class="btn primary compact" type="button" data-commercial-offer-generate="${escapeHtml(draft.id)}">Create draft</button>
       </div>
     </div>
   `;
 }
 
+function filteredCommercialOfferDrafts() {
+  const query = (state.commercialOfferSearchQuery || "").trim().toLowerCase();
+  return commercialOfferDrafts.filter((draft) => {
+    const archived = Boolean(draft.archived || draft.status === "Archived");
+    if (state.commercialOfferStatusFilter === "active" && archived) return false;
+    if (state.commercialOfferStatusFilter === "archived" && !archived) return false;
+    if (state.commercialOfferStatusFilter === "price-missing" && !draft.priceMissing && commercialOfferTotal(draft) > 0) return false;
+    if (state.commercialOfferEntryPersonFilter && state.commercialOfferEntryPersonFilter !== "all" && draft.entryPerson !== state.commercialOfferEntryPersonFilter) return false;
+    if (!query) return true;
+    return [
+      draft.profile, draft.number, draft.side, draft.equipment, draft.customer, draft.hospitalSystem,
+      commercialOfferPartNames(draft), draft.invoiceId, draft.currency, draft.entryPerson, draft.entryDate
+    ].join(" ").toLowerCase().includes(query);
+  });
+}
+
+function commercialOfferTotal(draft) {
+  return (draft?.lineItems || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+}
+
+function commercialOfferPartNames(draft) {
+  const items = (draft.lineItems || []).map((item) => item.description).filter(Boolean);
+  return items.length ? items.join(", ") : "No line items";
+}
+
+function commercialOfferField(draft, field, label, placeholder = "") {
+  return `
+    <label class="filter-control">
+      <span>${escapeHtml(label)}</span>
+      <input type="text" value="${escapeHtml(draft[field] || "")}" data-commercial-offer-field="${escapeHtml(draft.id)}:${escapeHtml(field)}" placeholder="${escapeHtml(placeholder)}">
+    </label>
+  `;
+}
+
 function workListTemplatesWorkspace() {
-  const selectedId = state.selectedWltId || workListTemplates[0]?.id;
+  const rows = filteredWorkListTemplates();
+  const selectedId = rows.some((tpl) => tpl.id === state.selectedWltId) ? state.selectedWltId : rows[0]?.id || workListTemplates[0]?.id;
   const selected = workListTemplates.find((tpl) => tpl.id === selectedId);
-  const active = workListTemplates.filter((tpl) => tpl.isActive !== false);
-  const archived = workListTemplates.filter((tpl) => tpl.isActive === false);
+  const entryPeople = ["all", ...new Set(workListTemplates.map((tpl) => tpl.entryPerson).filter(Boolean))];
 
   return `
     <section class="panel">
@@ -2850,39 +3370,60 @@ function workListTemplatesWorkspace() {
           <div class="section-title">Work List Templates</div>
           <div class="filter-note">Equipment/procedure-specific checklists. Select a template to edit, duplicate, or archive it.</div>
         </div>
-        <button class="btn primary" type="button" data-wlt-new-open>+ New template</button>
+        <div class="tg-heading-actions">
+          <button class="btn primary compact" type="button" data-wlt-new-open>New template</button>
+        </div>
       </div>
 
       ${state.wltNewOpen ? wltNewForm() : ""}
 
-      <table class="data-table">
-        <thead><tr><th>Name</th><th>Category</th><th>Type</th><th>Lang</th><th>Rows</th><th></th></tr></thead>
+      <div class="wlt-filter-bar tg-filter-strip">
+        <label class="filter-control">
+          <span>Search</span>
+          <input type="search" value="${escapeHtml(state.wltSearchQuery || "")}" placeholder="Find by name, equipment, hospital..." data-wlt-search>
+        </label>
+        <label class="filter-control">
+          <span>Filter</span>
+          <select data-wlt-status-filter>
+            ${[
+              ["all", "All Templates"],
+              ["active", "Active"],
+              ["equipment-unassigned", "Equipment not assigned"],
+              ["archived", "Archived"]
+            ].map(([value, label]) => `<option value="${value}" ${state.wltStatusFilter === value ? "selected" : ""}>${label}</option>`).join("")}
+          </select>
+        </label>
+        <label class="filter-control">
+          <span>Entry person</span>
+          <select data-wlt-entry-person-filter>
+            ${entryPeople.map((person) => `<option value="${escapeHtml(person)}" ${state.wltEntryPersonFilter === person ? "selected" : ""}>${escapeHtml(person === "all" ? "All entry persons" : person)}</option>`).join("")}
+          </select>
+        </label>
+        <div class="tg-action-cluster">
+          <button class="btn compact" type="button" data-wlt-find>Find</button>
+          <button class="btn ghost compact" type="button" data-wlt-clear-filters>Clear</button>
+        </div>
+      </div>
+
+      <table class="data-table wlt-table">
+        <thead><tr><th>Name</th><th>Equipment</th><th>Service T.</th><th>Hospitals</th><th>Work Eq.</th><th>Entry Person</th><th>Entry Date</th><th></th></tr></thead>
         <tbody>
-          ${active.map((tpl) => `
+          ${rows.map((tpl) => `
             <tr class="${tpl.id === selectedId ? "selected" : ""}" style="cursor:pointer" data-wlt-select="${escapeHtml(tpl.id)}">
-              <td>${escapeHtml(tpl.name)}</td>
-              <td>${escapeHtml(tpl.equipmentCategory)}</td>
-              <td>${escapeHtml(tpl.serviceType)}</td>
-              <td class="mono">${escapeHtml(tpl.language)}</td>
-              <td>${tpl.workRows.length}</td>
+              <td>${tpl.isActive === false ? `<span style="text-decoration:line-through">${escapeHtml(tpl.name)}</span> <span class="chip" style="font-size:9px">Archived</span>` : escapeHtml(tpl.name)}</td>
+              <td>${escapeHtml(wltLinkedEquipmentLabel(tpl))}</td>
+              <td>${escapeHtml(wltLinkedServiceTypeLabel(tpl))}</td>
+              <td>${escapeHtml(wltLinkedHospitalLabel(tpl))}</td>
+              <td>${escapeHtml(wltLinkedWorkEquipmentLabel(tpl))}</td>
+              <td>${escapeHtml(tpl.entryPerson || "Unassigned")}</td>
+              <td class="mono">${escapeHtml(tpl.entryDate || "-")}</td>
               <td style="white-space:nowrap">
                 <button class="btn ghost compact" type="button" data-wlt-duplicate="${escapeHtml(tpl.id)}">Duplicate</button>
-                <button class="btn ghost compact" type="button" data-wlt-archive="${escapeHtml(tpl.id)}" style="color:var(--amber)">Archive</button>
+                <button class="btn ghost compact" type="button" data-wlt-archive="${escapeHtml(tpl.id)}" style="color:${tpl.isActive === false ? "var(--green)" : "var(--amber)"}">${tpl.isActive === false ? "Restore" : "Archive"}</button>
               </td>
             </tr>
           `).join("")}
-          ${archived.map((tpl) => `
-            <tr style="opacity:0.5;cursor:pointer" data-wlt-select="${escapeHtml(tpl.id)}">
-              <td><span style="text-decoration:line-through">${escapeHtml(tpl.name)}</span> <span class="chip" style="font-size:9px">Archived</span></td>
-              <td>${escapeHtml(tpl.equipmentCategory)}</td>
-              <td>${escapeHtml(tpl.serviceType)}</td>
-              <td class="mono">${escapeHtml(tpl.language)}</td>
-              <td>${tpl.workRows.length}</td>
-              <td style="white-space:nowrap">
-                <button class="btn ghost compact" type="button" data-wlt-archive="${escapeHtml(tpl.id)}" style="color:var(--green)">Restore</button>
-              </td>
-            </tr>
-          `).join("")}
+          ${rows.length ? "" : `<tr><td colspan="8" class="muted">No templates match the current filters.</td></tr>`}
         </tbody>
       </table>
 
@@ -2891,7 +3432,7 @@ function workListTemplatesWorkspace() {
           <div class="section-heading" style="margin-bottom:8px">
             <div class="detail-group-title">${escapeHtml(selected.name)}${selected.isActive === false ? " (Archived)" : ""}</div>
             ${state.wltEditMode && state.selectedWltId === selected.id
-              ? `<div style="display:flex;gap:6px">
+              ? `<div class="tg-action-cluster">
                    <button class="btn ghost compact" type="button" data-wlt-edit-cancel>Cancel</button>
                    <button class="btn primary compact" type="button" data-wlt-edit-save="${escapeHtml(selected.id)}">Save changes</button>
                  </div>`
@@ -2910,11 +3451,13 @@ function workListTemplatesWorkspace() {
 }
 
 function wltNewForm() {
+  const serviceTypes = wltServiceTypeOptions();
+  const defaultPerson = users.find((user) => user.roles?.some((role) => ["service", "svcmgr"].includes(role)))?.name || "";
   return `
     <div class="detail-block" style="margin-bottom:12px">
       <div class="detail-group-title">New Work List Template</div>
       ${state.wltNewError ? `<div class="form-error">${escapeHtml(state.wltNewError)}</div>` : ""}
-      <div class="work-act-template-row" style="flex-wrap:wrap;gap:8px">
+      <div class="tg-form-grid">
         <label class="filter-control">
           <span>Name</span>
           <input type="text" id="wlt-new-name" placeholder="Template name">
@@ -2939,6 +3482,22 @@ function wltNewForm() {
             <option value="en">en</option>
           </select>
         </label>
+        <label class="filter-control">
+          <span>Entry person</span>
+          <select id="wlt-new-entry-person">
+            ${users.map((user) => `<option value="${escapeHtml(user.name)}" ${user.name === defaultPerson ? "selected" : ""}>${escapeHtml(user.name)}</option>`).join("")}
+          </select>
+        </label>
+        <label class="filter-control">
+          <span>Entry date</span>
+          <input type="date" id="wlt-new-entry-date" value="${new Date().toISOString().slice(0, 10)}">
+        </label>
+      </div>
+      <div class="wlt-applicability-grid">
+        ${wltCheckboxGroup("Service Types", serviceTypes, ["PM"], "wlt-new-service-type-link")}
+        ${wltCheckboxGroup("Equipment", equipment.map((eq) => [eq.id, eq.name]), [], "wlt-new-equipment")}
+        ${wltCheckboxGroup("Hospitals", customers.map((customer) => [customer.id, customer.name]), [], "wlt-new-hospital")}
+        ${wltCheckboxGroup("Work Equipment", wltWorkEquipmentOptions(), [], "wlt-new-work-equipment")}
       </div>
       <label class="field work-act-text">
         <span>Body text</span>
@@ -2946,9 +3505,9 @@ function wltNewForm() {
       </label>
       <div class="filter-note" style="margin:8px 0 4px">Work rows (one per line):</div>
       <textarea id="wlt-new-rows" rows="4" style="width:100%;font-family:var(--mono);font-size:12px" placeholder="First row&#10;Second row&#10;Third row"></textarea>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button class="btn primary" type="button" data-wlt-new-save>Save template</button>
-        <button class="btn ghost" type="button" data-wlt-new-cancel>Cancel</button>
+      <div class="tg-action-cluster left" style="margin-top:10px">
+        <button class="btn primary compact" type="button" data-wlt-new-save>Save template</button>
+        <button class="btn ghost compact" type="button" data-wlt-new-cancel>Cancel</button>
       </div>
     </div>
   `;
@@ -2961,8 +3520,31 @@ function wltDetailPanel(tpl) {
       ${detailItem("Service type", tpl.serviceType)}
       ${detailItem("Language", tpl.language)}
       ${detailItem("Rows", String(tpl.workRows.length))}
+      ${detailItem("Entry person", tpl.entryPerson || "Unassigned")}
+      ${detailItem("Entry date", tpl.entryDate || "-")}
+    </div>
+    <div class="wlt-link-summary">
+      ${detailItem("Linked service types", wltLinkedServiceTypeLabel(tpl))}
+      ${detailItem("Linked equipment", wltLinkedEquipmentLabel(tpl))}
+      ${detailItem("Linked hospitals", wltLinkedHospitalLabel(tpl))}
+      ${detailItem("Linked work equipment", wltLinkedWorkEquipmentLabel(tpl))}
     </div>
     ${tpl.bodyText ? `<div class="info-box" style="margin-top:8px"><div class="info-body">${escapeHtml(tpl.bodyText)}</div></div>` : ""}
+    <div class="wlt-visual-shell">
+      <div class="section-heading" style="margin-bottom:8px">
+        <div>
+          <div class="detail-group-title">Visual template preview</div>
+          <div class="filter-note">Daily users generate from prepared records, then make only the needed micro edit on an isolated copy.</div>
+        </div>
+      </div>
+      <div class="wlt-document-preview">${wltVisualHtml(tpl)}</div>
+    </div>
+    ${tpl.editorNote ? `
+      <div class="info-box warn" style="margin-top:8px">
+        <div class="info-title">Bug / workaround note</div>
+        <div class="info-body">${escapeHtml(tpl.editorNote)}</div>
+      </div>
+    ` : ""}
     <div style="margin-top:10px">
       <div class="filter-note" style="margin-bottom:6px">Work rows:</div>
       <ol style="margin:0;padding-left:20px;font-size:13px;line-height:1.7">
@@ -2973,8 +3555,12 @@ function wltDetailPanel(tpl) {
 }
 
 function wltEditPanel(tpl) {
+  const linkedServiceTypes = wltArray(tpl.linkedServiceTypes);
+  const linkedEquipmentIds = wltArray(tpl.linkedEquipmentIds);
+  const linkedHospitalIds = wltArray(tpl.linkedHospitalIds);
+  const linkedWorkEquipmentIds = wltArray(tpl.linkedWorkEquipmentIds);
   return `
-    <div class="work-act-template-row" style="flex-wrap:wrap;gap:8px">
+    <div class="tg-form-grid">
       <label class="filter-control">
         <span>Name</span>
         <input type="text" id="wlt-edit-name" value="${escapeHtml(tpl.name)}">
@@ -2995,10 +3581,50 @@ function wltEditPanel(tpl) {
           ${["lt", "en"].map((l) => `<option value="${l}" ${l === tpl.language ? "selected" : ""}>${l}</option>`).join("")}
         </select>
       </label>
+      <label class="filter-control">
+        <span>Entry person</span>
+        <select id="wlt-edit-entry-person">
+          ${users.map((user) => `<option value="${escapeHtml(user.name)}" ${user.name === tpl.entryPerson ? "selected" : ""}>${escapeHtml(user.name)}</option>`).join("")}
+        </select>
+      </label>
+      <label class="filter-control">
+        <span>Entry date</span>
+        <input type="date" id="wlt-edit-entry-date" value="${escapeHtml(tpl.entryDate || new Date().toISOString().slice(0, 10))}">
+      </label>
+    </div>
+    <div class="wlt-applicability-grid">
+      ${wltCheckboxGroup("Service Types", wltServiceTypeOptions(), linkedServiceTypes, "wlt-edit-service-type-link")}
+      ${wltCheckboxGroup("Equipment", equipment.map((eq) => [eq.id, eq.name]), linkedEquipmentIds, "wlt-edit-equipment")}
+      ${wltCheckboxGroup("Hospitals", customers.map((customer) => [customer.id, customer.name]), linkedHospitalIds, "wlt-edit-hospital")}
+      ${wltCheckboxGroup("Work Equipment", wltWorkEquipmentOptions(), linkedWorkEquipmentIds, "wlt-edit-work-equipment")}
     </div>
     <label class="field work-act-text">
       <span>Body text</span>
       <textarea id="wlt-edit-body" rows="2">${escapeHtml(tpl.bodyText || "")}</textarea>
+    </label>
+    <div class="wlt-visual-shell">
+      <div class="section-heading" style="margin-bottom:8px">
+        <div>
+          <div class="detail-group-title">Visual editor</div>
+          <div class="filter-note">Rich micro edits stay on this template copy. Structured work rows remain the default generation source.</div>
+        </div>
+      </div>
+      <div class="wlt-rich-toolbar" role="toolbar" aria-label="Visual template editor tools">
+        ${[
+          ["bold", "Bold"],
+          ["italic", "Italic"],
+          ["underline", "Underline"],
+          ["insertUnorderedList", "List"],
+          ["insertOrderedList", "Numbered"],
+          ["addChecklistRow", "Add checklist row"]
+        ].map(([command, label]) => `<button class="btn ghost compact" type="button" data-wlt-rich-command="${command}" data-wlt-rich-target="${escapeHtml(tpl.id)}">${label}</button>`).join("")}
+      </div>
+      <div class="wlt-document-editor" contenteditable="true" spellcheck="true" data-wlt-rich-editor="${escapeHtml(tpl.id)}">${wltVisualHtml(tpl)}</div>
+      <div class="filter-note" style="margin-top:6px">Save changes stores the visual editor HTML plus the structured metadata above. Cancel leaves persisted data untouched.</div>
+    </div>
+    <label class="field work-act-text">
+      <span>Bug / workaround note</span>
+      <textarea id="wlt-edit-note" rows="2" data-wlt-editor-note="${escapeHtml(tpl.id)}" placeholder="Optional: what was adjusted, what failed, or what should be reviewed later.">${escapeHtml(tpl.editorNote || "")}</textarea>
     </label>
     <div class="work-act-section" style="margin-top:8px">
       <div class="section-heading" style="margin-bottom:6px">
@@ -3014,6 +3640,162 @@ function wltEditPanel(tpl) {
       `).join("")}
     </div>
   `;
+}
+
+function wltVisualHtml(tpl) {
+  return sanitizeRichTemplateHtml(tpl.richBodyHtml || defaultWltVisualHtml(tpl));
+}
+
+function defaultWltVisualHtml(tpl) {
+  const rows = (tpl.workRows || []).map((row, index) => `
+    <tr>
+      <td>${escapeHtml(String(index + 1))}</td>
+      <td>${escapeHtml(row)}</td>
+      <td>Check / fill</td>
+      <td></td>
+    </tr>
+  `).join("");
+  return `
+    <h3>${escapeHtml(tpl.name || "Work List Template")}</h3>
+    ${tpl.bodyText ? `<p>${escapeHtml(tpl.bodyText)}</p>` : ""}
+    <table>
+      <thead>
+        <tr><th>No.</th><th>Work description</th><th>Expected / measured value</th><th>Notes</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function sanitizeRichTemplateHtml(html = "") {
+  return String(html)
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
+    .replace(/\son\w+="[^"]*"/gi, "")
+    .replace(/\son\w+='[^']*'/gi, "")
+    .replace(/javascript:/gi, "");
+}
+
+function filteredWorkListTemplates() {
+  const query = (state.wltSearchQuery || "").trim().toLowerCase();
+  return workListTemplates.filter((tpl) => {
+    if (state.wltStatusFilter === "active" && tpl.isActive === false) return false;
+    if (state.wltStatusFilter === "archived" && tpl.isActive !== false) return false;
+    if (state.wltStatusFilter === "equipment-unassigned" && wltArray(tpl.linkedEquipmentIds).length) return false;
+    if (state.wltEntryPersonFilter && state.wltEntryPersonFilter !== "all" && tpl.entryPerson !== state.wltEntryPersonFilter) return false;
+    if (!query) return true;
+    const haystack = [
+      tpl.name,
+      tpl.equipmentCategory,
+      tpl.serviceType,
+      tpl.language,
+      tpl.entryPerson,
+      tpl.entryDate,
+      wltLinkedEquipmentLabel(tpl),
+      wltLinkedHospitalLabel(tpl),
+      wltLinkedWorkEquipmentLabel(tpl),
+      wltLinkedServiceTypeLabel(tpl)
+    ].join(" ").toLowerCase();
+    return haystack.includes(query);
+  });
+}
+
+function workListTemplateOptionsForAct(act) {
+  const activeTemplates = workListTemplates.filter((tpl) => tpl.isActive !== false);
+  const applicable = activeTemplates.filter((tpl) => isWorkListTemplateApplicableToAct(tpl, act));
+  return applicable.length ? applicable : activeTemplates;
+}
+
+function isWorkListTemplateApplicableToAct(tpl, act) {
+  const linkedEquipmentIds = wltArray(tpl.linkedEquipmentIds);
+  const linkedHospitalIds = wltArray(tpl.linkedHospitalIds);
+  const linkedServiceTypes = wltArray(tpl.linkedServiceTypes);
+  const selectedEquipmentIds = wltArray(act?.equipmentIds);
+  wltArray(act?.equipmentItems).forEach((item) => {
+    if (item?.id && !selectedEquipmentIds.includes(item.id)) selectedEquipmentIds.push(item.id);
+  });
+  const selectedEquipment = selectedEquipmentIds.map((eqId) => equipment.find((eq) => eq.id === eqId)).filter(Boolean);
+  const job = jobs.find((item) => item.id === act?.jobId);
+  const jobEquipment = equipment.find((eq) => eq.id === job?.equipmentId || eq.name === job?.equipment || eq.serial === job?.serial);
+  if (jobEquipment && !selectedEquipment.some((eq) => eq.id === jobEquipment.id)) selectedEquipment.push(jobEquipment);
+  const customerIds = new Set(selectedEquipment.map((eq) => eq.customerId).filter(Boolean));
+  if (job?.customer) {
+    const customer = customers.find((item) => item.name === job.customer);
+    if (customer) customerIds.add(customer.id);
+  }
+  const serviceType = job?.type || act?.type || "";
+
+  const equipmentMatches = !linkedEquipmentIds.length || selectedEquipment.some((eq) => linkedEquipmentIds.includes(eq.id));
+  const hospitalMatches = !linkedHospitalIds.length || [...customerIds].some((customerId) => linkedHospitalIds.includes(customerId));
+  const serviceTypeMatches = !linkedServiceTypes.length || linkedServiceTypes.includes(serviceType) || linkedServiceTypes.includes(tpl.serviceType);
+  return equipmentMatches && hospitalMatches && serviceTypeMatches;
+}
+
+function wltCheckboxGroup(title, options, selectedValues, dataAttr) {
+  const selected = new Set(selectedValues || []);
+  return `
+    <div class="wlt-link-box">
+      <div class="filter-note">${escapeHtml(title)}</div>
+      <div class="wlt-check-list">
+        ${options.map(([value, label]) => `
+          <label class="wlt-check">
+            <input type="checkbox" value="${escapeHtml(value)}" data-${dataAttr} ${selected.has(value) ? "checked" : ""}>
+            <span>${escapeHtml(label)}</span>
+          </label>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function wltServiceTypeOptions() {
+  return ["PM", "Service", "Installation", "Repair", "TB", "Diagnostic"].map((type) => [type, type]);
+}
+
+function wltWorkEquipmentOptions() {
+  return [
+    ["ultrasound-probes", "Ultrasound probes"],
+    ["printer-export", "Printer / export"],
+    ["water-supply", "Water supply"],
+    ["chemistry-dosing", "Chemistry dosing"],
+    ["battery-charger", "Battery charger"],
+    ["safety-load", "Safety load"],
+    ["calibration-tools", "Calibration tools"]
+  ];
+}
+
+function wltArray(value) {
+  const aliases = {
+    "EQ-1001": "EQ-501",
+    "EQ-1005": "EQ-505",
+    "EQ-2001": "EQ-502",
+    "EQ-3001": "EQ-503"
+  };
+  return Array.isArray(value) ? value.map((item) => aliases[item] || item) : [];
+}
+
+function wltLinkedServiceTypeLabel(tpl) {
+  const values = wltArray(tpl.linkedServiceTypes);
+  return values.length ? values.join(", ") : tpl.serviceType || "All service types";
+}
+
+function wltLinkedEquipmentLabel(tpl) {
+  const ids = wltArray(tpl.linkedEquipmentIds);
+  if (!ids.length) return "Equipment not assigned";
+  return ids.map((id) => equipment.find((eq) => eq.id === id)?.name || id).join(", ");
+}
+
+function wltLinkedHospitalLabel(tpl) {
+  const ids = wltArray(tpl.linkedHospitalIds);
+  if (!ids.length) return "All hospitals";
+  return ids.map((id) => customers.find((customer) => customer.id === id)?.name || id).join(", ");
+}
+
+function wltLinkedWorkEquipmentLabel(tpl) {
+  const ids = wltArray(tpl.linkedWorkEquipmentIds);
+  if (!ids.length) return "Not assigned";
+  const labels = new Map(wltWorkEquipmentOptions());
+  return ids.map((id) => labels.get(id) || id).join(", ");
 }
 
 function outputTemplatesWorkspace(doc) {
@@ -3639,7 +4421,10 @@ function reportsPage() {
 
   // Documents grouped by pipeline step
   const stepCounts = {};
-  documents.forEach((d) => { stepCounts[d.pipelineStep] = (stepCounts[d.pipelineStep] || 0) + 1; });
+  documents.forEach((d) => {
+    const stage = documentStageForUi(d);
+    stepCounts[stage] = (stepCounts[stage] || 0) + 1;
+  });
 
   return `
     ${pageHeader("reports")}
@@ -3757,7 +4542,10 @@ function adminPage() {
         ${moduleTile("TPL", "Templates",          `${templates.length} planned`)}
         ${moduleTile("CFG", "Workflow settings",  "Stages and SLA rules")}
         ${moduleTile("CTR", "Contract archive",   "Restore to edit mode")}
+        ${state.role === "admin" ? moduleTile("BUG", "Bug reports", `${bugReports.filter((item) => item.status === "New").length} new`) : ""}
       </div>
+
+      ${state.role === "admin" ? adminBugReportsPanel() : ""}
 
       <section class="split-layout admin-layout">
         <div class="panel split-left">
@@ -3787,6 +4575,132 @@ function adminPage() {
       </section>
 
       ${devSpecPanel("admin")}
+    </div>
+  `;
+}
+
+function adminBugReportsPanel() {
+  const rows = filteredBugReports();
+  const selected = rows.find((item) => item.id === state.selectedBugReportId)
+    || rows[0];
+  const newCount = bugReports.filter((item) => item.status === "New").length;
+  const statusOptions = ["All", "New", "Assigned", "In progress", "Fixed", "Reviewed", "Closed"];
+  const assigneeOptions = feedbackAssigneeOptions();
+
+  return `
+    <section class="panel admin-bug-panel">
+      <div class="section-heading">
+        <div>
+          <div class="section-title">Admin bug reports</div>
+          <div class="filter-note">Visible only in the active admin role. Reports include screenshot, red-pencil annotation, short comment, and context.</div>
+        </div>
+        <span class="chip ${newCount ? "blocked" : "done"}">${newCount} new</span>
+      </div>
+      <div class="doc-filter-row bug-report-filters">
+        <label class="filter-control">
+          <span>Status</span>
+          <select data-feedback-status-filter>
+            ${statusOptions.map((status) => `<option value="${escapeHtml(status)}" ${state.feedbackStatusFilter === status ? "selected" : ""}>${escapeHtml(status)}</option>`).join("")}
+          </select>
+        </label>
+        <label class="filter-control">
+          <span>Assignee</span>
+          <select data-feedback-assignee-filter>
+            ${assigneeOptions.map((assignee) => `<option value="${escapeHtml(assignee)}" ${state.feedbackAssigneeFilter === assignee ? "selected" : ""}>${escapeHtml(assignee)}</option>`).join("")}
+          </select>
+        </label>
+        <button class="btn ghost compact" type="button" data-feedback-refresh>Refresh backend</button>
+        <span class="filter-note">${escapeHtml(state.feedbackBackendStatus || "Backend sync pending")}</span>
+      </div>
+
+      ${bugReports.length ? `
+        <div class="bug-report-layout">
+          <div class="bug-report-list" aria-label="Bug report list">
+            ${rows.length ? rows.map((report) => `
+              <button class="bug-report-row ${selected?.id === report.id ? "selected" : ""}" type="button" data-feedback-select="${escapeHtml(report.id)}">
+                <img src="${escapeHtml(report.screenshot)}" alt="">
+                <span>
+                  <strong>${escapeHtml(report.id)}</strong>
+                  <small>${escapeHtml(report.comment.slice(0, 86))}${report.comment.length > 86 ? "..." : ""}</small>
+                  <small>${escapeHtml(report.page)} / ${escapeHtml(report.role)} / ${escapeHtml(report.assignee || "Unassigned")} / ${formatDateTime(report.createdAt)}</small>
+                </span>
+                ${statusChip(report.status)}
+              </button>
+            `).join("") : `<div class="modal-placeholder">No reports match the current filters.</div>`}
+          </div>
+          ${selected ? adminBugReportDetail(selected) : ""}
+        </div>
+      ` : `
+        <div class="empty-state">
+          <div class="empty-title">No bug reports yet</div>
+          <div class="empty-sub">When a user captures a screenshot and submits a comment, it will appear here for admin review.</div>
+        </div>
+      `}
+    </section>
+  `;
+}
+
+function filteredBugReports() {
+  const status = state.feedbackStatusFilter || "All";
+  const assignee = state.feedbackAssigneeFilter || "All";
+  return bugReports.filter((report) => {
+    const statusMatch = status === "All" || report.status === status;
+    const assigneeMatch = assignee === "All"
+      || (assignee === "Unassigned" ? !report.assignee : report.assignee === assignee);
+    return statusMatch && assigneeMatch;
+  });
+}
+
+function feedbackAssigneeOptions() {
+  const userNames = users.map((user) => user.name);
+  const existing = bugReports.map((report) => report.assignee).filter(Boolean);
+  return ["All", "Unassigned", ...Array.from(new Set([...userNames, ...existing]))];
+}
+
+function adminBugReportDetail(report) {
+  const context = report.context || {};
+  const assigneeOptions = ["", ...feedbackAssigneeOptions().filter((item) => !["All", "Unassigned"].includes(item))];
+  return `
+    <div class="bug-report-detail">
+      <div class="bug-report-detail-head">
+        <div>
+          <div class="section-title">${escapeHtml(report.id)}</div>
+          <div class="filter-note">${escapeHtml(formatDateTime(report.createdAt))} / ${escapeHtml(report.createdBy || report.role)}</div>
+        </div>
+        <div class="doc-action-row">
+          <button class="btn ghost compact" type="button" data-feedback-status="${escapeHtml(report.id)}:New">Reopen</button>
+          <button class="btn ghost compact" type="button" data-feedback-status="${escapeHtml(report.id)}:In progress">Start</button>
+          <button class="btn ghost compact" type="button" data-feedback-status="${escapeHtml(report.id)}:Fixed">Mark fixed</button>
+          <button class="btn primary compact" type="button" data-feedback-status="${escapeHtml(report.id)}:Closed">Close</button>
+        </div>
+      </div>
+      <div class="bug-report-comment">${escapeHtml(report.comment)}</div>
+      <img class="bug-report-full" src="${escapeHtml(report.screenshot)}" alt="Annotated screenshot for ${escapeHtml(report.id)}">
+      <div class="bug-report-meta">
+        ${detailItem("Status", report.status)}
+        <label class="filter-control">
+          <span>Assignee</span>
+          <select data-feedback-assignee="${escapeHtml(report.id)}">
+            ${assigneeOptions.map((assignee) => `<option value="${escapeHtml(assignee)}" ${report.assignee === assignee ? "selected" : ""}>${escapeHtml(assignee || "Unassigned")}</option>`).join("")}
+          </select>
+        </label>
+        ${detailItem("Visibility", report.visibility || "admin-only")}
+        ${detailItem("Page", report.page)}
+        ${detailItem("Role", report.role)}
+        ${detailItem("Viewport", context.viewport || "")}
+        ${detailItem("URL", context.url || "")}
+        ${detailItem("Document", context.selectedDocumentId || "-")}
+        ${detailItem("Template", context.selectedTemplateId || "-")}
+        ${detailItem("Service job", context.selectedServiceJobId || "-")}
+      </div>
+      <div class="delivery-audit-list">
+        ${(report.history || []).map((item) => `
+          <div class="delivery-audit-item">
+            <strong>${escapeHtml(item.action)}</strong>
+            <span>${escapeHtml(formatDateTime(item.at))} / ${escapeHtml(item.by || "Admin")}</span>
+          </div>
+        `).join("")}
+      </div>
     </div>
   `;
 }
@@ -3947,22 +4861,434 @@ function calendarPage() {
 }
 
 // ---------------------------------------------------------------------------
+// Generated document print preview
+// ---------------------------------------------------------------------------
+function documentPrintPreviewOverlay() {
+  if (!state.printPreviewOpen) return "";
+
+  const doc = documents.find((item) => item.id === state.printPreviewDocumentId) || selectedDocument();
+  if (!doc) return "";
+
+  const template = documentTemplateForDoc(doc);
+  const generatedFile = documentGeneratedFileFor(doc);
+  const page = Number(state.printPreviewPage || 1);
+  const zoom = Number(state.printPreviewZoom || 100);
+  const pdfPreviewUrl = documentGeneratedPreviewUrl(generatedFile);
+  const pdfSrc = pdfPreviewUrl ? `${pdfPreviewUrl}#page=${page}&zoom=${zoom}` : "";
+  const pageCount = pdfSrc ? 1 : 2;
+
+  return `
+    <div class="print-preview-overlay" role="dialog" aria-modal="true" aria-label="Generated document preview">
+      <div class="print-preview-window">
+        <div class="print-preview-titlebar">
+          <div>
+            <div class="print-preview-caption">${escapeHtml(doc.id)} - Print Preview</div>
+            <div class="print-preview-subtitle">${escapeHtml(doc.type)} / ${escapeHtml(doc.customer)} / ${escapeHtml(generatedFileDisplayName(generatedFile) || "Preview draft")}</div>
+          </div>
+          <button class="btn ghost compact" type="button" data-doc-preview-close>Close</button>
+        </div>
+        <div class="print-preview-ribbon">
+          <button class="preview-tool" type="button" data-doc-delivery-action="print"><strong>Print</strong><span>Browser print</span></button>
+          <button class="preview-tool" type="button" data-doc-delivery-action="quick-print"><strong>Quick Print</strong><span>Record direct print</span></button>
+          <button class="preview-tool" type="button" data-doc-preview-zoom="out"><strong>Zoom Out</strong><span>${zoom}%</span></button>
+          <button class="preview-tool" type="button" data-doc-preview-zoom="in"><strong>Zoom In</strong><span>${zoom}%</span></button>
+          <div class="preview-menu-wrap">
+            <button class="preview-tool" type="button" data-doc-preview-export><strong>Export To</strong><span>PDF first</span></button>
+            ${state.printPreviewExportOpen ? printPreviewExportMenu(generatedFile) : ""}
+          </div>
+          <button class="preview-tool" type="button" data-doc-preview-email><strong>E-Mail As</strong><span>PDF compose</span></button>
+          <button class="preview-tool danger-tool" type="button" data-doc-preview-close><strong>Close Print Preview</strong><span>Return</span></button>
+        </div>
+        ${state.printPreviewEmailOpen ? printPreviewEmailComposer(doc, generatedFile) : ""}
+        ${state.printPreviewEmailStatus ? `<div class="print-preview-status-note">${escapeHtml(state.printPreviewEmailStatus)}</div>` : ""}
+        <div class="print-preview-body">
+          ${pdfSrc ? `
+            <iframe class="print-preview-pdf" title="${escapeHtml(doc.id)} generated PDF" src="${escapeHtml(pdfSrc)}"></iframe>
+          ` : `
+            <div class="print-preview-paper-shell" style="--preview-zoom:${zoom / 100}">
+              ${documentPreviewA4Pages(doc, template, page)}
+            </div>
+          `}
+        </div>
+        <div class="print-preview-statusbar">
+          <div>
+            ${pdfSrc ? `
+              <span>PDF viewer controls active</span>
+            ` : `
+              <button class="btn ghost compact" type="button" data-doc-preview-page="prev" ${page <= 1 ? "disabled" : ""}>Prev</button>
+              <span>Page ${page} of ${pageCount}</span>
+              <button class="btn ghost compact" type="button" data-doc-preview-page="next" ${page >= pageCount ? "disabled" : ""}>Next</button>
+            `}
+          </div>
+          <div>${zoom}%</div>
+          <div>${escapeHtml(doc.deliveryStatus || "Preview")}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function printPreviewExportMenu(generatedFile) {
+  return `
+    <div class="preview-menu">
+      <button type="button" data-doc-delivery-action="export-pdf" ${generatedFile?.downloadUrl ? "" : "disabled"}>
+        <strong>PDF File</strong><span>Adobe Portable Document Format</span>
+      </button>
+      <button type="button" disabled><strong>DOCX File</strong><span>Later delivery format</span></button>
+      <button type="button" disabled><strong>ODT File</strong><span>Later delivery format</span></button>
+      <button type="button" disabled><strong>RTF File</strong><span>Later delivery format</span></button>
+      <button type="button" disabled><strong>Image File</strong><span>Later delivery format</span></button>
+    </div>
+  `;
+}
+
+function printPreviewEmailComposer(doc, generatedFile) {
+  const customer = customers.find((item) => item.name === doc.customer);
+  const to = customer?.email || "";
+  const subject = `${doc.type} ${doc.id}`;
+  return `
+    <div class="print-preview-email">
+      <div>
+        <div class="section-title">E-mail PDF</div>
+        <div class="filter-note">Demo compose step. It records delivery audit instead of sending immediately.</div>
+      </div>
+      <div class="upload-form">
+        <label class="field">
+          <span>Recipient</span>
+          <input id="doc-preview-email-to" value="${escapeHtml(to)}" placeholder="customer@example.lt">
+        </label>
+        <label class="field">
+          <span>Subject</span>
+          <input id="doc-preview-email-subject" value="${escapeHtml(subject)}">
+        </label>
+        <label class="field full">
+          <span>Message</span>
+          <textarea id="doc-preview-email-message" rows="3">Sveiki, siunčiame dokumentą ${escapeHtml(doc.id)}.</textarea>
+        </label>
+      </div>
+      <div class="print-preview-attachment">Attachment: ${escapeHtml(generatedFileDisplayName(generatedFile) || `${doc.id}.pdf`)}</div>
+      <div class="doc-action-row">
+        <button class="btn primary compact" type="button" data-doc-preview-email-send="${escapeHtml(doc.id)}">Queue email</button>
+        <button class="btn ghost compact" type="button" data-doc-preview-email>Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+function generatedFileDisplayName(generatedFile) {
+  if (!generatedFile) return "";
+  return [generatedFile.versionLabel || "", generatedFile.fileName || ""].filter(Boolean).join(" / ");
+}
+
+function documentGeneratedFileFor(doc) {
+  if (doc.generatedFile?.downloadUrl) return doc.generatedFile;
+  if (state.generatedDocPreview?.docId === doc.id && state.generatedDocPreview.serviceDownloadUrl) {
+    return {
+      id: state.generatedDocPreview.fileId || state.generatedDocPreview.fileRecord?.id || "",
+      fileId: state.generatedDocPreview.fileId || state.generatedDocPreview.fileRecord?.id || "",
+      fileName: state.generatedDocPreview.serviceFileName,
+      format: state.generatedDocPreview.format,
+      generatedAt: state.generatedDocPreview.generatedAt,
+      downloadUrl: state.generatedDocPreview.serviceDownloadUrl,
+      previewUrl: state.generatedDocPreview.servicePreviewUrl || "",
+      templateId: state.generatedDocPreview.templateId,
+      version: state.generatedDocPreview.version || state.generatedDocPreview.fileRecord?.version || null,
+      versionLabel: state.generatedDocPreview.versionLabel || state.generatedDocPreview.fileRecord?.versionLabel || "",
+      fileRecord: state.generatedDocPreview.fileRecord || null
+    };
+  }
+  return doc.generatedFile || null;
+}
+
+function documentGeneratedPreviewUrl(generatedFile) {
+  if (!generatedFile?.downloadUrl) return "";
+  const fileFormat = String(generatedFile.format || generatedFile.fileName || "").toLowerCase();
+  if (!fileFormat.includes("pdf")) return "";
+  if (generatedFile.previewUrl) return generatedFile.previewUrl;
+  const separator = generatedFile.downloadUrl.includes("?") ? "&" : "?";
+  return `${generatedFile.downloadUrl}${separator}inline=1`;
+}
+
+function documentTemplateForDoc(doc) {
+  const generatedTemplate = doc.generatedFile?.templateId || (state.generatedDocPreview?.docId === doc.id ? state.generatedDocPreview.templateId : "");
+  if (generatedTemplate) {
+    const tpl = templates.find((item) => item.id === generatedTemplate);
+    if (tpl) return tpl;
+  }
+
+  const type = String(doc.type || "").toLowerCase();
+  const templateId = type.includes("commercial") || type.includes("quotation")
+    ? "tpl-quotation"
+    : type.includes("defect")
+      ? "tpl-defect-act"
+      : type.includes("diagnostic")
+        ? "tpl-diagnostic"
+        : type.includes("acceptance")
+          ? "tpl-acceptance"
+          : type.includes("vendor")
+            ? "tpl-vendor-return"
+            : "tpl-service-act";
+  return templates.find((item) => item.id === templateId) || templates[0];
+}
+
+function documentPreviewA4Pages(doc, template, activePage) {
+  const job = jobs.find((item) => item.id === doc.jobId);
+  const workAct = workActs.find((item) => item.id === doc.workActId);
+  const defectAct = defectActs.find((item) => item.id === doc.defectActId);
+  const customer = customers.find((item) => item.name === doc.customer);
+  const seller = companyProfiles[0] || {};
+  const equipmentRows = workAct?.equipmentItems?.length
+    ? workAct.equipmentItems
+    : [{ name: job?.equipment || "Equipment", serial: job?.serial || "", location: job?.stage || "" }];
+  const workRows = workAct?.workRows?.length
+    ? workAct.workRows
+    : [
+      { number: 1, description: defectAct?.defectDescription || doc.description || "Patikrinta sistemos bukle.", completed: true, comments: "" },
+      { number: 2, description: "Atlikti reikalingi techniniai veiksmai.", completed: true, comments: "" },
+      { number: 3, description: "Aparatas paliktas tolimesniam naudojimui pagal busena.", completed: false, comments: "" }
+    ];
+  const firstRows = workRows.slice(0, Math.max(2, Math.ceil(workRows.length / 2)));
+  const secondRows = workRows.slice(firstRows.length);
+  const docNumber = workAct?.number || doc.id;
+  const contract = workAct ? workActContractLabel(workAct) : "";
+  const contractLabel = contract && contract !== "Recommended" ? contract : "";
+  const dateText = formatLtDate(new Date());
+
+  return `
+    <article class="print-paper ${activePage === 1 ? "active" : ""}">
+      ${printPaperHeader(seller)}
+      ${printBuyerBlock(customer)}
+      <h2>ATLIKTU DARBU AKTAS Nr. ${escapeHtml(docNumber)}</h2>
+      <div class="print-paper-date">${escapeHtml(dateText)}</div>
+      ${contractLabel ? `<div class="print-contract">Sutartis nr. ${escapeHtml(contractLabel)}</div>` : ""}
+      <div class="print-equipment-grid">
+        ${equipmentRows.map((item) => `
+          <div>
+            <span>Prietaiso pavadinimas</span>
+            <strong>${escapeHtml(item.name)}</strong>
+          </div>
+          <div>
+            <span>Prietaiso identifikatorius</span>
+            <strong>${escapeHtml(item.serial || item.location || "-")}</strong>
+          </div>
+        `).join("")}
+      </div>
+      ${printChecklistTable(template?.name || doc.type, firstRows)}
+      <footer><span>${escapeHtml(docNumber)}</span><span>1</span></footer>
+    </article>
+    <article class="print-paper ${activePage === 2 ? "active" : ""}">
+      ${printPaperHeader(seller)}
+      ${printChecklistTable(template?.name || doc.type, secondRows.length ? secondRows : workRows.slice(-2))}
+      <div class="print-confirmation">
+        <p><strong>Vykdytojas patvirtina, kad:</strong></p>
+        <ol>
+          <li>Siame akte nurodyti darbai atlikti pagal sutarties ir technines prieziuros reikalavimus.</li>
+          <li>Uzsakovas priima atliktus darbus ir pateiktas dalis / komponentus.</li>
+        </ol>
+      </div>
+      <div class="print-signatures">
+        <div>
+          <strong>Uzsakovas</strong>
+          <span class="signature-line"></span>
+          <em>Parasas</em>
+          <em>Vardas, pavarde, pareigos</em>
+        </div>
+        <div>
+          <strong>Vykdytojas</strong>
+          <span class="signature-line signed-line">Viva Medical</span>
+          <em>Parasas</em>
+          <em>Vardas, pavarde, pareigos</em>
+        </div>
+      </div>
+      <div class="print-technician-signature">
+        Daliu keitima ir kalibravima vykde medicinos technikos inzinierius
+        <span class="signature-line"></span>
+      </div>
+      <footer><span>${escapeHtml(docNumber)}</span><span>2</span></footer>
+    </article>
+  `;
+}
+
+function printPaperHeader(seller) {
+  return `
+    <header class="print-paper-header">
+      <div class="paper-logo-mark"></div>
+      <div>
+        <div class="paper-logo-text">${escapeHtml(seller.displayName || seller.name || "Viva Medical")}</div>
+        <p>${escapeHtml(seller.name || "")}, ${escapeHtml(seller.address || "")}</p>
+        <p>Tel. ${escapeHtml(seller.phone || "")}, ${escapeHtml(seller.website || "")}</p>
+        <p>Imones kodas: ${escapeHtml(seller.registrationCode || "")}, PVM moketojo kodas: ${escapeHtml(seller.vatCode || "")}</p>
+      </div>
+    </header>
+  `;
+}
+
+function printBuyerBlock(customer) {
+  return `
+    <div class="print-buyer-block">
+      <strong>UZSAKOVAS: ${escapeHtml(customer?.legalName || customer?.name || "Customer")}</strong>
+      <span>Im. kodas: ${escapeHtml(customer?.companyCode || "-")}</span>
+      <span>PVM kodas: ${escapeHtml(customer?.vatCode || "-")}</span>
+      <span>Darbu atlikimo vieta: ${escapeHtml(customer?.documentAddress || customer?.address || "-")}</span>
+    </div>
+  `;
+}
+
+function printChecklistTable(title, rows = []) {
+  return `
+    <table class="print-checklist">
+      <thead>
+        <tr><th colspan="3">${escapeHtml(title)}</th></tr>
+        <tr><th>Darbas</th><th>Atlikta / reiksme</th><th>Pastabos</th></tr>
+      </thead>
+      <tbody>
+        ${rows.map((row) => `
+          <tr>
+            <td>${escapeHtml(row.description || row)}</td>
+            <td>${row.completed ? "☑" : "☐"}</td>
+            <td>${escapeHtml(row.comments || "")}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function formatLtDate(date) {
+  const months = ["sausio", "vasario", "kovo", "balandzio", "geguzes", "birzelio", "liepos", "rugpjucio", "rugsejo", "spalio", "lapkricio", "gruodzio"];
+  return `${date.getFullYear()} m. ${months[date.getMonth()]} ${date.getDate()} d.`;
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("lt-LT", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Bug / feedback capture
+// ---------------------------------------------------------------------------
+function feedbackLauncher() {
+  if (state.feedbackOpen || state.feedbackSelecting) return "";
+  return `
+    <div class="feedback-launcher-wrap" data-feedback-ignore>
+      ${state.feedbackSavedNotice ? `<div class="feedback-toast">${escapeHtml(state.feedbackSavedNotice)}</div>` : ""}
+      <button class="feedback-launcher" type="button" data-feedback-open>
+        <span class="feedback-pencil-dot"></span>
+        <span>Report issue</span>
+      </button>
+    </div>
+  `;
+}
+
+function feedbackSelectionOverlay() {
+  if (!state.feedbackSelecting) return "";
+
+  return `
+    <div class="feedback-snipping-overlay" data-feedback-snipping-surface data-feedback-ignore>
+      <img class="feedback-snipping-capture" src="${escapeHtml(state.feedbackCaptureDataUrl)}" alt="">
+      <div class="feedback-snipping-guide">
+        <strong>Click and drag to capture an area</strong>
+        <span>Like Windows screenshot selection. Release the mouse to continue.</span>
+        ${state.feedbackError ? `<em>${escapeHtml(state.feedbackError)}</em>` : ""}
+      </div>
+      <button class="feedback-snipping-cancel" type="button" data-feedback-selection-cancel>Cancel</button>
+      <div class="feedback-selection-box" data-feedback-selection-box hidden></div>
+    </div>
+  `;
+}
+
+function feedbackOverlay() {
+  if (!state.feedbackOpen) return "";
+  const screenshotBlock = state.feedbackAnnotating
+    ? `
+      <div class="feedback-shot-frame">
+        <img id="feedback-screenshot-img" class="feedback-screenshot" src="${escapeHtml(state.feedbackScreenshotDataUrl)}" alt="Captured screen">
+        <canvas id="feedback-annotation-canvas" class="feedback-canvas" aria-label="Red pencil annotation layer"></canvas>
+      </div>
+    `
+    : `
+      <div class="feedback-attachment-card">
+        <img src="${escapeHtml(state.feedbackScreenshotDataUrl)}" alt="Attached screenshot for admin">
+        <div>
+          <strong>Screenshot attached for admin</strong>
+          <span>The selected screen area will be stored as additional info for review.</span>
+        </div>
+        <button class="btn ghost compact" type="button" data-feedback-annotate-toggle>Draw / edit screenshot</button>
+      </div>
+    `;
+
+  return `
+    <div class="feedback-overlay" role="dialog" aria-modal="true" aria-label="Report issue" data-feedback-ignore>
+      <section class="feedback-dialog">
+        <div class="feedback-head">
+          <div>
+            <div class="feedback-title">Report issue</div>
+            <div class="feedback-subtitle">Register the issue. The selected screenshot is attached as additional admin info.</div>
+          </div>
+          <button class="btn ghost compact" type="button" data-feedback-cancel>Cancel</button>
+        </div>
+
+        ${state.feedbackAnnotating ? `
+          <div class="feedback-toolbar">
+            <span class="feedback-tool active">
+              <span class="feedback-pencil-dot"></span>
+              Red pencil
+            </span>
+            <span class="feedback-toolbar-note">Draw directly on the screenshot, then save the drawing.</span>
+            <button class="btn ghost compact" type="button" data-feedback-clear>Clear drawing</button>
+            <button class="btn ghost compact" type="button" data-feedback-annotate-toggle>Save drawing</button>
+          </div>
+        ` : ""}
+
+        <div class="feedback-body ${state.feedbackAnnotating ? "annotating" : "registering"}">
+          ${screenshotBlock}
+
+          <aside class="feedback-side">
+            <label class="field">
+              <span>Short comment</span>
+              <textarea id="feedback-comment" rows="5" maxlength="500" placeholder="What is wrong or what should admin check?">${escapeHtml(state.feedbackCommentDraft || "")}</textarea>
+            </label>
+            <div class="feedback-context">
+              <div>${detailItem("Page", state.page)}</div>
+              <div>${detailItem("Role", state.role)}</div>
+              <div>${detailItem("Document", state.selectedDocumentId || "-")}</div>
+            </div>
+            <div class="form-error feedback-error" data-feedback-error>${escapeHtml(state.feedbackError || "")}</div>
+            <button class="btn primary" type="button" data-feedback-save>Send to admin</button>
+          </aside>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 export function renderPage() {
+  let pageHtml = "";
   switch (state.page) {
-    case "service":   return servicePage();
-    case "sales":     return salesPage();
-    case "documents": return documentsPage();
-    case "templategen": return templateGenerationPage();
-    case "finance":   return financePage();
-    case "customers": return customersPage();
-    case "equipment": return equipmentPage();
-    case "parts":     return partsPage();
-    case "reports":   return reportsPage();
-    case "admin":     return adminPage();
-    case "calendar":  return calendarPage();
+    case "service":   pageHtml = servicePage(); break;
+    case "sales":     pageHtml = salesPage(); break;
+    case "documents": pageHtml = documentsPage(); break;
+    case "templategen": pageHtml = templateGenerationPage(); break;
+    case "finance":   pageHtml = financePage(); break;
+    case "customers": pageHtml = customersPage(); break;
+    case "equipment": pageHtml = equipmentPage(); break;
+    case "parts":     pageHtml = partsPage(); break;
+    case "reports":   pageHtml = reportsPage(); break;
+    case "admin":     pageHtml = adminPage(); break;
+    case "calendar":  pageHtml = calendarPage(); break;
     case "command":
-    default:          return commandPage();
+    default:          pageHtml = commandPage();
   }
+  return `${pageHtml}${documentPrintPreviewOverlay()}${feedbackSelectionOverlay()}${feedbackOverlay()}${feedbackLauncher()}`;
 }

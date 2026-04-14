@@ -106,6 +106,21 @@ function handleClick(event) {
     return;
   }
 
+  const wltClearFilters = event.target.closest("[data-wlt-clear-filters]");
+  if (wltClearFilters) {
+    state.wltSearchQuery = "";
+    state.wltStatusFilter = "all";
+    state.wltEntryPersonFilter = "all";
+    renderAppCallback();
+    return;
+  }
+
+  const wltFind = event.target.closest("[data-wlt-find]");
+  if (wltFind) {
+    renderAppCallback();
+    return;
+  }
+
   const wltSelect = event.target.closest("[data-wlt-select]");
   if (wltSelect) {
     state.selectedWltId = wltSelect.dataset.wltSelect;
@@ -160,6 +175,12 @@ function handleClick(event) {
   if (wltRemoveRow) {
     const [tplId, indexStr] = wltRemoveRow.dataset.wltRemoveRow.split(":");
     removeWltRow(tplId, parseInt(indexStr, 10));
+    return;
+  }
+
+  const wltRichCommand = event.target.closest("[data-wlt-rich-command]");
+  if (wltRichCommand) {
+    applyWltRichCommand(wltRichCommand.dataset.wltRichTarget, wltRichCommand.dataset.wltRichCommand);
     return;
   }
 
@@ -219,6 +240,12 @@ function handleClick(event) {
     return;
   }
 
+  const workActSelect = event.target.closest("[data-work-act-select]");
+  if (workActSelect) {
+    selectWorkActDraft(workActSelect.dataset.workActSelect);
+    return;
+  }
+
   const workActApplyTemplate = event.target.closest("[data-work-act-apply-template]");
   if (workActApplyTemplate) {
     applyWorkListTemplate(workActApplyTemplate.dataset.workActApplyTemplate);
@@ -262,15 +289,61 @@ function handleClick(event) {
     return;
   }
 
+  const defectActSelect = event.target.closest("[data-defect-act-select]");
+  if (defectActSelect) {
+    selectDefectActDraft(defectActSelect.dataset.defectActSelect);
+    return;
+  }
+
+  const defectActAddVisit = event.target.closest("[data-defect-act-add-visit]");
+  if (defectActAddVisit) {
+    addDefectActVisit(defectActAddVisit.dataset.defectActAddVisit);
+    return;
+  }
+
+  const defectActRemoveVisit = event.target.closest("[data-defect-act-remove-visit]");
+  if (defectActRemoveVisit) {
+    const [actId, visitId] = defectActRemoveVisit.dataset.defectActRemoveVisit.split(":");
+    removeDefectActVisit(actId, visitId);
+    return;
+  }
+
+  const defectActCreateOffer = event.target.closest("[data-defect-act-create-offer]");
+  if (defectActCreateOffer) {
+    state.selectedDefectActId = defectActCreateOffer.dataset.defectActCreateOffer;
+    state.defectActError = "Create Part Request Offer is planned for the sales/parts follow-up flow.";
+    renderAppCallback();
+    return;
+  }
+
   const commercialOfferCreate = event.target.closest("[data-commercial-offer-create]");
   if (commercialOfferCreate) {
     createCommercialOfferDraft(commercialOfferCreate.dataset.commercialOfferCreate);
     return;
   }
 
+  const commercialOfferSelect = event.target.closest("[data-commercial-offer-select]");
+  if (commercialOfferSelect) {
+    selectCommercialOfferDraft(commercialOfferSelect.dataset.commercialOfferSelect);
+    return;
+  }
+
   const commercialOfferAddRow = event.target.closest("[data-commercial-offer-add-row]");
   if (commercialOfferAddRow) {
     addCommercialOfferRow(commercialOfferAddRow.dataset.commercialOfferAddRow);
+    return;
+  }
+
+  const commercialOfferArchive = event.target.closest("[data-commercial-offer-archive]");
+  if (commercialOfferArchive) {
+    toggleCommercialOfferArchive(commercialOfferArchive.dataset.commercialOfferArchive);
+    return;
+  }
+
+  const commercialOfferPlaceholder = event.target.closest("[data-commercial-offer-placeholder]");
+  if (commercialOfferPlaceholder) {
+    state.commercialOfferError = commercialOfferPlaceholder.dataset.commercialOfferPlaceholder || "Workflow placeholder.";
+    renderAppCallback();
     return;
   }
 
@@ -573,8 +646,50 @@ function handleChange(event) {
       act.workTemplateId = event.target.value;
       state.selectedWorkActId = act.id;
       state.workActError = "";
+      saveDemoState();
       renderAppCallback();
     }
+    return;
+  }
+
+  if (event.target.matches("[data-work-act-status-filter]")) {
+    state.workActStatusFilter = event.target.value;
+    renderAppCallback();
+    return;
+  }
+
+  if (event.target.matches("[data-work-act-search]")) {
+    state.workActSearchQuery = event.target.value;
+    renderAppCallback();
+    return;
+  }
+
+  if (event.target.matches("[data-work-act-entry-person]")) {
+    updateWorkActReportOption(event.target.dataset.workActEntryPerson, "entryPerson", event.target.value);
+    return;
+  }
+
+  if (event.target.matches("[data-work-act-option]")) {
+    const [actId, optionKey] = event.target.dataset.workActOption.split(":");
+    updateWorkActReportOption(actId, optionKey, event.target.checked);
+    return;
+  }
+
+  if (event.target.matches("[data-wlt-status-filter]")) {
+    state.wltStatusFilter = event.target.value;
+    renderAppCallback();
+    return;
+  }
+
+  if (event.target.matches("[data-wlt-entry-person-filter]")) {
+    state.wltEntryPersonFilter = event.target.value;
+    renderAppCallback();
+    return;
+  }
+
+  if (event.target.matches("[data-wlt-search]")) {
+    state.wltSearchQuery = event.target.value;
+    renderAppCallback();
     return;
   }
 
@@ -596,13 +711,38 @@ function handleChange(event) {
 
   if (event.target.matches("[data-template-commercial-offer-quotation]")) {
     state.templateGenCommercialOfferQuotationId = event.target.value;
+    const draft = commercialOfferDrafts.find((item) => item.quotationId === event.target.value);
+    state.selectedCommercialOfferDraftId = draft?.id || state.selectedCommercialOfferDraftId;
     state.commercialOfferError = "";
     renderAppCallback();
     return;
   }
 
+  if (event.target.matches("[data-commercial-offer-status-filter]")) {
+    state.commercialOfferStatusFilter = event.target.value;
+    renderAppCallback();
+    return;
+  }
+
+  if (event.target.matches("[data-commercial-offer-entry-person-filter]")) {
+    state.commercialOfferEntryPersonFilter = event.target.value;
+    renderAppCallback();
+    return;
+  }
+
+  if (event.target.matches("[data-commercial-offer-search]")) {
+    state.commercialOfferSearchQuery = event.target.value;
+    return;
+  }
+
   if (event.target.matches("[data-defect-act-risk]")) {
     updateDefectActField(event.target.dataset.defectActRisk, "riskLevel", event.target.value);
+    return;
+  }
+
+  if (event.target.matches("[data-defect-act-visit-check]")) {
+    const [actId, visitId, field] = event.target.dataset.defectActVisitCheck.split(":");
+    updateDefectActVisit(actId, visitId, { [field]: event.target.checked });
     return;
   }
 
@@ -630,6 +770,16 @@ function handleInput(event) {
     return;
   }
 
+  if (event.target.matches("[data-work-act-search]")) {
+    state.workActSearchQuery = event.target.value;
+    return;
+  }
+
+  if (event.target.matches("[data-wlt-search]")) {
+    state.wltSearchQuery = event.target.value;
+    return;
+  }
+
   if (event.target.matches("[data-work-act-row-comment]")) {
     const [actId, rowId] = event.target.dataset.workActRowComment.split(":");
     updateWorkActRow(actId, rowId, { comments: event.target.value }, false);
@@ -647,6 +797,13 @@ function handleInput(event) {
   if (event.target.matches("[data-defect-act-field]")) {
     const [actId, field] = event.target.dataset.defectActField.split(":");
     updateDefectActField(actId, field, event.target.value, false);
+    saveDemoState();
+    return;
+  }
+
+  if (event.target.matches("[data-defect-act-visit-field]")) {
+    const [actId, visitId, field] = event.target.dataset.defectActVisitField.split(":");
+    updateDefectActVisit(actId, visitId, { [field]: event.target.value }, false);
     saveDemoState();
     return;
   }
@@ -673,11 +830,29 @@ function handleInput(event) {
     return;
   }
 
+  if (event.target.matches("[data-commercial-offer-search]")) {
+    state.commercialOfferSearchQuery = event.target.value;
+    return;
+  }
+
   if (event.target.matches("[data-wlt-row-text]")) {
     const [tplId, indexStr] = event.target.dataset.wltRowText.split(":");
     const tpl = workListTemplates.find((t) => t.id === tplId);
     if (tpl) {
       tpl.workRows[parseInt(indexStr, 10)] = event.target.value;
+      saveDemoState();
+    }
+  }
+
+  if (event.target.matches("[data-wlt-rich-editor]")) {
+    storeWltRichHtml(event.target.dataset.wltRichEditor, event.target.innerHTML);
+    return;
+  }
+
+  if (event.target.matches("[data-wlt-editor-note]")) {
+    const tpl = workListTemplates.find((t) => t.id === event.target.dataset.wltEditorNote);
+    if (tpl) {
+      tpl.editorNote = event.target.value;
       saveDemoState();
     }
   }
@@ -774,13 +949,19 @@ function createWorkActDraft(jobId) {
     workText: "",
     workRows: [],
     reportOptions: {
+      entryPerson: users.find((user) => user.roles?.includes("service"))?.name || "Service",
       includePersonName: true,
       includeSignature: true,
       includeWorkingHours: true,
       includeSystemIdentity: true,
       includeSystemName: true,
       equipmentWorking: true,
-      readyForUse: false
+      readyForUse: false,
+      oldPartReturned: false,
+      hygieneStandard: false,
+      showTravelHours: false,
+      showStartedCompletedTime: false,
+      useThreeSideTemplate: false
     },
     generatedDocumentId: null,
     updatedAt: new Date().toISOString()
@@ -788,6 +969,17 @@ function createWorkActDraft(jobId) {
 
   state.selectedWorkActId = actId;
   state.templateGenWorkActJobId = jobId;
+  state.workActError = "";
+  saveDemoState();
+  renderAppCallback();
+}
+
+function selectWorkActDraft(actId) {
+  const act = workActs.find((item) => item.id === actId);
+  if (!act) return;
+  state.selectedWorkActId = act.id;
+  state.templateGenWorkActJobId = act.jobId || state.templateGenWorkActJobId;
+  state.selectedServiceJobId = act.jobId || state.selectedServiceJobId;
   state.workActError = "";
   renderAppCallback();
 }
@@ -807,6 +999,7 @@ function toggleWorkActEquipment(actId, eqId, checked) {
   act.updatedAt = new Date().toISOString();
   state.selectedWorkActId = act.id;
   state.workActError = "";
+  saveDemoState();
   renderAppCallback();
 }
 
@@ -832,6 +1025,7 @@ function applyWorkListTemplate(actId) {
   act.updatedAt = new Date().toISOString();
   state.selectedWorkActId = act.id;
   state.workActError = "";
+  saveDemoState();
   renderAppCallback();
 }
 
@@ -850,6 +1044,7 @@ function addWorkActRow(actId) {
   act.updatedAt = new Date().toISOString();
   state.selectedWorkActId = act.id;
   state.workActError = "";
+  saveDemoState();
   renderAppCallback();
 }
 
@@ -894,7 +1089,22 @@ function updateWorkActRow(actId, rowId, patch, shouldRender = true) {
   act.updatedAt = new Date().toISOString();
   state.selectedWorkActId = act.id;
   state.workActError = "";
+  saveDemoState();
   if (shouldRender) renderAppCallback();
+}
+
+function updateWorkActReportOption(actId, optionKey, value) {
+  const act = workActs.find((item) => item.id === actId);
+  if (!act) return;
+  act.reportOptions = {
+    ...(act.reportOptions || {}),
+    [optionKey]: value
+  };
+  act.updatedAt = new Date().toISOString();
+  state.selectedWorkActId = act.id;
+  state.workActError = "";
+  saveDemoState();
+  renderAppCallback();
 }
 
 function createWorkActDocumentDraft(actId) {
@@ -931,8 +1141,11 @@ function createWorkActDocumentDraft(actId) {
   act.status = "Document draft";
   act.updatedAt = new Date().toISOString();
   state.selectedDocumentId = act.generatedDocumentId;
+  state.selectedTemplateId = "tpl-service-act";
+  state.documentOutputFormat = "pdf";
   state.selectedWorkActId = act.id;
   state.workActError = "";
+  saveDemoState();
   renderAppCallback();
 }
 
@@ -996,6 +1209,7 @@ function createDefectActDraft(jobId) {
     recommendedCorrection: "",
     riskLevel: "Medium",
     customerAcknowledgement: "",
+    actualVisits: [defaultDefectActVisit(job, 1)],
     generatedDocumentId: null,
     updatedAt: new Date().toISOString()
   });
@@ -1014,6 +1228,73 @@ function updateDefectActField(actId, field, value, shouldRender = true) {
   state.selectedDefectActId = act.id;
   state.defectActError = "";
   if (shouldRender) renderAppCallback();
+}
+
+function selectDefectActDraft(actId) {
+  const act = defectActs.find((item) => item.id === actId);
+  if (!act) return;
+  state.selectedDefectActId = act.id;
+  state.templateGenDefectActJobId = act.jobId || state.templateGenDefectActJobId;
+  state.selectedServiceJobId = act.jobId || state.selectedServiceJobId;
+  state.defectActError = "";
+  renderAppCallback();
+}
+
+function addDefectActVisit(actId) {
+  const act = defectActs.find((item) => item.id === actId);
+  if (!act) return;
+  const job = jobs.find((item) => item.id === act.jobId);
+  act.actualVisits ||= [];
+  act.actualVisits.push(defaultDefectActVisit(job, act.actualVisits.length + 1));
+  act.updatedAt = new Date().toISOString();
+  state.selectedDefectActId = act.id;
+  state.defectActError = "";
+  renderAppCallback();
+}
+
+function removeDefectActVisit(actId, visitId) {
+  const act = defectActs.find((item) => item.id === actId);
+  if (!act) return;
+  act.actualVisits = (act.actualVisits || []).filter((visit) => visit.id !== visitId);
+  act.updatedAt = new Date().toISOString();
+  state.selectedDefectActId = act.id;
+  state.defectActError = "";
+  renderAppCallback();
+}
+
+function updateDefectActVisit(actId, visitId, changes, shouldRender = true) {
+  const act = defectActs.find((item) => item.id === actId);
+  if (!act) return;
+  act.actualVisits ||= [];
+  const visit = act.actualVisits.find((item) => item.id === visitId);
+  if (!visit) return;
+  Object.assign(visit, normalizeDefectVisitChanges(changes));
+  act.updatedAt = new Date().toISOString();
+  state.selectedDefectActId = act.id;
+  state.defectActError = "";
+  if (shouldRender) renderAppCallback();
+}
+
+function defaultDefectActVisit(job, index) {
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    id: `DAV-${Date.now()}-${index}`,
+    da: true,
+    wa: false,
+    plannedStart: job?.due || today,
+    workHours: "",
+    travelHours: "",
+    completed: false,
+    comments: job?.stage || ""
+  };
+}
+
+function normalizeDefectVisitChanges(changes) {
+  const normalized = { ...changes };
+  for (const field of ["workHours", "travelHours"]) {
+    if (field in normalized) normalized[field] = normalized[field] === "" ? "" : Math.max(0, Number(normalized[field]) || 0);
+  }
+  return normalized;
 }
 
 function createDefectActDocumentDraft(actId) {
@@ -1089,6 +1370,8 @@ function createCommercialOfferDraft(quotationId) {
 
   const today = new Date().toISOString().slice(0, 10);
   const draftId = `CO-${Date.now()}`;
+  const customer = customers.find((item) => item.id === qte.customerId || item.name === qte.customer);
+  const relatedContract = contracts.find((item) => item.id === qte.contractId || item.equipmentId === qte.equipmentId || item.customerId === qte.customerId);
   commercialOfferDrafts.unshift({
     id: draftId,
     number: `VM-CO-${String(commercialOfferDrafts.length + 1).padStart(4, "0")}`,
@@ -1099,6 +1382,21 @@ function createCommercialOfferDraft(quotationId) {
     equipment: qte.equipment,
     equipmentId: qte.equipmentId,
     type: qte.type,
+    currency: qte.currency || "EUR",
+    profile: qte.type === "PM Contract" ? "PM" : qte.type === "Installation" ? "Installation" : "Service",
+    group: "",
+    hospitalSystem: `${qte.customer} / ${qte.equipment}`,
+    side: "Customer",
+    contract: qte.contractId || relatedContract?.id || "",
+    recipient: qte.approvalContact || customer?.contact || "",
+    fax: customer?.fax || "",
+    entryPerson: users.find((user) => user.roles?.includes("sales"))?.name || qte.owner || "",
+    entryDate: today,
+    invoiceId: "",
+    archived: false,
+    priceMissing: !qte.amount,
+    headerText: `Gerb. ${qte.approvalContact || customer?.contact || "Kliente"},\n\nSiunciame komercini pasiulyma del ${qte.equipment}.`,
+    footerText: "Pasiulymas galioja iki nurodytos datos. Uzsakymas patvirtinamas rastu arba el. pastu.",
     scopeText: qte.notes || "",
     lineItems: [
       {
@@ -1120,6 +1418,15 @@ function createCommercialOfferDraft(quotationId) {
   state.templateGenCommercialOfferQuotationId = quotationId;
   state.commercialOfferError = "";
   saveDemoState();
+  renderAppCallback();
+}
+
+function selectCommercialOfferDraft(draftId) {
+  const draft = commercialOfferDrafts.find((d) => d.id === draftId);
+  if (!draft) return;
+  state.selectedCommercialOfferDraftId = draft.id;
+  state.templateGenCommercialOfferQuotationId = draft.quotationId;
+  state.commercialOfferError = "";
   renderAppCallback();
 }
 
@@ -1153,13 +1460,31 @@ function removeCommercialOfferRow(draftId, rowId) {
 
 function updateCommercialOfferField(draftId, field, value, shouldRender = true) {
   const draft = commercialOfferDrafts.find((d) => d.id === draftId);
-  const allowedFields = ["scopeText", "validityDate", "paymentTerms", "notes"];
+  const allowedFields = [
+    "profile", "group", "hospitalSystem", "side", "contract", "recipient", "fax",
+    "currency", "invoiceId", "headerText", "footerText", "scopeText", "validityDate", "paymentTerms", "notes"
+  ];
   if (!draft || !allowedFields.includes(field)) return;
   draft[field] = value;
+  if (field === "currency") {
+    (draft.lineItems || []).forEach((item) => { item.currency = value; });
+  }
   draft.updatedAt = new Date().toISOString();
   state.selectedCommercialOfferDraftId = draft.id;
   state.commercialOfferError = "";
   if (shouldRender) renderAppCallback();
+}
+
+function toggleCommercialOfferArchive(draftId) {
+  const draft = commercialOfferDrafts.find((d) => d.id === draftId);
+  if (!draft) return;
+  draft.archived = !draft.archived;
+  draft.status = draft.archived ? "Archived" : "Draft";
+  draft.updatedAt = new Date().toISOString();
+  state.selectedCommercialOfferDraftId = draft.id;
+  state.commercialOfferError = "";
+  saveDemoState();
+  renderAppCallback();
 }
 
 function updateCommercialOfferRow(draftId, rowId, patch, shouldRender = true) {
@@ -1167,6 +1492,7 @@ function updateCommercialOfferRow(draftId, rowId, patch, shouldRender = true) {
   const row = draft?.lineItems?.find((item) => item.id === rowId);
   if (!draft || !row) return;
   Object.assign(row, patch);
+  draft.priceMissing = !commercialOfferTotal(draft);
   draft.updatedAt = new Date().toISOString();
   state.selectedCommercialOfferDraftId = draft.id;
   state.commercialOfferError = "";
@@ -1200,6 +1526,7 @@ function createCommercialOfferDocumentDraft(draftId) {
   }
 
   draft.status = "Document draft";
+  draft.priceMissing = !commercialOfferTotal(draft);
   draft.updatedAt = new Date().toISOString();
   state.selectedDocumentId = draft.generatedDocumentId;
   state.selectedTemplateId = "tpl-quotation";
@@ -1207,6 +1534,10 @@ function createCommercialOfferDocumentDraft(draftId) {
   state.commercialOfferError = "";
   saveDemoState();
   renderAppCallback();
+}
+
+function commercialOfferTotal(draft) {
+  return (draft?.lineItems || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1217,6 +1548,8 @@ function saveNewWlt() {
   const category = document.getElementById("wlt-new-category")?.value.trim() || "";
   const serviceType = document.getElementById("wlt-new-service-type")?.value || "Service";
   const language = document.getElementById("wlt-new-language")?.value || "lt";
+  const entryPerson = document.getElementById("wlt-new-entry-person")?.value || "";
+  const entryDate = document.getElementById("wlt-new-entry-date")?.value || new Date().toISOString().slice(0, 10);
   const bodyText = document.getElementById("wlt-new-body")?.value.trim() || "";
   const rowsRaw = document.getElementById("wlt-new-rows")?.value || "";
   const workRows = rowsRaw.split("\n").map((r) => r.trim()).filter(Boolean);
@@ -1238,9 +1571,17 @@ function saveNewWlt() {
     name,
     equipmentCategory: category || "General",
     serviceType,
+    linkedServiceTypes: checkedValues("[data-wlt-new-service-type-link]"),
+    linkedEquipmentIds: checkedValues("[data-wlt-new-equipment]"),
+    linkedHospitalIds: checkedValues("[data-wlt-new-hospital]"),
+    linkedWorkEquipmentIds: checkedValues("[data-wlt-new-work-equipment]"),
+    entryPerson,
+    entryDate,
     language,
     bodyText,
     workRows,
+    richBodyHtml: defaultWltRichHtml(name, bodyText, workRows),
+    editorNote: "",
     isActive: true
   });
 
@@ -1260,7 +1601,11 @@ function saveWltEdits(tplId) {
   const category = document.getElementById("wlt-edit-category")?.value.trim() || "";
   const serviceType = document.getElementById("wlt-edit-service-type")?.value || tpl.serviceType;
   const language = document.getElementById("wlt-edit-language")?.value || tpl.language;
+  const entryPerson = document.getElementById("wlt-edit-entry-person")?.value || tpl.entryPerson || "";
+  const entryDate = document.getElementById("wlt-edit-entry-date")?.value || tpl.entryDate || "";
   const bodyText = document.getElementById("wlt-edit-body")?.value.trim() || "";
+  const richEditor = document.querySelector(`[data-wlt-rich-editor="${cssEscape(tplId)}"]`);
+  const editorNote = document.getElementById("wlt-edit-note")?.value || "";
 
   if (!name) {
     state.wltError = "Template name is required.";
@@ -1271,8 +1616,16 @@ function saveWltEdits(tplId) {
   tpl.name = name;
   tpl.equipmentCategory = category || tpl.equipmentCategory;
   tpl.serviceType = serviceType;
+  tpl.linkedServiceTypes = checkedValues("[data-wlt-edit-service-type-link]");
+  tpl.linkedEquipmentIds = checkedValues("[data-wlt-edit-equipment]");
+  tpl.linkedHospitalIds = checkedValues("[data-wlt-edit-hospital]");
+  tpl.linkedWorkEquipmentIds = checkedValues("[data-wlt-edit-work-equipment]");
+  tpl.entryPerson = entryPerson;
+  tpl.entryDate = entryDate;
   tpl.language = language;
   tpl.bodyText = bodyText;
+  tpl.richBodyHtml = sanitizeWltRichHtml(richEditor?.innerHTML || tpl.richBodyHtml || defaultWltRichHtml(name, bodyText, tpl.workRows || []));
+  tpl.editorNote = editorNote;
 
   state.wltEditMode = false;
   state.wltError = "";
@@ -1326,6 +1679,83 @@ function removeWltRow(tplId, index) {
   state.selectedWltId = tplId;
   saveDemoState();
   renderAppCallback();
+}
+
+function applyWltRichCommand(tplId, command) {
+  const editor = document.querySelector(`[data-wlt-rich-editor="${cssEscape(tplId)}"]`);
+  if (!editor) return;
+  editor.focus();
+  if (command === "addChecklistRow") {
+    editor.insertAdjacentHTML("beforeend", defaultWltChecklistRowHtml());
+  } else {
+    document.execCommand(command, false, null);
+  }
+  storeWltRichHtml(tplId, editor.innerHTML);
+}
+
+function storeWltRichHtml(tplId, html) {
+  const tpl = workListTemplates.find((t) => t.id === tplId);
+  if (!tpl) return;
+  tpl.richBodyHtml = sanitizeWltRichHtml(html);
+  saveDemoState();
+}
+
+function sanitizeWltRichHtml(html = "") {
+  return String(html)
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
+    .replace(/\son\w+="[^"]*"/gi, "")
+    .replace(/\son\w+='[^']*'/gi, "")
+    .replace(/javascript:/gi, "");
+}
+
+function defaultWltRichHtml(name, bodyText, rows) {
+  const rowHtml = rows.map((row, index) => `
+    <tr>
+      <td>${escapeHtmlForRich(String(index + 1))}</td>
+      <td>${escapeHtmlForRich(row)}</td>
+      <td>Check / fill</td>
+      <td></td>
+    </tr>
+  `).join("");
+  return `
+    <h3>${escapeHtmlForRich(name || "Work List Template")}</h3>
+    ${bodyText ? `<p>${escapeHtmlForRich(bodyText)}</p>` : ""}
+    <table>
+      <thead><tr><th>No.</th><th>Work description</th><th>Expected / measured value</th><th>Notes</th></tr></thead>
+      <tbody>${rowHtml}</tbody>
+    </table>
+  `;
+}
+
+function defaultWltChecklistRowHtml() {
+  return `
+    <table>
+      <tbody>
+        <tr><td>New</td><td>Describe work step</td><td>Expected value</td><td>Notes</td></tr>
+      </tbody>
+    </table>
+  `;
+}
+
+function escapeHtmlForRich(value = "") {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function cssEscape(value = "") {
+  if (window.CSS?.escape) return CSS.escape(value);
+  return String(value).replace(/["\\]/g, "\\$&");
+}
+
+function checkedValues(selector) {
+  return Array.from(document.querySelectorAll(selector))
+    .filter((input) => input.checked)
+    .map((input) => input.value);
 }
 
 // ---------------------------------------------------------------------------

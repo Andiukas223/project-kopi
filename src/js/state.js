@@ -4,6 +4,7 @@ export const state = {
   // Navigation
   page: "command",
   role: "admin",
+  theme: "light",
 
   // Documents module
   documentFilter: "All",
@@ -21,11 +22,21 @@ export const state = {
   templateEditorOpen: false,
   templateEditorError: "",
   templateEditorSavedAt: "",
+  templateFileStatus: "",
+  templateFileError: "",
   templateGenTab: "work-acts", // work-acts | defect-acts | commercial-offers | work-list-templates | output-templates
   rejectingDocumentId: null,
   documentRejectError: "",
   documentUploadOpen: false,
+  documentUploadTargetId: null,
   documentUploadError: "",
+  printPreviewOpen: false,
+  printPreviewDocumentId: null,
+  printPreviewPage: 1,
+  printPreviewZoom: 100,
+  printPreviewExportOpen: false,
+  printPreviewEmailOpen: false,
+  printPreviewEmailStatus: "",
 
   // Equipment module
   selectedEquipmentId: "EQ-501",
@@ -43,6 +54,18 @@ export const state = {
 
   // Admin module
   adminEditUserId: "u1",
+  selectedBugReportId: null,
+  feedbackOpen: false,
+  feedbackSelecting: false,
+  feedbackAnnotating: false,
+  feedbackCaptureDataUrl: "",
+  feedbackScreenshotDataUrl: "",
+  feedbackCommentDraft: "",
+  feedbackError: "",
+  feedbackSavedNotice: "",
+  feedbackBackendStatus: "",
+  feedbackStatusFilter: "All",
+  feedbackAssigneeFilter: "All",
 
   // Calendar module
   calendarYear: 2026,
@@ -57,6 +80,8 @@ export const state = {
   selectedServiceJobId: "VM-SV-1024",
   selectedWorkActId: null,
   templateGenWorkActJobId: "VM-SV-1024",
+  workActSearchQuery: "",
+  workActStatusFilter: "All",
   selectedDefectActId: null,
   templateGenDefectActJobId: "VM-SV-1024",
   workActError: "",
@@ -64,6 +89,9 @@ export const state = {
   selectedCommercialOfferDraftId: null,
   templateGenCommercialOfferQuotationId: "QTE-501",
   commercialOfferError: "",
+  commercialOfferSearchQuery: "",
+  commercialOfferStatusFilter: "active",
+  commercialOfferEntryPersonFilter: "all",
 
   // Work List Templates CRUD
   selectedWltId: null,
@@ -71,6 +99,9 @@ export const state = {
   wltNewOpen: false,
   wltError: "",
   wltNewError: "",
+  wltSearchQuery: "",
+  wltStatusFilter: "all",
+  wltEntryPersonFilter: "all",
 
   // Sales module
   selectedQuotationId: "QTE-501",
@@ -93,4 +124,8 @@ export function setRole(role) {
   if (roles.some((item) => item.id === role)) {
     state.role = role;
   }
+}
+
+export function setTheme(theme) {
+  state.theme = theme === "dark" ? "dark" : "light";
 }

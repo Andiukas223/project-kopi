@@ -9,9 +9,10 @@
   align-items: center;
   background: var(--dark);
   border-bottom: 3px solid var(--brand);
-  color: var(--bg-card);
+  color: var(--on-dark);
   display: flex;
   flex-shrink: 0;
+  gap: 10px;
   height: 52px;
   padding: 0 18px;
 }
@@ -23,7 +24,7 @@
 }
 
 .wordmark-main {
-  color: var(--bg-card);
+  color: var(--on-dark);
   font-size: 18px;
   font-weight: 800;
 }
@@ -35,10 +36,10 @@
 }
 
 .wordmark-sub {
-  color: rgba(255, 255, 255, .42);
+  color: rgba(255, 255, 255, .72);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 1.2px;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -57,7 +58,7 @@
   align-items: center;
   background: var(--brand);
   border-radius: var(--r);
-  color: var(--bg-card);
+  color: var(--on-accent);
   display: inline-flex;
   font-family: "JetBrains Mono", monospace;
   font-size: 10px;
@@ -65,6 +66,24 @@
   height: 24px;
   justify-content: center;
   width: 24px;
+}
+
+.theme-toggle {
+  background: rgba(255, 255, 255, .07);
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: var(--r);
+  color: rgba(255, 255, 255, .82);
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.theme-toggle:hover,
+.theme-toggle[aria-pressed="true"] {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--on-accent);
 }
 
 .app-body {
@@ -87,10 +106,10 @@
 }
 
 .sb-label {
-  color: rgba(255, 255, 255, .28);
+  color: rgba(255, 255, 255, .62);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 1.5px;
+  letter-spacing: 0;
   margin-bottom: 4px;
   padding: 0 16px;
   text-transform: uppercase;
@@ -118,7 +137,7 @@
 .sb-item.active {
   background: rgba(17, 143, 122, .18);
   border-left-color: var(--brand);
-  color: var(--bg-card);
+  color: var(--on-dark);
 }
 
 .sb-icon {
@@ -142,12 +161,12 @@
 
 .sb-badge.brand {
   background: var(--brand);
-  color: var(--bg-card);
+  color: var(--on-accent);
 }
 
 .sb-badge.warn {
   background: var(--amber);
-  color: var(--bg-card);
+  color: var(--on-accent);
 }
 
 .main {
@@ -168,10 +187,10 @@
 }
 
 .sb-reminders-label {
-  color: rgba(255, 255, 255, .28);
+  color: rgba(255, 255, 255, .62);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 1.5px;
+  letter-spacing: 0;
   margin-bottom: 6px;
   padding: 0 16px;
   text-transform: uppercase;
@@ -213,4 +232,70 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 52px;
+    padding: 8px 12px;
+  }
+
+  .wordmark {
+    min-width: 0;
+  }
+
+  .wordmark-main {
+    font-size: 16px;
+  }
+
+  .wordmark-sub {
+    display: none;
+  }
+
+  .app-body {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    overflow: visible;
+    padding: 8px;
+    width: 100%;
+  }
+
+  .sb-section {
+    display: contents;
+  }
+
+  .sb-section + .sb-section {
+    margin-top: 0;
+  }
+
+  .sb-label,
+  .sb-reminders {
+    display: none;
+  }
+
+  .sb-item {
+    border-left: 0;
+    border-radius: var(--r);
+    flex: 1 1 118px;
+    min-height: 40px;
+    padding: 8px 10px;
+    width: auto;
+  }
+
+  .main {
+    overflow: visible;
+  }
 }

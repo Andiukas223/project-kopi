@@ -3,15 +3,16 @@
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
   display: flex;
+  gap: 14px;
   justify-content: space-between;
   padding: 17px 24px;
 }
 
 .ph-title {
-  color: var(--dark);
+  color: var(--text);
   font-size: 20px;
   font-weight: 800;
-  letter-spacing: -.3px;
+  letter-spacing: 0;
 }
 
 .ph-sub {
@@ -24,7 +25,10 @@
 .action-row {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .btn {
@@ -35,12 +39,17 @@
   font-size: 13px;
   font-weight: 700;
   gap: 6px;
+  justify-content: center;
+  line-height: 1.2;
+  min-height: 36px;
   padding: 7px 14px;
+  white-space: nowrap;
+  width: auto;
 }
 
 .btn.primary {
   background: var(--brand);
-  color: var(--bg-card);
+  color: var(--on-accent);
 }
 
 .btn.primary:hover {
@@ -49,7 +58,17 @@
 
 .btn.dark {
   background: var(--dark);
-  color: var(--bg-card);
+  color: var(--on-dark);
+}
+
+.btn.warn {
+  background: var(--amber);
+  color: var(--on-accent);
+}
+
+.btn.done {
+  background: var(--green);
+  color: var(--on-accent);
 }
 
 .btn.ghost {
@@ -75,12 +94,60 @@
 
 .btn.compact {
   font-size: 11px;
+  min-height: 30px;
   padding: 5px 9px;
 }
 
 .btn:disabled {
   cursor: default;
   opacity: .48;
+}
+
+.btn.done:disabled {
+  opacity: 1;
+}
+
+@media (max-width: 420px) {
+  .btn {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 720px) {
+  .page-header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 14px;
+  }
+
+  .action-row {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .role-switcher {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .role-btn {
+    flex: 1 1 70px;
+  }
+
+  .tile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .data-table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .document-inline-panel {
+    grid-template-columns: 1fr;
+  }
 }
 
 .role-switcher {
@@ -105,7 +172,7 @@
 
 .role-btn.active {
   background: var(--dark);
-  color: var(--bg-card);
+  color: var(--on-dark);
 }
 
 .section-heading {
@@ -119,7 +186,7 @@
   color: var(--text-mid);
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 1px;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -157,7 +224,7 @@
   color: var(--text-muted);
   font-size: 10.5px;
   font-weight: 800;
-  letter-spacing: .8px;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -265,6 +332,77 @@
   overflow: hidden;
 }
 
+.table-scroll {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.documents-table .data-table {
+  min-width: 1780px;
+}
+
+.doc-table-file,
+.doc-table-note {
+  display: block;
+  line-height: 1.35;
+  max-width: 240px;
+  white-space: normal;
+}
+
+.doc-table-note {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.doc-signal {
+  border-radius: 4px;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 3px 7px;
+}
+
+.doc-signal.warn {
+  background: var(--amber-lt);
+  color: var(--amber);
+}
+
+.doc-signal.signed {
+  background: var(--blue-lt);
+  color: var(--blue);
+}
+
+.doc-signal.done {
+  background: var(--green-lt);
+  color: var(--green);
+}
+
+.doc-return-summary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 12px;
+}
+
+@media (max-width: 1100px) {
+  .doc-return-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.document-inline-panel {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, .35fr) minmax(0, 1fr);
+  padding: 14px 16px;
+}
+
 .table-toolbar {
   align-items: center;
   border-bottom: 1px solid var(--border);
@@ -287,7 +425,7 @@
   color: var(--text-muted);
   font-size: 10.5px;
   font-weight: 800;
-  letter-spacing: .8px;
+  letter-spacing: 0;
   padding: 9px 14px;
   text-align: left;
   text-transform: uppercase;
@@ -318,6 +456,7 @@
 
 .table-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -337,16 +476,24 @@
 }
 
 .chip.pending,
-.chip.review {
+.chip.review,
+.chip.assigned,
+.chip.in-progress {
   background: var(--blue-lt);
   color: var(--blue);
 }
 
 .chip.warn,
 .chip.customer,
-.chip.signature {
+.chip.signature,
+.chip.needs-upload {
   background: var(--amber-lt);
   color: var(--amber);
+}
+
+.chip.signed {
+  background: var(--blue-lt);
+  color: var(--blue);
 }
 
 .chip.done,
@@ -354,9 +501,17 @@
 .chip.generated,
 .chip.paid,
 .chip.finished,
-.chip.archived {
+.chip.archived,
+.chip.fixed,
+.chip.reviewed,
+.chip.closed {
   background: var(--green-lt);
   color: var(--green);
+}
+
+.chip.new {
+  background: var(--amber-lt);
+  color: var(--amber);
 }
 
 .chip.blocked,
@@ -427,7 +582,7 @@
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: .06em;
+  letter-spacing: 0;
   list-style: none;
   padding: 10px 14px;
   text-transform: uppercase;
@@ -470,11 +625,11 @@ details[open] .dev-spec-summary::before {
 
 .ds-label {
   background: #0b1520;
-  color: #3d7a96;
+  color: #85c7dd;
   font-family: var(--mono);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: .05em;
+  letter-spacing: 0;
   padding: 8px 12px;
   text-transform: uppercase;
 }
@@ -508,7 +663,7 @@ details[open] .dev-spec-summary::before {
 }
 
 .pipeline-type-label {
-  color: var(--dark);
+  color: var(--text);
   font-size: 12px;
   font-weight: 800;
 }
@@ -521,7 +676,7 @@ details[open] .dev-spec-summary::before {
 }
 
 .info-title {
-  color: var(--dark);
+  color: var(--text);
   font-size: 12px;
   font-weight: 800;
 }
@@ -539,7 +694,13 @@ details[open] .dev-spec-summary::before {
    Shown in templatePanel() after clicking "Generate mock".
 --------------------------------------------------------------------------- */
 .doc-preview {
-  background: #fff;
+  --bg-soft: #f7faf9;
+  --border: #d5dbe1;
+  --green: #21875b;
+  --text: var(--paper-text);
+  --text-muted: var(--paper-muted);
+  --wb: #eef7f5;
+  background: var(--paper-bg);
   border: 1px solid var(--border);
   border-top: 4px solid var(--green);
   border-radius: var(--r);
@@ -558,7 +719,7 @@ details[open] .dev-spec-summary::before {
   font-family: "JetBrains Mono", monospace;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 1.5px;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -589,7 +750,7 @@ details[open] .dev-spec-summary::before {
   color: var(--text-muted);
   font-size: 10.5px;
   font-weight: 800;
-  letter-spacing: 1px;
+  letter-spacing: 0;
   margin-bottom: 6px;
   margin-top: 14px;
   text-transform: uppercase;

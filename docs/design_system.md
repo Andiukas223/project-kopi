@@ -147,6 +147,18 @@ Define all of the following on `:root`. Fill actual hex values per project.
 | Flow process nodes | `--wb` bg + `--wb-dark` border |
 | Flow start/end nodes | `--dark` bg, white text, pill shape |
 
+### Dark Mode Principles
+
+Dark mode is a first-class theme, not a separate layout. The same modules, spacing and component structure remain in place; only semantic colour tokens change through `:root[data-theme="dark"]`.
+
+- Use graphite / smoky grey surfaces instead of pure black. This follows Material dark theme guidance and Reddit UI discussions: pure black can feel harsh, while layered dark greys make elevation and grouping easier to read.
+- Keep the UI calm and modular. Main app surfaces use neutral charcoal; brand, success, warning and danger accents are reserved for status, active state and required actions.
+- Do not invert generated documents. Document pages, template paper previews and PDF preview pages stay white with dark print-style text, because they represent printable output.
+- Separate colour roles: `--bg-card` is the panel/card surface, `--on-dark` is text on dark chrome, and `--on-accent` is text/icons on brand or status fills.
+- Muted text must still be readable. Avoid very low-opacity grey for body copy; use `--text-mid` and `--text-muted` only for secondary metadata.
+- Keep accent colours slightly brighter/desaturated in dark mode. This avoids neon effects while keeping status chips, badges and buttons visible.
+- Sources used for the rule of thumb: Material Design dark theme guidance (`https://design.google/library/material-design-dark-theme`) and Reddit web design discussion recommending Material guidance, layered grey surfaces and desaturated/brightened primary colours (`https://www.reddit.com/r/web_design/comments/g147fv/is_there_anything_like_refactoring_ui_for_dark/`).
+
 ---
 
 ## 5. Application Shell

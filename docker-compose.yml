@@ -6,6 +6,7 @@ services:
     volumes:
       - ./document-service/templates:/app/templates:ro
       - ./document-service/generated:/app/generated
+      - ./document-service/storage:/app/storage
     restart: unless-stopped
 
   web:

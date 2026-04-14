@@ -2,29 +2,59 @@
 <office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" office:version="1.2" office:mimetype="application/vnd.oasis.opendocument.text">
   <office:styles>
     <style:style style:name="Standard" style:family="paragraph"><style:text-properties fo:font-size="10pt"/></style:style>
-    <style:style style:name="Title" style:family="paragraph"><style:text-properties fo:font-size="18pt" fo:font-weight="bold"/></style:style>
+    <style:style style:name="SellerLogo" style:family="paragraph"><style:paragraph-properties fo:text-align="end"/><style:text-properties fo:font-size="20pt" fo:font-weight="bold"/></style:style>
+    <style:style style:name="SellerSmall" style:family="paragraph"><style:paragraph-properties fo:text-align="end"/><style:text-properties fo:font-size="8pt"/></style:style>
+    <style:style style:name="Title" style:family="paragraph"><style:paragraph-properties fo:text-align="center"/><style:text-properties fo:font-size="14pt" fo:font-weight="bold"/></style:style>
     <style:style style:name="Section" style:family="paragraph"><style:text-properties fo:font-size="12pt" fo:font-weight="bold"/></style:style>
+    <style:style style:name="Label" style:family="paragraph"><style:text-properties fo:font-size="10pt" fo:font-weight="bold"/></style:style>
   </office:styles>
   <office:body>
     <office:text>
-      <text:p text:style-name="Title">VIVA MEDICAL - DEFEKTINIS AKTAS</text:p>
-      <text:p>Akto Nr.: {d.documentId}</text:p>
-      <text:p>Data: {d.generatedAt}</text:p>
-      <text:p>Klientas: {d.customer}</text:p>
-      <text:p>Adresas: {d.customerAddress}</text:p>
+      <text:p text:style-name="SellerLogo">{d.sellerDisplayName}</text:p>
+      <text:p text:style-name="SellerSmall">{d.sellerName}, {d.sellerAddress}</text:p>
+      <text:p text:style-name="SellerSmall">Tel. {d.sellerPhone}, {d.sellerWebsite}</text:p>
+      <text:p text:style-name="SellerSmall">Imones kodas: {d.sellerCompanyCode}, PVM moketojo kodas: {d.sellerVatCode}</text:p>
+      <text:p text:style-name="Label">UZSAKOVAS: {d.buyerName}</text:p>
+      <text:p>Im. kodas: {d.buyerCompanyCode}</text:p>
+      <text:p>PVM kodas: {d.buyerVatCode}</text:p>
+      <text:p>Darbu atlikimo vieta: {d.workLocation}</text:p>
       <text:p>Kontaktas: {d.contact}</text:p>
-      <text:p>Susijęs darbas: {d.jobId}</text:p>
-      <text:p text:style-name="Section">Įranga</text:p>
+      <text:p text:style-name="Title">DEFEKTINIS AKTAS Nr. {d.documentId}</text:p>
+      <text:p text:style-name="Title">{d.documentDateLt}</text:p>
+      <text:p>{d.contractNumber:ifNEM:showBegin}Sutartis nr. {d.contractNumber}{d.contractNumber:showEnd}</text:p>
+      <text:p>Susijes darbas: {d.jobId}</text:p>
+      <text:p text:style-name="Section">Iranga</text:p>
       <text:p>{d.equipment}</text:p>
       <text:p>Serijos Nr.: {d.serial}</text:p>
-      <text:p text:style-name="Section">Gedimo / defekto aprašymas</text:p>
+      <text:p text:style-name="Section">Gedimo / defekto aprasymas</text:p>
       <text:p>{d.defectDescription}</text:p>
-      <text:p text:style-name="Section">Papildoma informacija</text:p>
-      <text:p>{d.fieldsText}</text:p>
+      <text:p>{d.engineerFindings:ifNEM:showBegin}</text:p>
+      <text:p text:style-name="Section">Inzinieriaus isvados</text:p>
+      <text:p>{d.engineerFindings}</text:p>
+      <text:p>{d.engineerFindings:showEnd}</text:p>
+      <text:p>{d.recommendedCorrection:ifNEM:showBegin}</text:p>
+      <text:p text:style-name="Section">Rekomenduojamas sprendimas</text:p>
+      <text:p>{d.recommendedCorrection}</text:p>
+      <text:p>{d.recommendedCorrection:showEnd}</text:p>
+      <text:p>{d.riskLevel:ifNEM:showBegin}</text:p>
+      <text:p>Rizika: {d.riskLevel}</text:p>
+      <text:p>{d.riskLevel:showEnd}</text:p>
+      <text:p>{d.customerAcknowledgement:ifNEM:showBegin}</text:p>
+      <text:p>Kliento pastaba: {d.customerAcknowledgement}</text:p>
+      <text:p>{d.customerAcknowledgement:showEnd}</text:p>
+      <text:p>{d.defectActVisitsText:ifNEM:showBegin}</text:p>
+      <text:p text:style-name="Section">Actual Visits</text:p>
+      <text:p>{d.defectActVisitsText}</text:p>
+      <text:p>{d.defectActVisitsText:showEnd}</text:p>
+      <text:p>{d.templateSectionsText:ifNEM:showBegin}</text:p>
       <text:p text:style-name="Section">Dokumento tekstas</text:p>
       <text:p>{d.templateSectionsText}</text:p>
+      <text:p>{d.templateSectionsText:showEnd}</text:p>
       <text:p>Atsakingas asmuo: ________________________________</text:p>
       <text:p>Kliento atstovas: ________________________________</text:p>
+      <text:p>Uzsakovas ________________________________    Vykdytojas ________________________________</text:p>
+      <text:p>Vardas, pavarde, pareigos                              Vardas, pavarde, pareigos</text:p>
+      <text:p>Parasas                                                 Parasas</text:p>
     </office:text>
   </office:body>
 </office:document>

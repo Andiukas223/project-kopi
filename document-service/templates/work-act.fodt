@@ -2,31 +2,55 @@
 <office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" office:version="1.2" office:mimetype="application/vnd.oasis.opendocument.text">
   <office:styles>
     <style:style style:name="Standard" style:family="paragraph"><style:text-properties fo:font-size="10pt"/></style:style>
-    <style:style style:name="Title" style:family="paragraph"><style:text-properties fo:font-size="18pt" fo:font-weight="bold"/></style:style>
+    <style:style style:name="SellerLogo" style:family="paragraph"><style:paragraph-properties fo:text-align="end"/><style:text-properties fo:font-size="20pt" fo:font-weight="bold"/></style:style>
+    <style:style style:name="SellerSmall" style:family="paragraph"><style:paragraph-properties fo:text-align="end"/><style:text-properties fo:font-size="8pt"/></style:style>
+    <style:style style:name="Title" style:family="paragraph"><style:paragraph-properties fo:text-align="center"/><style:text-properties fo:font-size="14pt" fo:font-weight="bold"/></style:style>
     <style:style style:name="Section" style:family="paragraph"><style:text-properties fo:font-size="12pt" fo:font-weight="bold"/></style:style>
+    <style:style style:name="Label" style:family="paragraph"><style:text-properties fo:font-size="10pt" fo:font-weight="bold"/></style:style>
+    <style:style style:name="Signature" style:family="paragraph"><style:text-properties fo:font-size="10pt" fo:font-weight="bold"/></style:style>
   </office:styles>
   <office:body>
     <office:text>
-      <text:p text:style-name="Title">VIVA MEDICAL - ATLIKTU DARBU AKTAS</text:p>
-      <text:p>Dokumento Nr.: {d.documentId}</text:p>
-      <text:p>Akto Nr.: {d.workActNumber}</text:p>
-      <text:p>Data: {d.generatedAt}</text:p>
-      <text:p>Klientas: {d.customer}</text:p>
-      <text:p>Adresas: {d.customerAddress}</text:p>
-      <text:p>Kontaktas: {d.contact}</text:p>
-      <text:p>Darbų / case Nr.: {d.jobId}</text:p>
-      <text:p text:style-name="Section">Įranga</text:p>
+      <text:p text:style-name="SellerLogo">{d.sellerDisplayName}</text:p>
+      <text:p text:style-name="SellerSmall">{d.sellerName}, {d.sellerAddress}</text:p>
+      <text:p text:style-name="SellerSmall">Tel. {d.sellerPhone}, {d.sellerWebsite}</text:p>
+      <text:p text:style-name="SellerSmall">Imones kodas: {d.sellerCompanyCode}, PVM moketojo kodas: {d.sellerVatCode}</text:p>
+      <text:p text:style-name="SellerSmall">{d.sellerBankAccount:ifNEM:showBegin}a.s.: {d.sellerBankAccount}, bankas {d.sellerBankName}{d.sellerBankAccount:showEnd}</text:p>
+      <text:p text:style-name="Label">UZSAKOVAS: {d.buyerName}</text:p>
+      <text:p>Im. kodas: {d.buyerCompanyCode}</text:p>
+      <text:p>PVM kodas: {d.buyerVatCode}</text:p>
+      <text:p>Darbu atlikimo vieta: {d.workLocation}</text:p>
+      <text:p text:style-name="Title">ATLIKTU DARBU AKTAS Nr. {d.workActNumber}</text:p>
+      <text:p text:style-name="Title">{d.documentDateLt}</text:p>
+      <text:p>{d.contractNumber:ifNEM:showBegin}Sutartis nr. {d.contractNumber}{d.contractNumber:showEnd}</text:p>
+      <text:p>Darbo / case Nr.: {d.jobId}</text:p>
+      <text:p>{d.equipmentItemsText:ifNEM:showBegin}</text:p>
+      <text:p text:style-name="Section">Prietaiso duomenys</text:p>
       <text:p>{d.equipmentItemsText}</text:p>
-      <text:p text:style-name="Section">Atliktų darbų tekstas</text:p>
+      <text:p>{d.equipmentItemsText:showEnd}</text:p>
+      <text:p>{d.notes:ifNEM:showBegin}</text:p>
+      <text:p text:style-name="Section">Atliktu darbu tekstas</text:p>
       <text:p>{d.notes}</text:p>
-      <text:p text:style-name="Section">Darbų sąrašas</text:p>
+      <text:p>{d.notes:showEnd}</text:p>
+      <text:p>{d.workActRowsText:ifNEM:showBegin}</text:p>
+      <text:p text:style-name="Section">Darbu sarasas</text:p>
       <text:p>{d.workActRowsText}</text:p>
-      <text:p text:style-name="Section">Papildomi laukai</text:p>
-      <text:p>{d.fieldsText}</text:p>
+      <text:p>{d.workActRowsText:showEnd}</text:p>
+      <text:p>{d.reportOptionsText:ifNEM:showBegin}</text:p>
+      <text:p text:style-name="Section">Spausdinimo nustatymai</text:p>
+      <text:p>{d.reportOptionsText}</text:p>
+      <text:p>{d.reportOptionsText:showEnd}</text:p>
+      <text:p>{d.templateSectionsText:ifNEM:showBegin}</text:p>
       <text:p text:style-name="Section">Dokumento tekstas</text:p>
       <text:p>{d.templateSectionsText}</text:p>
-      <text:p>Serviso inžinierius: ________________________________</text:p>
+      <text:p>{d.templateSectionsText:showEnd}</text:p>
+      <text:p>{d.reportOptions.includeSignature:ifNE(false):showBegin}</text:p>
+      <text:p>Serviso inzinierius: ________________________________</text:p>
       <text:p>Kliento atstovas: ________________________________</text:p>
+      <text:p>{d.reportOptions.includeSignature:showEnd}</text:p>
+      <text:p text:style-name="Signature">Uzsakovas ________________________________    Vykdytojas ________________________________</text:p>
+      <text:p>Vardas, pavarde, pareigos                              Vardas, pavarde, pareigos</text:p>
+      <text:p>Parasas                                                 Parasas</text:p>
     </office:text>
   </office:body>
 </office:document>

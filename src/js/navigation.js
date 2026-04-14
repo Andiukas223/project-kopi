@@ -2,10 +2,11 @@ import { qs, qsa } from "./dom.js";
 import { documents, invoices, jobs, partsRequests, roles, vendorReturns } from "./data.js";
 import { saveDemoState } from "./persistence.js";
 import { renderPage, renderRemindersStrip } from "./render.js";
-import { setPage, setRole, state } from "./state.js";
+import { setPage, setRole, setTheme, state } from "./state.js";
 
 export function renderApp() {
   const main = qs("#app-main");
+  applyTheme();
   main.innerHTML = renderPage();
   updateActiveNav();
   updateRoleLabel();
@@ -93,6 +94,13 @@ export function bindNavigation() {
   });
 
   document.addEventListener("click", (event) => {
+    const themeButton = event.target.closest("[data-theme-toggle]");
+    if (themeButton) {
+      setTheme(state.theme === "dark" ? "light" : "dark");
+      renderApp();
+      return;
+    }
+
     const roleButton = event.target.closest("[data-role]");
     if (!roleButton) return;
     setRole(roleButton.dataset.role);
@@ -109,4 +117,16 @@ function updateActiveNav() {
 function updateRoleLabel() {
   const role = roles.find((item) => item.id === state.role);
   qs("#active-role-label").textContent = role ? role.label : "Workspace";
+}
+
+function applyTheme() {
+  const theme = state.theme === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = theme;
+
+  const toggle = qs("[data-theme-toggle]");
+  if (toggle) {
+    const dark = theme === "dark";
+    toggle.textContent = dark ? "Light mode" : "Dark mode";
+    toggle.setAttribute("aria-pressed", String(dark));
+  }
 }

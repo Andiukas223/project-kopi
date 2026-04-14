@@ -38,7 +38,7 @@
 .wiz-head {
   align-items: flex-start;
   background: var(--dark);
-  color: var(--bg-card);
+  color: var(--on-dark);
   display: flex;
   justify-content: space-between;
   padding: 18px 22px;
@@ -66,7 +66,7 @@
 }
 
 .wiz-close:hover {
-  color: var(--bg-card);
+  color: var(--on-dark);
 }
 
 .wiz-body {
@@ -105,13 +105,13 @@
 .wiz-step-wrap.done .wiz-dot {
   background: var(--green);
   border-color: var(--green);
-  color: var(--bg-card);
+  color: var(--on-accent);
 }
 
 .wiz-step-wrap.active .wiz-dot {
   background: var(--brand);
   border-color: var(--brand);
-  color: var(--bg-card);
+  color: var(--on-accent);
 }
 
 .wiz-step-label {
@@ -144,7 +144,7 @@
 }
 
 .wiz-step-title {
-  color: var(--dark);
+  color: var(--text);
   font-size: 15px;
   font-weight: 800;
   margin-bottom: 12px;
@@ -174,7 +174,7 @@
   color: var(--text-muted);
   font-size: 10.5px;
   font-weight: 800;
-  letter-spacing: .8px;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -246,7 +246,7 @@
 .duration-card {
   background: var(--dark);
   border-radius: var(--r-lg);
-  color: var(--bg-card);
+  color: var(--on-dark);
   padding: 16px 20px;
 }
 
@@ -254,7 +254,7 @@
   color: rgba(255, 255, 255, .42);
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 1.2px;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -262,7 +262,7 @@
   background: rgba(255, 255, 255, .08);
   border: 1px solid rgba(255, 255, 255, .18);
   border-radius: var(--r);
-  color: var(--bg-card);
+  color: var(--on-dark);
   font-family: "JetBrains Mono", monospace;
   font-size: 24px;
   font-weight: 700;
@@ -304,7 +304,7 @@
   align-items: center;
   border: 2px solid var(--border-mid);
   border-radius: 3px;
-  color: var(--bg-card);
+  color: var(--on-accent);
   display: inline-flex;
   flex-shrink: 0;
   font-size: 12px;
