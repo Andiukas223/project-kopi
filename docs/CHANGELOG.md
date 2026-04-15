@@ -15,6 +15,7 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 - Pataisytas Documents search/filter wrap: paieskos, statusu, klientu ir datu laukai wrap'ina eilutemis vietoje puslapio horizontalaus overflow; lenteliu horizontalus scroll lieka tik lenteles konteineryje.
 - `Issue sent to admin.` patvirtinimas po report issue issiuntimo dabar pats pranyksta su fade animacija po 2 sekundziu.
 - Is Command Center admin view isimtas perteklinis `Document pipeline` blokas; pipeline lieka Documents ir Reports kontekstuose.
+- Is Sales view isimtas perteklinis quotation stat card blokas, kad puslapis prasidetu nuo quotation darbo lenteles ir detales.
 
 ### Documentation
 

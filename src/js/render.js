@@ -2565,21 +2565,11 @@ function salesHandoffTab(qte) {
 
 function salesPage() {
   const qte          = selectedQuotation();
-  const awaitingCount = quotations.filter((q) => q.status === "Awaiting approval").length;
-  const approvedCount = quotations.filter((q) => q.status === "Approved").length;
-  const handedCount   = quotations.filter((q) => q.status === "Handed off").length;
   const salesDocs = documents.filter((doc) => doc.owner === "Sales");
 
   return `
     ${pageHeader("sales")}
     <div class="page-content">
-      <div class="stat-grid">
-        ${statCard("Total quotations",    quotations.length, "In system",                 "info")}
-        ${statCard("Awaiting approval",   awaitingCount,     "Customer response needed",  awaitingCount > 0 ? "warn" : "")}
-        ${statCard("Approved",            approvedCount,     "Ready to hand off",         approvedCount > 0 ? "ok"   : "")}
-        ${statCard("Handed off",          handedCount,       "Transferred to Service",    "")}
-      </div>
-
       <section class="split-layout">
         <div class="panel split-left">
           <div class="section-heading">
