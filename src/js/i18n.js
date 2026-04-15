@@ -2,7 +2,7 @@ import { state } from "./state.js";
 
 const translations = {
   en: {
-    "app.serviceIs": "Service IS",
+    "app.serviceIs": "Informational system",
     "aria.currentUser": "Current user",
     "aria.mainNavigation": "Main navigation",
     "theme.dark": "Dark mode",
@@ -11,10 +11,12 @@ const translations = {
     "nav.workspace": "Workspace",
     "nav.command": "Command Center",
     "nav.service": "Service",
+    "nav.workActs": "Work Acts",
     "nav.sales": "Sales",
     "nav.contracts": "Contracts",
     "nav.documents": "Documents",
-    "nav.templateGeneration": "Template Generation",
+    "nav.templates": "Templates",
+    "nav.templateGeneration": "Templates",
     "nav.finance": "Finance",
     "nav.registry": "Registry",
     "nav.customers": "Customers",
@@ -37,7 +39,7 @@ const translations = {
     "role.default": "Workspace"
   },
   lt: {
-    "app.serviceIs": "Serviso IS",
+    "app.serviceIs": "Informacine sistema",
     "aria.currentUser": "Aktyvus naudotojas",
     "aria.mainNavigation": "Pagrindine navigacija",
     "theme.dark": "Tamsus rezimas",
@@ -46,9 +48,11 @@ const translations = {
     "nav.workspace": "Darbo vieta",
     "nav.command": "Valdymo centras",
     "nav.service": "Servisas",
+    "nav.workActs": "Darbo aktai",
     "nav.sales": "Pardavimai",
     "nav.contracts": "Sutartys",
     "nav.documents": "Dokumentai",
+    "nav.templates": "Sablonai",
     "nav.templateGeneration": "Sablonai",
     "nav.finance": "Finansai",
     "nav.registry": "Registrai",

@@ -12,10 +12,17 @@ const statusByStage = {
   Rejected: "Rejected"
 };
 
+const AUTO_GENERATION_STALE_MS = 2 * 60 * 1000;
+const queuedAutoGenerationIds = new Set();
+
 let renderAppCallback = null;
 
 export function bindDocumentPipeline(renderApp) {
   renderAppCallback = renderApp;
+  if (normalizeDocumentWorkflowStates({ resetAutoGeneration: true })) {
+    saveDemoState();
+    window.setTimeout(renderAppCallback, 0);
+  }
   window.setTimeout(autoGenerateMissingDocumentFiles, 250);
 
   document.addEventListener("click", (event) => {
@@ -38,7 +45,7 @@ export function bindDocumentPipeline(renderApp) {
     }
 
     const row = event.target.closest("[data-doc-row]");
-    if (row && !event.target.closest("button")) {
+    if (row && !event.target.closest("button, a, input, select, textarea") && !hasActiveTextSelection()) {
       selectDocument(row.dataset.docRow);
       return;
     }
@@ -251,6 +258,33 @@ export function bindDocumentPipeline(renderApp) {
     }
   });
 
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || !isDocumentSearchEnterTarget(event.target)) return;
+    event.preventDefault();
+    applyDocumentSearch();
+  });
+
+  document.addEventListener("dragover", (event) => {
+    const dropzone = event.target.closest("[data-doc-upload-dropzone]");
+    if (!dropzone) return;
+    event.preventDefault();
+    dropzone.classList.add("dragging");
+  });
+
+  document.addEventListener("dragleave", (event) => {
+    const dropzone = event.target.closest("[data-doc-upload-dropzone]");
+    if (!dropzone || (event.relatedTarget instanceof Node && dropzone.contains(event.relatedTarget))) return;
+    dropzone.classList.remove("dragging");
+  });
+
+  document.addEventListener("drop", (event) => {
+    const dropzone = event.target.closest("[data-doc-upload-dropzone]");
+    if (!dropzone) return;
+    event.preventDefault();
+    dropzone.classList.remove("dragging");
+    setDocumentUploadFile(event.dataTransfer?.files?.[0] || null);
+  });
+
   document.addEventListener("change", (event) => {
     if (event.target.matches("[data-template-select]")) {
       state.selectedTemplateId = event.target.value;
@@ -271,12 +305,48 @@ export function bindDocumentPipeline(renderApp) {
       return;
     }
 
+    if (event.target.matches("[data-doc-date-picker]")) {
+      state.documentDateQuery = event.target.value || "";
+      const textInput = document.getElementById("doc-date-query");
+      if (textInput) textInput.value = state.documentDateQuery;
+      applyDocumentSearch();
+      return;
+    }
+
+    if (event.target.matches("#doc-upload-file")) {
+      updateDocumentUploadFileName(event.target.files?.[0] || null);
+      return;
+    }
+
     if (event.target.matches("[data-template-fodt-upload]")) {
       uploadFodtTemplate(event.target.dataset.templateFodtUpload, event.target.files?.[0]);
       event.target.value = "";
       return;
     }
   });
+}
+
+function isDocumentSearchEnterTarget(target) {
+  return target instanceof HTMLElement && (
+    target.matches("#doc-search-query") ||
+    target.matches("#doc-date-query") ||
+    target.matches("[data-doc-date-picker]")
+  );
+}
+
+function setDocumentUploadFile(file) {
+  const input = document.getElementById("doc-upload-file");
+  if (!input || !file) return;
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  input.files = transfer.files;
+  updateDocumentUploadFileName(file);
+}
+
+function updateDocumentUploadFileName(file) {
+  const label = document.querySelector("[data-doc-upload-file-name]");
+  if (!label) return;
+  label.textContent = file ? file.name : "No file selected";
 }
 
 function selectDocument(id) {
@@ -325,7 +395,7 @@ function routeToWorkAct(doc) {
     item.generatedDocumentId === doc.id ||
     item.jobId === doc.jobId
   );
-  state.page = "templategen";
+  state.page = "workacts";
   state.templateGenTab = "work-acts";
   state.selectedTemplateId = "tpl-service-act";
   state.selectedWorkActId = act?.id || null;
@@ -432,7 +502,8 @@ async function uploadDocument() {
   const customerInput = getUploadValue("doc-upload-customer");
   const signedBy = getUploadValue("doc-upload-signed-by");
   const description = getUploadValue("doc-upload-description");
-  const due = getUploadValue("doc-upload-due") || dateAfterDays(7);
+  const created = getUploadValue("doc-upload-created") || new Date().toISOString().slice(0, 10);
+  const due = dateAfterDays(7);
   const file = document.getElementById("doc-upload-file")?.files?.[0] || null;
   const job = jobs.find((item) => item.id === jobId);
   const customer = customerInput || job?.customer || "";
@@ -471,6 +542,8 @@ async function uploadDocument() {
     customer,
     owner: ownerForDocumentType(type),
     ...creatorMeta(),
+    created,
+    createdAt: new Date(`${created}T00:00:00`).toISOString(),
     status: "Draft",
     due,
     pipelineStep: "Draft",
@@ -489,6 +562,8 @@ async function uploadDocument() {
       customer,
       owner: currentUserName(),
       ...creatorMeta(),
+      created,
+      createdAt: new Date(`${created}T00:00:00`).toISOString(),
       amount: 0,
       currency: "EUR",
       invoiceNo: file.name.replace(/\.[^.]+$/, "") || null,
@@ -754,8 +829,9 @@ function applyDocumentSearch() {
   state.documentSearchQuery = getControlValue("doc-search-query");
   state.documentTypeFilter = getControlValue("doc-type-filter") || "All";
   state.documentCustomerFilter = getControlValue("doc-customer-filter") || "All";
-  state.documentDateFrom = getControlValue("doc-date-from");
-  state.documentDateTo = getControlValue("doc-date-to");
+  state.documentDateQuery = getControlValue("doc-date-query");
+  state.documentDateFrom = "";
+  state.documentDateTo = "";
   renderAppCallback();
 }
 
@@ -763,6 +839,7 @@ function clearDocumentSearch() {
   state.documentSearchQuery = "";
   state.documentTypeFilter = "All";
   state.documentCustomerFilter = "All";
+  state.documentDateQuery = "";
   state.documentDateFrom = "";
   state.documentDateTo = "";
   renderAppCallback();
@@ -1055,19 +1132,30 @@ function upsertGeneratedFileVersion(existingVersions, generatedFile) {
   ].slice(0, 12);
 }
 
-function syncGeneratedFileToSource(doc, generatedFile) {
+function syncGeneratedFileToSource(doc, generatedFile, options = {}) {
   const source = generationSourceForDoc(doc);
   const sourceRecord = sourceRecordForDocument(doc);
-  if (!sourceRecord) return;
+  if (!sourceRecord) return false;
 
-  sourceRecord.generatedDocumentId = doc.id;
-  sourceRecord.generatedFile = generatedFile;
-  sourceRecord.generatedFileVersions = upsertGeneratedFileVersion(sourceRecord.generatedFileVersions, generatedFile);
-  sourceRecord.generatedFileId = generatedFile.fileId || generatedFile.id || "";
-  sourceRecord.generatedFileVersion = generatedFile.version || null;
-  sourceRecord.generatedAt = generatedFile.generatedAt;
-  sourceRecord.status = "Generated";
-  sourceRecord.updatedAt = new Date().toISOString();
+  let changed = false;
+  changed = assignIfChanged(sourceRecord, "generatedDocumentId", doc.id) || changed;
+  if (JSON.stringify(sourceRecord.generatedFile || null) !== JSON.stringify(generatedFile || null)) {
+    sourceRecord.generatedFile = generatedFile;
+    changed = true;
+  }
+  const nextVersions = upsertGeneratedFileVersion(sourceRecord.generatedFileVersions, generatedFile);
+  if (JSON.stringify(sourceRecord.generatedFileVersions || []) !== JSON.stringify(nextVersions)) {
+    sourceRecord.generatedFileVersions = nextVersions;
+    changed = true;
+  }
+  changed = assignIfChanged(sourceRecord, "generatedFileId", generatedFile.fileId || generatedFile.id || "") || changed;
+  changed = assignIfChanged(sourceRecord, "generatedFileVersion", generatedFile.version || null) || changed;
+  changed = assignIfChanged(sourceRecord, "generatedAt", generatedFile.generatedAt) || changed;
+  changed = assignIfChanged(sourceRecord, "status", "Generated") || changed;
+  if (changed && options.touch !== false) {
+    sourceRecord.updatedAt = new Date().toISOString();
+  }
+  return changed;
 }
 
 function sourceRecordForDocument(doc) {
@@ -1085,20 +1173,142 @@ function documentFileAuditNote(file, fallback = "") {
   return [file.versionLabel, file.fileName].filter(Boolean).join(" / ");
 }
 
+function assignIfChanged(target, key, value) {
+  if (!target || target[key] === value) return false;
+  target[key] = value;
+  return true;
+}
+
+function fileRecordHasFile(file) {
+  return Boolean(file?.downloadUrl || file?.previewUrl || file?.fileName || file?.id || file?.fileId);
+}
+
+function fileRecordIsUsable(file) {
+  return Boolean(file?.downloadUrl || file?.previewUrl);
+}
+
+function documentHasGeneratedFile(doc) {
+  return fileRecordIsUsable(doc?.generatedFile) && doc.generatedFile.source !== "mock";
+}
+
+function documentHasUploadedFile(doc) {
+  return fileRecordIsUsable(doc?.uploadedFile);
+}
+
+function documentHasSignedFile(doc) {
+  return Boolean(doc?.signedUploadedAt || fileRecordHasFile(doc?.signedFile));
+}
+
+function hasActiveTextSelection() {
+  return Boolean(window.getSelection?.().toString().trim());
+}
+
+function documentIsWorkflowDone(doc) {
+  return Boolean(doc?.finishedAt || doc?.caseClosed || doc?.status === "Done");
+}
+
+function autoGenerationIsStale(doc, now = Date.now()) {
+  const queuedAt = Date.parse(doc?.autoGenerationQueuedAt || "");
+  return !queuedAt || now - queuedAt > AUTO_GENERATION_STALE_MS;
+}
+
+function normalizeDocumentWorkflowStates(options = {}) {
+  return documents.reduce((changed, doc) => normalizeDocumentWorkflowState(doc, options) || changed, false);
+}
+
+function normalizeDocumentWorkflowState(doc, options = {}) {
+  if (!doc) return false;
+
+  const now = options.now || Date.now();
+  const hasGeneratedFile = documentHasGeneratedFile(doc);
+  const hasSignedFile = documentHasSignedFile(doc);
+  const hasUploadedFile = documentHasUploadedFile(doc);
+  const isDone = documentIsWorkflowDone(doc);
+  const isRejected = doc.pipelineStep === "Rejected" || doc.status === "Rejected";
+  let changed = false;
+
+  if (
+    options.resetAutoGeneration &&
+    doc.deliveryStatus === "Auto generating" &&
+    !hasGeneratedFile &&
+    !hasSignedFile
+  ) {
+    changed = assignIfChanged(doc, "deliveryStatus", "Generation pending") || changed;
+    if (doc.autoGenerationQueuedAt) {
+      delete doc.autoGenerationQueuedAt;
+      changed = true;
+    }
+  } else if (
+    doc.deliveryStatus === "Auto generating" &&
+    !hasGeneratedFile &&
+    !hasSignedFile &&
+    autoGenerationIsStale(doc, now)
+  ) {
+    changed = assignIfChanged(doc, "deliveryStatus", "Generation pending") || changed;
+    delete doc.autoGenerationQueuedAt;
+    changed = true;
+  }
+
+  if (isDone) {
+    changed = assignIfChanged(doc, "pipelineStep", "Approved") || changed;
+    changed = assignIfChanged(doc, "status", "Done") || changed;
+    if (!doc.deliveryStatus) {
+      changed = assignIfChanged(doc, "deliveryStatus", "Case/ticket closed") || changed;
+    }
+    return changed;
+  }
+
+  if (isRejected) {
+    changed = assignIfChanged(doc, "pipelineStep", "Rejected") || changed;
+    changed = assignIfChanged(doc, "status", statusByStage.Rejected) || changed;
+    return changed;
+  }
+
+  if (hasSignedFile) {
+    changed = assignIfChanged(doc, "pipelineStep", "Signature") || changed;
+    changed = assignIfChanged(doc, "status", statusByStage.Signature) || changed;
+    changed = assignIfChanged(doc, "deliveryStatus", "Signed copy uploaded") || changed;
+    return changed;
+  }
+
+  if (hasGeneratedFile) {
+    changed = assignIfChanged(doc, "pipelineStep", "Signature") || changed;
+    changed = assignIfChanged(doc, "status", statusByStage.Signature) || changed;
+    if (!doc.deliveryStatus || ["Auto generating", "Generation pending", "Generation failed", "Generated", "Not generated"].includes(doc.deliveryStatus)) {
+      changed = assignIfChanged(doc, "deliveryStatus", "Needs signed upload") || changed;
+    }
+    changed = syncGeneratedFileToSource(doc, doc.generatedFile, { touch: false }) || changed;
+    return changed;
+  }
+
+  if (hasUploadedFile && !doc.deliveryStatus) {
+    changed = assignIfChanged(doc, "deliveryStatus", "Uploaded") || changed;
+  }
+
+  if (doc.pipelineStep && statusByStage[doc.pipelineStep]) {
+    changed = assignIfChanged(doc, "status", statusByStage[doc.pipelineStep]) || changed;
+  }
+
+  return changed;
+}
+
 export function queueAutoGenerateDocument(id, options = {}) {
   const doc = documents.find((item) => item.id === id);
-  if (doc && !doc.generatedFile?.downloadUrl && !doc.uploadedFile?.downloadUrl) {
-    doc.deliveryStatus = "Auto generating";
-    doc.autoGenerationQueuedAt = new Date().toISOString();
-    saveDemoState();
-    if (renderAppCallback) renderAppCallback();
-  }
+  if (!doc || queuedAutoGenerationIds.has(id) || !shouldAutoGenerateDocument(doc)) return;
+
+  queuedAutoGenerationIds.add(id);
+  doc.deliveryStatus = "Auto generating";
+  doc.autoGenerationQueuedAt = new Date().toISOString();
+  saveDemoState();
+  if (renderAppCallback) renderAppCallback();
 
   window.setTimeout(() => {
     void generateServiceDocument(id, {
       format: options.format || "pdf",
       silent: true,
       reason: options.reason || "Auto generated"
+    }).finally(() => {
+      queuedAutoGenerationIds.delete(id);
     });
   }, options.delayMs || 0);
 }
@@ -1116,9 +1326,15 @@ function autoGenerateMissingDocumentFiles() {
 
 function shouldAutoGenerateDocument(doc) {
   if (!doc) return false;
-  if (doc.generatedFile?.downloadUrl || doc.uploadedFile?.downloadUrl || doc.signedFile?.downloadUrl) return false;
-  if (doc.autoGenerationQueuedAt && doc.deliveryStatus === "Auto generating") return false;
-  if (doc.status === "Done" || doc.pipelineStep === "Rejected") return false;
+  if (documentHasGeneratedFile(doc) || documentHasUploadedFile(doc) || documentHasSignedFile(doc)) return false;
+  if (doc.status === "Done" || doc.pipelineStep === "Rejected" || doc.status === "Rejected") return false;
+  if (
+    doc.autoGenerationQueuedAt &&
+    doc.deliveryStatus === "Auto generating" &&
+    !autoGenerationIsStale(doc)
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -1166,6 +1382,7 @@ async function generateServiceDocument(id, options = {}) {
     doc.pipelineStep = "Signature";
     doc.status = "Signature";
     doc.deliveryStatus = "Needs signed upload";
+    delete doc.autoGenerationQueuedAt;
     syncGeneratedFileToSource(doc, generatedFile);
     addDocumentDeliveryAudit(doc, options.reason || "Generated", `${outputFormat.toUpperCase()} file generated: ${documentFileAuditNote(generatedFile, generatedFile.fileName)}`, generatedFile);
   } catch (error) {
@@ -1178,6 +1395,7 @@ async function generateServiceDocument(id, options = {}) {
       serviceError: error.message || "Document service unavailable."
     };
     doc.deliveryStatus = "Generation failed";
+    delete doc.autoGenerationQueuedAt;
     addDocumentDeliveryAudit(doc, "Generation failed", state.generatedDocPreview.serviceError);
   }
 
@@ -1188,7 +1406,7 @@ async function generateServiceDocument(id, options = {}) {
 function openDocumentPrintPreview(id) {
   const doc = documents.find((item) => item.id === id);
   if (!doc) return;
-  const generatedFile = doc.generatedFile || null;
+  const generatedFile = documentHasGeneratedFile(doc) ? doc.generatedFile : null;
 
   state.selectedDocumentId = doc.id;
   state.printPreviewOpen = true;
@@ -1229,7 +1447,7 @@ function zoomDocumentPrintPreview(direction) {
 function handleDocumentDeliveryAction(action) {
   const doc = documents.find((item) => item.id === state.printPreviewDocumentId);
   if (!doc) return;
-  const generatedFile = doc.generatedFile || null;
+  const generatedFile = documentHasGeneratedFile(doc) ? doc.generatedFile : null;
 
   if (action === "download") {
     doc.deliveryStatus = "Downloaded";
@@ -1266,7 +1484,7 @@ function handleDocumentDeliveryAction(action) {
 function queueDocumentEmail(id) {
   const doc = documents.find((item) => item.id === id);
   if (!doc) return;
-  const generatedFile = doc.generatedFile || null;
+  const generatedFile = documentHasGeneratedFile(doc) ? doc.generatedFile : null;
 
   const to = getControlValue("doc-preview-email-to");
   const subject = getControlValue("doc-preview-email-subject");

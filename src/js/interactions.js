@@ -19,12 +19,41 @@ export function bindInteractions(renderApp) {
   document.addEventListener("click", handleClick);
   document.addEventListener("change", handleChange);
   document.addEventListener("input", handleInput);
+  document.addEventListener("focusin", handleFocusIn);
+}
+
+function normalizedTemplateConfigTab(tabId) {
+  return ["work-acts", "defect-acts", "commercial-offers"].includes(tabId) ? tabId : "work-acts";
 }
 
 // ---------------------------------------------------------------------------
 // Central click dispatcher
 // ---------------------------------------------------------------------------
 function handleClick(event) {
+  if (!event.target.closest("[data-wlt-combobox]")) {
+    closeWltComboboxes();
+  }
+
+  const wltComboboxToggle = event.target.closest("[data-wlt-combobox-toggle]");
+  if (wltComboboxToggle) {
+    const combo = wltComboboxToggle.closest("[data-wlt-combobox]");
+    toggleWltCombobox(combo);
+    return;
+  }
+
+  const wltComboboxOption = event.target.closest("[data-wlt-combobox-option]");
+  if (wltComboboxOption) {
+    selectWltComboboxOption(wltComboboxOption);
+    return;
+  }
+
+  const wltComboboxSearch = event.target.closest("[data-wlt-combobox-search]");
+  if (wltComboboxSearch) {
+    openWltCombobox(wltComboboxSearch.closest("[data-wlt-combobox]"));
+    window.setTimeout(() => wltComboboxSearch.select(), 0);
+    return;
+  }
+
   // Admin — select user for permission edit
   const adminUser = event.target.closest("[data-admin-user]");
   if (adminUser) {
@@ -92,18 +121,10 @@ function handleClick(event) {
   // Equipment — copy URL to clipboard
   const templateGenTab = event.target.closest("[data-template-gen-tab]");
   if (templateGenTab) {
-    state.templateGenTab = templateGenTab.dataset.templateGenTab;
-    renderAppCallback();
-    return;
-  }
-
-  const outputTemplateRoute = event.target.closest("[data-output-template-route]");
-  if (outputTemplateRoute) {
-    state.selectedTemplateId = outputTemplateRoute.dataset.outputTemplateRoute;
-    state.templateGenTab = "output-templates";
-    state.generationStatus = "Ready";
-    state.generatedDocPreview = null;
-    state.templateEditorError = "";
+    state.templateGenTab = normalizedTemplateConfigTab(templateGenTab.dataset.templateGenTab);
+    if (state.templateGenTab === "work-acts") {
+      state.page = "workacts";
+    }
     renderAppCallback();
     return;
   }
@@ -135,6 +156,7 @@ function handleClick(event) {
   if (wltClearFilters) {
     state.wltSearchQuery = "";
     state.wltStatusFilter = "all";
+    state.wltServiceTypeFilter = "all";
     state.wltEntryPersonFilter = "all";
     renderAppCallback();
     return;
@@ -151,16 +173,15 @@ function handleClick(event) {
     state.selectedWltId = wltSelect.dataset.wltSelect;
     state.wltEditMode = false;
     state.wltError = "";
+    state.wltCollaboraStatus = "";
+    state.wltCollaboraError = "";
     renderAppCallback();
     return;
   }
 
   const wltEditOpen = event.target.closest("[data-wlt-edit-open]");
   if (wltEditOpen) {
-    state.selectedWltId = wltEditOpen.dataset.wltEditOpen;
-    state.wltEditMode = true;
-    state.wltError = "";
-    renderAppCallback();
+    openWltAdvancedEditor(wltEditOpen.dataset.wltEditOpen);
     return;
   }
 
@@ -168,6 +189,8 @@ function handleClick(event) {
   if (wltEditCancel) {
     state.wltEditMode = false;
     state.wltError = "";
+    state.wltCollaboraStatus = "";
+    state.wltCollaboraError = "";
     renderAppCallback();
     return;
   }
@@ -175,6 +198,12 @@ function handleClick(event) {
   const wltEditSave = event.target.closest("[data-wlt-edit-save]");
   if (wltEditSave) {
     saveWltEdits(wltEditSave.dataset.wltEditSave);
+    return;
+  }
+
+  const wltDelete = event.target.closest("[data-wlt-delete]");
+  if (wltDelete) {
+    deleteWlt(wltDelete.dataset.wltDelete);
     return;
   }
 
@@ -190,16 +219,10 @@ function handleClick(event) {
     return;
   }
 
-  const wltAddRow = event.target.closest("[data-wlt-add-row]");
-  if (wltAddRow) {
-    addWltRow(wltAddRow.dataset.wltAddRow);
-    return;
-  }
-
-  const wltRemoveRow = event.target.closest("[data-wlt-remove-row]");
-  if (wltRemoveRow) {
-    const [tplId, indexStr] = wltRemoveRow.dataset.wltRemoveRow.split(":");
-    removeWltRow(tplId, parseInt(indexStr, 10));
+  const wltStartWorkAct = event.target.closest("[data-wlt-start-work-act]");
+  if (wltStartWorkAct) {
+    const [tplId, jobId] = wltStartWorkAct.dataset.wltStartWorkAct.split(":");
+    startWorkActFromTemplate(tplId, jobId);
     return;
   }
 
@@ -613,6 +636,13 @@ function handleClick(event) {
   }
 }
 
+function handleFocusIn(event) {
+  if (!event.target.matches("[data-wlt-combobox-search]")) return;
+  const combo = event.target.closest("[data-wlt-combobox]");
+  openWltCombobox(combo);
+  window.setTimeout(() => event.target.select(), 0);
+}
+
 // ---------------------------------------------------------------------------
 // Central change dispatcher
 // ---------------------------------------------------------------------------
@@ -712,9 +742,30 @@ function handleChange(event) {
     return;
   }
 
+  if (event.target.matches("[data-wlt-service-type-filter]")) {
+    state.wltServiceTypeFilter = event.target.value;
+    renderAppCallback();
+    return;
+  }
+
   if (event.target.matches("[data-wlt-entry-person-filter]")) {
     state.wltEntryPersonFilter = event.target.value;
     renderAppCallback();
+    return;
+  }
+
+  if (event.target.matches("[data-wlt-template-select]")) {
+    state.selectedWltId = event.target.value;
+    state.wltEditMode = false;
+    state.wltError = "";
+    state.wltCollaboraStatus = "";
+    state.wltCollaboraError = "";
+    renderAppCallback();
+    return;
+  }
+
+  if (event.target.matches("[data-wlt-edit-equipment], [data-wlt-edit-hospital], [data-wlt-edit-work-equipment], [data-wlt-new-equipment], [data-wlt-new-hospital], [data-wlt-new-work-equipment]")) {
+    updateWltPickerSummary(event.target);
     return;
   }
 
@@ -818,6 +869,11 @@ function handleInput(event) {
     return;
   }
 
+  if (event.target.matches("[data-wlt-combobox-search], [data-wlt-picker-search]")) {
+    filterWltPicker(event.target);
+    return;
+  }
+
   if (event.target.matches("[data-work-act-row-comment]")) {
     const [actId, rowId] = event.target.dataset.workActRowComment.split(":");
     updateWorkActRow(actId, rowId, { comments: event.target.value }, false);
@@ -873,27 +929,153 @@ function handleInput(event) {
     return;
   }
 
-  if (event.target.matches("[data-wlt-row-text]")) {
-    const [tplId, indexStr] = event.target.dataset.wltRowText.split(":");
-    const tpl = workListTemplates.find((t) => t.id === tplId);
-    if (tpl) {
-      tpl.workRows[parseInt(indexStr, 10)] = event.target.value;
-      saveDemoState();
-    }
-  }
-
   if (event.target.matches("[data-wlt-rich-editor]")) {
-    storeWltRichHtml(event.target.dataset.wltRichEditor, event.target.innerHTML);
     return;
   }
 
   if (event.target.matches("[data-wlt-editor-note]")) {
-    const tpl = workListTemplates.find((t) => t.id === event.target.dataset.wltEditorNote);
-    if (tpl) {
-      tpl.editorNote = event.target.value;
-      saveDemoState();
-    }
+    return;
   }
+}
+
+function filterWltPicker(input) {
+  const combo = input.closest("[data-wlt-combobox]");
+  if (!combo) return;
+  if (!combo.classList.contains("is-open")) {
+    openWltCombobox(combo, { preserveInput: true, skipFilter: true });
+  }
+  filterWltComboboxOptions(input);
+}
+
+function filterWltComboboxOptions(input) {
+  const combo = input.closest("[data-wlt-combobox]");
+  if (!combo) return;
+  const query = input.value.trim().toLowerCase();
+  const selectedText = (input.dataset.selectedText || "").toLowerCase();
+  const activeQuery = query === selectedText ? "" : query;
+  const options = Array.from(combo.querySelectorAll("[data-wlt-combobox-option]"));
+  let visibleCount = 0;
+  options.forEach((option) => {
+    const text = option.dataset.search || option.innerText.toLowerCase();
+    const visible = !activeQuery || text.includes(activeQuery);
+    option.hidden = !visible;
+    if (visible) visibleCount += 1;
+  });
+  const empty = combo.querySelector("[data-wlt-combobox-empty], [data-wlt-picker-empty]");
+  if (empty) empty.hidden = visibleCount > 0;
+}
+
+function toggleWltCombobox(combo) {
+  if (!combo) return;
+  if (combo.classList.contains("is-open")) {
+    closeWltCombobox(combo);
+  } else {
+    openWltCombobox(combo);
+  }
+}
+
+function openWltCombobox(combo, options = {}) {
+  if (!combo) return;
+  closeWltComboboxes(combo);
+  combo.classList.add("is-open");
+  const input = combo.querySelector("[data-wlt-combobox-search]");
+  if (input) {
+    input.setAttribute("aria-expanded", "true");
+    if (!options.preserveInput && input.value === input.dataset.selectedText) {
+      input.value = "";
+    }
+    if (!options.skipFilter) filterWltComboboxOptions(input);
+  }
+}
+
+function closeWltCombobox(combo) {
+  if (!combo) return;
+  combo.classList.remove("is-open");
+  const input = combo.querySelector("[data-wlt-combobox-search]");
+  if (input) {
+    input.setAttribute("aria-expanded", "false");
+    input.value = input.dataset.selectedText || "";
+  }
+  combo.querySelectorAll("[data-wlt-combobox-option]").forEach((option) => {
+    option.hidden = false;
+  });
+  const empty = combo.querySelector("[data-wlt-combobox-empty]");
+  if (empty) empty.hidden = true;
+}
+
+function closeWltComboboxes(except = null) {
+  document.querySelectorAll("[data-wlt-combobox].is-open").forEach((combo) => {
+    if (combo !== except) closeWltCombobox(combo);
+  });
+}
+
+function selectWltComboboxOption(option) {
+  const combo = option.closest("[data-wlt-combobox]");
+  if (!combo) return;
+  const value = option.dataset.value || "";
+  const label = option.dataset.label || value;
+  const dataAttr = combo.dataset.wltComboboxDataAttr;
+  const valuesContainer = combo.querySelector("[data-wlt-combobox-values]");
+  if (!value || !dataAttr || !valuesContainer) return;
+
+  const multiple = combo.dataset.wltComboboxMultiple !== "false";
+  const existing = Array.from(valuesContainer.querySelectorAll("[data-wlt-combobox-value]"));
+  const existingMatch = existing.find((input) => input.value === value);
+
+  if (multiple) {
+    if (existingMatch) {
+      existingMatch.remove();
+    } else {
+      valuesContainer.appendChild(createWltComboboxHiddenInput(dataAttr, value, label));
+    }
+  } else {
+    valuesContainer.innerHTML = "";
+    valuesContainer.appendChild(createWltComboboxHiddenInput(dataAttr, value, label));
+  }
+
+  refreshWltCombobox(combo);
+  closeWltCombobox(combo);
+}
+
+function createWltComboboxHiddenInput(dataAttr, value, label) {
+  const input = document.createElement("input");
+  input.type = "hidden";
+  input.value = value;
+  input.dataset.wltComboboxValue = "true";
+  input.dataset.wltLabel = label;
+  input.setAttribute(`data-${dataAttr}`, "");
+  return input;
+}
+
+function refreshWltCombobox(combo) {
+  const selectedInputs = Array.from(combo.querySelectorAll("[data-wlt-combobox-value]"));
+  const selectedValues = new Set(selectedInputs.map((input) => input.value));
+  const labels = selectedInputs.map((input) => input.dataset.wltLabel || input.value);
+  const selectedText = labels.length === 1
+    ? labels[0]
+    : labels.length
+      ? `${labels.length} selected: ${labels.slice(0, 2).join(", ")}${labels.length > 2 ? ", ..." : ""}`
+      : "";
+  const summary = combo.querySelector("[data-wlt-combobox-summary]");
+  if (summary) summary.textContent = selectedText || "No specific link";
+  const input = combo.querySelector("[data-wlt-combobox-search]");
+  if (input) {
+    input.dataset.selectedText = selectedText;
+    input.value = selectedText;
+  }
+  combo.querySelectorAll("[data-wlt-combobox-option]").forEach((option) => {
+    const selected = selectedValues.has(option.dataset.value);
+    option.classList.toggle("is-selected", selected);
+    option.setAttribute("aria-selected", selected ? "true" : "false");
+    option.hidden = false;
+  });
+  const empty = combo.querySelector("[data-wlt-combobox-empty]");
+  if (empty) empty.hidden = true;
+}
+
+function updateWltPickerSummary(input) {
+  const combo = input.closest("[data-wlt-combobox]");
+  if (combo) refreshWltCombobox(combo);
 }
 
 function createAdminUser() {
@@ -1013,22 +1195,25 @@ function submitSupportCase(eqId) {
 // Work Act draft helpers
 // ---------------------------------------------------------------------------
 function createWorkActDraft(jobId) {
+  const act = ensureWorkActDraft(jobId);
+  if (!act) return;
+  selectWorkActContext(act);
+  state.workActError = "";
+  saveDemoState();
+  renderAppCallback();
+}
+
+function ensureWorkActDraft(jobId) {
   const job = jobs.find((item) => item.id === jobId);
-  if (!job) return;
+  if (!job) return null;
 
   const existing = workActs.find((item) => item.jobId === jobId);
-  if (existing) {
-    state.selectedWorkActId = existing.id;
-    state.templateGenWorkActJobId = jobId;
-    state.workActError = "";
-    renderAppCallback();
-    return;
-  }
+  if (existing) return existing;
 
   const today = new Date().toISOString().slice(0, 10);
   const jobEquipment = equipment.find((item) => item.name === job.equipment || item.serial === job.serial || item.id === job.equipmentId);
   const actId = `WA-${260412 + workActs.length}`;
-  workActs.unshift({
+  const act = {
     id: actId,
     number: `VM-WA-${String(workActs.length + 1).padStart(4, "0")}`,
     date: today,
@@ -1036,7 +1221,7 @@ function createWorkActDraft(jobId) {
     company: "Viva Medical",
     companyProfile: "Default",
     customer: job.customer,
-    type: job.stage?.includes("PM") ? "PM" : "Service",
+    type: serviceTypeFromJob(job),
     status: "Draft",
     source: `Service job ${job.id}`,
     workDescription: job.stage || "Service work",
@@ -1062,21 +1247,31 @@ function createWorkActDraft(jobId) {
     generatedDocumentId: null,
     ...creatorMeta(),
     updatedAt: new Date().toISOString()
-  });
+  };
 
-  state.selectedWorkActId = actId;
-  state.templateGenWorkActJobId = jobId;
-  state.workActError = "";
-  saveDemoState();
-  renderAppCallback();
+  workActs.unshift(act);
+  return act;
+}
+
+function serviceTypeFromJob(job) {
+  const stage = String(job?.stage || "").toLowerCase();
+  if (stage.includes("pm") || stage.includes("maintenance")) return "PM";
+  if (stage.includes("install")) return "Installation";
+  if (stage.includes("diagnostic")) return "Diagnostic";
+  if (stage.includes("repair")) return "Repair";
+  return job?.type || "Service";
+}
+
+function selectWorkActContext(act) {
+  state.selectedWorkActId = act.id;
+  state.templateGenWorkActJobId = act.jobId || state.templateGenWorkActJobId;
+  state.selectedServiceJobId = act.jobId || state.selectedServiceJobId;
 }
 
 function selectWorkActDraft(actId) {
   const act = workActs.find((item) => item.id === actId);
   if (!act) return;
-  state.selectedWorkActId = act.id;
-  state.templateGenWorkActJobId = act.jobId || state.templateGenWorkActJobId;
-  state.selectedServiceJobId = act.jobId || state.selectedServiceJobId;
+  selectWorkActContext(act);
   state.workActError = "";
   renderAppCallback();
 }
@@ -1111,19 +1306,34 @@ function applyWorkListTemplate(actId) {
     return;
   }
 
-  act.workText = template.bodyText || act.workText || "";
-  act.workRows = template.workRows.map((description, index) => ({
-    id: `${act.id}-WR-${index + 1}`,
-    number: index + 1,
-    description,
-    completed: true,
-    comments: ""
-  }));
-  act.updatedAt = new Date().toISOString();
-  state.selectedWorkActId = act.id;
+  copyTemplateToWorkAct(act, template);
+  selectWorkActContext(act);
   state.workActError = "";
   saveDemoState();
   renderAppCallback();
+}
+
+function startWorkActFromTemplate(tplId, jobId) {
+  const template = workListTemplates.find((item) => item.id === tplId);
+  const act = ensureWorkActDraft(jobId);
+  if (!template || !act) return;
+
+  act.workTemplateId = template.id;
+  copyTemplateToWorkAct(act, template);
+  state.page = "workacts";
+  state.templateGenTab = "work-acts";
+  state.selectedWltId = template.id;
+  selectWorkActContext(act);
+  state.workActError = "";
+  state.wltError = "";
+  saveDemoState();
+  renderAppCallback();
+}
+
+function copyTemplateToWorkAct(act, template) {
+  act.workText = template.bodyText || act.workText || "";
+  act.workRows = act.workRows || [];
+  act.updatedAt = new Date().toISOString();
 }
 
 function addWorkActRow(actId) {
@@ -1222,6 +1432,7 @@ function createWorkActDocumentDraft(actId) {
 
   if (!act.generatedDocumentId) {
     const docId = `DOC-${3108 + documents.length}`;
+    const createdAt = new Date().toISOString();
     documents.unshift({
       id: docId,
       type: "Service act",
@@ -1230,6 +1441,8 @@ function createWorkActDocumentDraft(actId) {
       owner: "Service",
       createdBy: act.createdBy || currentUserName(),
       createdByInitials: act.createdByInitials || initialsFromName(act.createdBy || currentUserName()),
+      created: act.date || createdAt.slice(0, 10),
+      createdAt,
       status: "Draft",
       due: act.date,
       pipelineStep: "Draft",
@@ -1417,6 +1630,7 @@ function createDefectActDocumentDraft(actId) {
 
   if (!act.generatedDocumentId) {
     const docId = `DOC-${3108 + documents.length}`;
+    const createdAt = new Date().toISOString();
     documents.unshift({
       id: docId,
       type: "Defect act",
@@ -1425,6 +1639,8 @@ function createDefectActDocumentDraft(actId) {
       owner: "Service",
       createdBy: act.createdBy || currentUserName(),
       createdByInitials: act.createdByInitials || initialsFromName(act.createdBy || currentUserName()),
+      created: act.date || createdAt.slice(0, 10),
+      createdAt,
       status: "Draft",
       due: act.date,
       pipelineStep: "Draft",
@@ -1619,6 +1835,7 @@ function createCommercialOfferDocumentDraft(draftId) {
 
   if (!draft.generatedDocumentId) {
     const docId = `DOC-${3108 + documents.length}`;
+    const createdAt = new Date().toISOString();
     documents.unshift({
       id: docId,
       type: "Quotation",
@@ -1627,6 +1844,8 @@ function createCommercialOfferDocumentDraft(draftId) {
       owner: "Sales",
       createdBy: draft.createdBy || currentUserName(),
       createdByInitials: draft.createdByInitials || initialsFromName(draft.createdBy || currentUserName()),
+      created: draft.date || createdAt.slice(0, 10),
+      createdAt,
       status: "Draft",
       due: draft.validityDate || draft.date,
       pipelineStep: "Draft",
@@ -1655,6 +1874,93 @@ function commercialOfferTotal(draft) {
 // ---------------------------------------------------------------------------
 // Template CRUD helpers
 // ---------------------------------------------------------------------------
+async function openWltAdvancedEditor(tplId) {
+  const tpl = workListTemplates.find((t) => t.id === tplId);
+  if (!tpl) return;
+
+  const payload = buildWltCollaboraPayload(tpl);
+  state.selectedWltId = tplId;
+  state.wltEditMode = true;
+  state.wltError = "";
+  state.wltCollaboraError = "";
+  state.wltCollaboraStatus = "Preparing Collabora editor...";
+  state.wltCollaboraSession = null;
+  suppressCollaboraWelcomeDialog();
+  renderAppCallback();
+
+  try {
+    const response = await fetch("/api/documents/collabora/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const result = await readWltJsonResponse(response, "Could not open Collabora editor.");
+    state.wltCollaboraSession = result.session || null;
+    state.wltCollaboraStatus = result.session?.fileName
+      ? `Collabora editor ready: ${result.session.fileName}`
+      : "Collabora editor ready.";
+  } catch (error) {
+    state.wltCollaboraSession = null;
+    state.wltCollaboraStatus = "";
+    state.wltCollaboraError = error.message || "Could not open Collabora editor.";
+  }
+
+  renderAppCallback();
+}
+
+function suppressCollaboraWelcomeDialog() {
+  try {
+    const today = new Date().toDateString().replaceAll(" ", "-");
+    window.localStorage.setItem("WSDWelcomeDisabled", "true");
+    window.localStorage.setItem("WSDWelcomeDisabledDate", today);
+  } catch {
+    // Collabora still works if browser storage is unavailable.
+  }
+}
+
+function buildWltCollaboraPayload(tpl) {
+  const tplId = tpl.id;
+  const richEditor = document.querySelector(`[data-wlt-rich-editor="${cssEscape(tplId)}"]`);
+  const preview = document.querySelector(".wlt-document-preview");
+
+  return {
+    sourceType: "work-list-template",
+    sourceId: tplId,
+    ownerId: tplId,
+    userId: "local-owner",
+    userName: currentUserName(),
+    title: document.getElementById("wlt-edit-name")?.value.trim() || tpl.name,
+    company: document.getElementById("wlt-edit-company")?.value || tpl.company || "",
+    entryPerson: document.getElementById("wlt-edit-entry-person")?.value || tpl.entryPerson || "",
+    serviceType: document.getElementById("wlt-edit-service-type")?.value || tpl.serviceType || "",
+    bodyText: document.getElementById("wlt-edit-body")?.value.trim() || tpl.bodyText || "",
+    equipmentLabels: checkedLabelValues("[data-wlt-edit-equipment]"),
+    hospitalLabels: checkedLabelValues("[data-wlt-edit-hospital]"),
+    workEquipmentLabels: checkedLabelValues("[data-wlt-edit-work-equipment]"),
+    richBodyHtml: sanitizeWltRichHtml(richEditor?.innerHTML || preview?.innerHTML || tpl.richBodyHtml || "")
+  };
+}
+
+function checkedLabelValues(selector) {
+  return Array.from(document.querySelectorAll(selector))
+    .filter((input) => (input.type === "checkbox" || input.type === "radio") ? input.checked : Boolean(input.value))
+    .map((input) => input.dataset.wltLabel || input.closest("label")?.querySelector("strong")?.innerText.trim() || input.closest("label")?.innerText.trim() || input.value)
+    .filter(Boolean);
+}
+
+async function readWltJsonResponse(response, fallbackMessage) {
+  let result = null;
+  try {
+    result = await response.json();
+  } catch {
+    result = null;
+  }
+  if (!response.ok || result?.ok === false) {
+    throw new Error(result?.error || fallbackMessage);
+  }
+  return result || {};
+}
+
 function saveNewWlt() {
   const name = document.getElementById("wlt-new-name")?.value.trim() || "";
   const category = document.getElementById("wlt-new-category")?.value.trim() || "";
@@ -1663,16 +1969,9 @@ function saveNewWlt() {
   const entryPerson = document.getElementById("wlt-new-entry-person")?.value || "";
   const entryDate = document.getElementById("wlt-new-entry-date")?.value || new Date().toISOString().slice(0, 10);
   const bodyText = document.getElementById("wlt-new-body")?.value.trim() || "";
-  const rowsRaw = document.getElementById("wlt-new-rows")?.value || "";
-  const workRows = rowsRaw.split("\n").map((r) => r.trim()).filter(Boolean);
 
   if (!name) {
     state.wltNewError = "Template name is required.";
-    renderAppCallback();
-    return;
-  }
-  if (!workRows.length) {
-    state.wltNewError = "Add at least one work row.";
     renderAppCallback();
     return;
   }
@@ -1683,7 +1982,7 @@ function saveNewWlt() {
     name,
     equipmentCategory: category || "General",
     serviceType,
-    linkedServiceTypes: checkedValues("[data-wlt-new-service-type-link]"),
+    linkedServiceTypes: [serviceType],
     linkedEquipmentIds: checkedValues("[data-wlt-new-equipment]"),
     linkedHospitalIds: checkedValues("[data-wlt-new-hospital]"),
     linkedWorkEquipmentIds: checkedValues("[data-wlt-new-work-equipment]"),
@@ -1691,8 +1990,8 @@ function saveNewWlt() {
     entryDate,
     language,
     bodyText,
-    workRows,
-    richBodyHtml: defaultWltRichHtml(name, bodyText, workRows),
+    workRows: [],
+    richBodyHtml: defaultWltRichHtml(name, bodyText),
     editorNote: "",
     isActive: true
   });
@@ -1710,12 +2009,13 @@ function saveWltEdits(tplId) {
   if (!tpl) return;
 
   const name = document.getElementById("wlt-edit-name")?.value.trim() || "";
-  const category = document.getElementById("wlt-edit-category")?.value.trim() || "";
+  const category = document.getElementById("wlt-edit-category")?.value.trim() || tpl.equipmentCategory || "General";
   const serviceType = document.getElementById("wlt-edit-service-type")?.value || tpl.serviceType;
-  const language = document.getElementById("wlt-edit-language")?.value || tpl.language;
+  const language = document.getElementById("wlt-edit-language")?.value || tpl.language || "lt";
   const entryPerson = document.getElementById("wlt-edit-entry-person")?.value || tpl.entryPerson || "";
-  const entryDate = document.getElementById("wlt-edit-entry-date")?.value || tpl.entryDate || "";
-  const bodyText = document.getElementById("wlt-edit-body")?.value.trim() || "";
+  const entryDate = document.getElementById("wlt-edit-entry-date")?.value || tpl.entryDate || new Date().toISOString().slice(0, 10);
+  const bodyText = document.getElementById("wlt-edit-body")?.value.trim() || tpl.bodyText || "";
+  const company = document.getElementById("wlt-edit-company")?.value || tpl.company || "";
   const richEditor = document.querySelector(`[data-wlt-rich-editor="${cssEscape(tplId)}"]`);
   const editorNote = document.getElementById("wlt-edit-note")?.value || "";
 
@@ -1728,7 +2028,9 @@ function saveWltEdits(tplId) {
   tpl.name = name;
   tpl.equipmentCategory = category || tpl.equipmentCategory;
   tpl.serviceType = serviceType;
-  tpl.linkedServiceTypes = checkedValues("[data-wlt-edit-service-type-link]");
+  tpl.company = company;
+  const checkedServiceTypes = checkedValues("[data-wlt-edit-service-type-link]");
+  tpl.linkedServiceTypes = checkedServiceTypes.length ? checkedServiceTypes : [serviceType];
   tpl.linkedEquipmentIds = checkedValues("[data-wlt-edit-equipment]");
   tpl.linkedHospitalIds = checkedValues("[data-wlt-edit-hospital]");
   tpl.linkedWorkEquipmentIds = checkedValues("[data-wlt-edit-work-equipment]");
@@ -1736,9 +2038,32 @@ function saveWltEdits(tplId) {
   tpl.entryDate = entryDate;
   tpl.language = language;
   tpl.bodyText = bodyText;
-  tpl.richBodyHtml = sanitizeWltRichHtml(richEditor?.innerHTML || tpl.richBodyHtml || defaultWltRichHtml(name, bodyText, tpl.workRows || []));
+  tpl.richBodyHtml = sanitizeWltRichHtml(richEditor?.innerHTML || tpl.richBodyHtml || defaultWltRichHtml(name, bodyText));
   tpl.editorNote = editorNote;
+  if (state.wltCollaboraSession?.sourceId === tplId) {
+    const pdfDownloadUrl = state.wltCollaboraSession.pdfDownloadUrl || (state.wltCollaboraSession.downloadUrl
+      ? `${state.wltCollaboraSession.downloadUrl}${state.wltCollaboraSession.downloadUrl.includes("?") ? "&" : "?"}format=pdf`
+      : "");
+    tpl.collaboraSessionId = state.wltCollaboraSession.id;
+    tpl.collaboraFileName = state.wltCollaboraSession.fileName;
+    tpl.collaboraDownloadUrl = state.wltCollaboraSession.downloadUrl;
+    tpl.collaboraPdfDownloadUrl = pdfDownloadUrl;
+    tpl.collaboraUpdatedAt = state.wltCollaboraSession.lastSavedAt || state.wltCollaboraSession.updatedAt || new Date().toISOString();
+  }
 
+  state.wltEditMode = false;
+  state.wltError = "";
+  saveDemoState();
+  renderAppCallback();
+}
+
+function deleteWlt(tplId) {
+  const index = workListTemplates.findIndex((t) => t.id === tplId);
+  if (index < 0) return;
+
+  workListTemplates.splice(index, 1);
+  const next = workListTemplates[Math.min(index, workListTemplates.length - 1)] || workListTemplates[0] || null;
+  state.selectedWltId = next?.id || null;
   state.wltEditMode = false;
   state.wltError = "";
   saveDemoState();
@@ -1775,34 +2100,11 @@ function toggleWltArchive(tplId) {
   renderAppCallback();
 }
 
-function addWltRow(tplId) {
-  const tpl = workListTemplates.find((t) => t.id === tplId);
-  if (!tpl) return;
-  tpl.workRows.push("New work row");
-  state.selectedWltId = tplId;
-  saveDemoState();
-  renderAppCallback();
-}
-
-function removeWltRow(tplId, index) {
-  const tpl = workListTemplates.find((t) => t.id === tplId);
-  if (!tpl || index < 0 || index >= tpl.workRows.length) return;
-  tpl.workRows.splice(index, 1);
-  state.selectedWltId = tplId;
-  saveDemoState();
-  renderAppCallback();
-}
-
 function applyWltRichCommand(tplId, command) {
   const editor = document.querySelector(`[data-wlt-rich-editor="${cssEscape(tplId)}"]`);
   if (!editor) return;
   editor.focus();
-  if (command === "addChecklistRow") {
-    editor.insertAdjacentHTML("beforeend", defaultWltChecklistRowHtml());
-  } else {
-    document.execCommand(command, false, null);
-  }
-  storeWltRichHtml(tplId, editor.innerHTML);
+  document.execCommand(command, false, null);
 }
 
 function storeWltRichHtml(tplId, html) {
@@ -1821,32 +2123,12 @@ function sanitizeWltRichHtml(html = "") {
     .replace(/javascript:/gi, "");
 }
 
-function defaultWltRichHtml(name, bodyText, rows) {
-  const rowHtml = rows.map((row, index) => `
-    <tr>
-      <td>${escapeHtmlForRich(String(index + 1))}</td>
-      <td>${escapeHtmlForRich(row)}</td>
-      <td>Check / fill</td>
-      <td></td>
-    </tr>
-  `).join("");
+function defaultWltRichHtml(name, bodyText) {
   return `
     <h3>${escapeHtmlForRich(name || "Template")}</h3>
     ${bodyText ? `<p>${escapeHtmlForRich(bodyText)}</p>` : ""}
-    <table>
-      <thead><tr><th>No.</th><th>Work description</th><th>Expected / measured value</th><th>Notes</th></tr></thead>
-      <tbody>${rowHtml}</tbody>
-    </table>
-  `;
-}
-
-function defaultWltChecklistRowHtml() {
-  return `
-    <table>
-      <tbody>
-        <tr><td>New</td><td>Describe work step</td><td>Expected value</td><td>Notes</td></tr>
-      </tbody>
-    </table>
+    <p><strong>Applicability:</strong> service type, equipment, hospitals, and work equipment are configured on the right side.</p>
+    <p>Work Act rows are added in the Work Acts module and appended to the generated Work Act document.</p>
   `;
 }
 
@@ -1866,7 +2148,7 @@ function cssEscape(value = "") {
 
 function checkedValues(selector) {
   return Array.from(document.querySelectorAll(selector))
-    .filter((input) => input.checked)
+    .filter((input) => (input.type === "checkbox" || input.type === "radio") ? input.checked : Boolean(input.value))
     .map((input) => input.value);
 }
 
@@ -2105,6 +2387,7 @@ function handoffToService(qteId) {
   });
 
   const docId = `DOC-${3108 + documents.length}`;
+  const createdAt = new Date().toISOString();
   documents.unshift({
     id:           docId,
     type:         q.type === "PM Contract" ? "PM contract"
@@ -2115,6 +2398,8 @@ function handoffToService(qteId) {
     owner:        "Service",
     createdBy:    q.createdBy || currentUserName(),
     createdByInitials: q.createdByInitials || initialsFromName(q.createdBy || currentUserName()),
+    created:      q.created || createdAt.slice(0, 10),
+    createdAt,
     status:       "Draft",
     due:          q.due,
     pipelineStep: "Draft"
@@ -2159,6 +2444,7 @@ function updateInvoicePayment(invoiceId, paymentStatus) {
 function ensureInvoiceDocument(inv) {
   if (inv.documentId) return;
   const docId = `DOC-${3108 + documents.length}`;
+  const createdAt = new Date().toISOString();
   documents.unshift({
     id:           docId,
     type:         "Invoice",
@@ -2167,6 +2453,8 @@ function ensureInvoiceDocument(inv) {
     owner:        "Finance",
     createdBy:    inv.createdBy || currentUserName(),
     createdByInitials: inv.createdByInitials || initialsFromName(inv.createdBy || currentUserName()),
+    created:      inv.created || inv.generatedAt || createdAt.slice(0, 10),
+    createdAt,
     status:       "Draft",
     due:          inv.due,
     pipelineStep: "Draft"

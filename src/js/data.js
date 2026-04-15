@@ -1185,6 +1185,7 @@ export const documents = [
     owner: "Service",
     createdBy: "Rokas Petrauskas",
     createdByInitials: "RP",
+    created: "2026-04-15",
     status: "Draft",
     due: "2026-04-15",
     pipelineStep: "Draft"
@@ -1197,6 +1198,7 @@ export const documents = [
     owner: "Sales",
     createdBy: "Vita Klimaite",
     createdByInitials: "VK",
+    created: "2026-04-11",
     status: "Review",
     due: "2026-04-11",
     pipelineStep: "Review"
@@ -1209,6 +1211,7 @@ export const documents = [
     owner: "Service",
     createdBy: "Rokas Petrauskas",
     createdByInitials: "RP",
+    created: "2026-04-10",
     status: "Customer",
     due: "2026-04-10",
     pipelineStep: "Customer"
@@ -1221,6 +1224,7 @@ export const documents = [
     owner: "Admin",
     createdBy: "Andrejus Lomovas",
     createdByInitials: "AL",
+    created: "2026-04-13",
     status: "Signature",
     due: "2026-04-19",
     pipelineStep: "Signature"
@@ -1472,7 +1476,7 @@ export const workListTemplates = [
     linkedServiceTypes: ["PM"],
     linkedEquipmentIds: ["EQ-501", "EQ-505"],
     linkedHospitalIds: ["CUST-01"],
-    linkedWorkEquipmentIds: ["ultrasound-probes", "printer-export"],
+    linkedWorkEquipmentIds: ["digital-multimeter", "electrical-safety-analyzer"],
     entryPerson: "Rokas Petrauskas",
     entryDate: "2026-04-13",
     language: "lt",
@@ -1494,7 +1498,7 @@ export const workListTemplates = [
     linkedServiceTypes: ["PM"],
     linkedEquipmentIds: ["EQ-502"],
     linkedHospitalIds: ["CUST-03"],
-    linkedWorkEquipmentIds: ["water-supply", "chemistry-dosing"],
+    linkedWorkEquipmentIds: ["pressure-gauge", "thermometer"],
     entryPerson: "Marius Vaitkus",
     entryDate: "2026-04-13",
     language: "lt",
@@ -1516,7 +1520,7 @@ export const workListTemplates = [
     linkedServiceTypes: ["Service", "Repair"],
     linkedEquipmentIds: ["EQ-503"],
     linkedHospitalIds: ["CUST-04"],
-    linkedWorkEquipmentIds: ["battery-charger", "safety-load"],
+    linkedWorkEquipmentIds: ["load-cell-tester", "digital-multimeter"],
     entryPerson: "Aurelija Jankauske",
     entryDate: "2026-04-12",
     language: "lt",
@@ -1550,6 +1554,67 @@ export const workListTemplates = [
       "Patikrintas irangos veikimas po atliktu darbu.",
       "Klientas informuotas apie atliktus darbus ir tolimesnius veiksmus."
     ]
+  }
+];
+
+// Service work equipment used during checks, measurements, and metrology-style
+// verification. This will become a separate Work Equipment module later.
+export const workEquipmentTools = [
+  {
+    id: "digital-multimeter",
+    name: "Digital multimeter",
+    category: "Electrical measurement",
+    purpose: "Voltage, resistance, continuity, and basic electrical checks",
+    calibrationRequired: true
+  },
+  {
+    id: "oscilloscope",
+    name: "Oscilloscope",
+    category: "Signal measurement",
+    purpose: "Signal waveform and timing checks",
+    calibrationRequired: true
+  },
+  {
+    id: "electrical-safety-analyzer",
+    name: "Electrical safety analyzer",
+    category: "Safety / leakage current",
+    purpose: "Protective earth, leakage current, and safety checks",
+    calibrationRequired: true
+  },
+  {
+    id: "pressure-gauge",
+    name: "Pressure gauge / manometer",
+    category: "Pressure measurement",
+    purpose: "Water, air, pneumatic, or hydraulic pressure checks",
+    calibrationRequired: true
+  },
+  {
+    id: "thermometer",
+    name: "Calibrated thermometer",
+    category: "Temperature measurement",
+    purpose: "Temperature verification during service or PM",
+    calibrationRequired: true
+  },
+  {
+    id: "flow-meter",
+    name: "Flow meter",
+    category: "Flow measurement",
+    purpose: "Air, water, or gas flow verification",
+    calibrationRequired: true
+  },
+  {
+    id: "load-cell-tester",
+    name: "Load cell / test weight set",
+    category: "Load testing",
+    purpose: "Patient lift and mechanical load checks",
+    calibrationRequired: true
+  },
+  {
+    id: "insulation-tester",
+    name: "Insulation resistance tester",
+    category: "Electrical safety",
+    purpose: "Insulation resistance checks where applicable",
+    calibrationRequired: true
   }
 ];
 

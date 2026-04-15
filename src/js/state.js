@@ -11,6 +11,7 @@ export const state = {
   documentSearchQuery: "",
   documentTypeFilter: "All",
   documentCustomerFilter: "All",
+  documentDateQuery: "",
   documentDateFrom: "",
   documentDateTo: "",
   selectedDocumentId: "DOC-3108",
@@ -23,7 +24,7 @@ export const state = {
   templateEditorSavedAt: "",
   templateFileStatus: "",
   templateFileError: "",
-  templateGenTab: "work-acts", // work-acts | defect-acts | commercial-offers | work-list-templates | output-templates
+  templateGenTab: "work-acts", // legacy source-flow hint; Templates landing uses the configurator
   rejectingDocumentId: null,
   documentRejectError: "",
   documentUploadOpen: false,
@@ -105,7 +106,11 @@ export const state = {
   wltNewError: "",
   wltSearchQuery: "",
   wltStatusFilter: "all",
+  wltServiceTypeFilter: "all",
   wltEntryPersonFilter: "all",
+  wltCollaboraSession: null,
+  wltCollaboraStatus: "",
+  wltCollaboraError: "",
 
   // Sales module
   selectedQuotationId: "QTE-501",
@@ -123,7 +128,7 @@ export const state = {
 };
 
 export function setPage(page) {
-  state.page = page;
+  state.page = page === "templategen" ? "templates" : page;
 }
 
 export function setRole(role) {

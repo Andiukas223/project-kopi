@@ -373,6 +373,7 @@
   color: var(--text);
   font-size: 13px;
   padding: 10px 14px;
+  user-select: text;
 }
 
 .data-table tr:last-child td {
@@ -385,10 +386,6 @@
 
 .data-table tbody tr.selected {
   background: var(--brand-lt);
-}
-
-.data-table tbody tr.overdue {
-  box-shadow: inset 3px 0 0 var(--red);
 }
 
 .table-actions {
@@ -423,6 +420,7 @@
 .chip.warn,
 .chip.customer,
 .chip.signature,
+.chip.need-upload,
 .chip.needs-upload {
   background: var(--amber-lt);
   color: var(--amber);
@@ -436,6 +434,7 @@
 .chip.done,
 .chip.approved,
 .chip.generated,
+.chip.uploaded,
 .chip.paid,
 .chip.finished,
 .chip.archived,

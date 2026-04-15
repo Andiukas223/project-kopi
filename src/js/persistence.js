@@ -36,6 +36,9 @@ export function loadPersistedDemoState() {
     const snapshot = JSON.parse(raw);
     if (snapshot?.state && typeof snapshot.state === "object") {
       Object.assign(state, snapshot.state);
+      if (state.page === "templategen") {
+        state.page = state.templateGenTab === "work-acts" ? "workacts" : "templates";
+      }
       state.feedbackOpen = false;
       state.feedbackSelecting = false;
       state.feedbackAnnotating = false;

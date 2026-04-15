@@ -85,32 +85,35 @@ Sprendima del stacko verta priimti po MVP, nes `design_system.md` dabar speciali
 
 ## 4. MVP funkcine apimtis
 
-Pirmas prototipas turetu tureti:
+Dabartinis prototipas jau yra platesnis uz pradini MVP plana. Aktualus moduliu source of truth yra `docs/modules/WORKSPACE_MODULES.md`, Templates taisykles - `docs/modules/TEMPLATES_MODULE.md`, o pipeline/linkinimo logika - `docs/modules/LINKING_AND_PIPELINE_LOGIC.md`.
+
+Aktyvus workspace moduliai:
+
+- Command Center
+- Service
+- Sales
+- Contracts
+- Documents
+- Template Generation
+- Finance
+- Customers
+- Equipment
+- Parts
+- Calendar
+- Reports
+- Admin
+
+Pagrindiniai MVP principai lieka:
 
 - App shell: topbar, sidebar, main area.
-- Dashboard: 4 stat cards, pagrindiniu moduliu tiles.
-- Moduliai:
-  - Service
-  - Sales
-  - Customers
-  - Inventory / Parts
-  - Reports
-  - Settings
-- Service modulis:
-  - subgroup tiles: Warranty, PM Jobs, Diagnostics, Repairs, Missing Documents, Vendor Returns.
-  - sample lenteles su job ID, customer, system, status, due date.
-- Job wizard:
-  - kliento/irenginio informacija.
-  - atsakingas darbuotojas ir service tipas.
-  - diagnostikos trukmes laukelis.
-  - sutarties/garantijos/quotation sprendimu korteles.
-  - daliu prieinamumas ir EDD.
-  - remonto trukmes laukelis.
-  - uzdarymo checklist.
-- Process flow:
-  - service eiga nuo job sukurimo iki uzdarymo.
-  - sprendimu sakos: contract/warranty/quotation/parts/vendor return.
-  - diagnostikos ir remonto mazgai zymi ranka pildoma proceduros trukme, ne live timeri.
+- Role-aware workspace vaizdai.
+- Table-first moduliai su aiskiais primary actions.
+- Service job wizard su A/B/C/D pipeline routing.
+- Rankinis diagnostikos/remonto trukmes pildymas, ne live timer.
+- Documents yra repository/file custody modulis.
+- Template Generation yra dokumentu kurimo/generavimo modulis.
+- Templates / Output Layouts pakeitimai turi buti dokumentuojami `docs/modules/TEMPLATES_MODULE.md`.
+- Cross-module linkai turi eiti per stabilius ids (`jobId`, `documentId`, `customerId`, `equipmentId`, `contractId`, `quotationId`) ir neperkelti ownership i neteisinga moduli.
 
 ## 5. Techniniai principai MVP etapui
 
@@ -273,6 +276,14 @@ Vendor return trigger: Work Act'e pažymima "repair exchange" → Logistics suku
 
 ## 15. Dokumentų modulis
 
+Detalus dabartinis Documents modulio source of truth perkeltas i `docs/modules/DOCUMENTS_MODULE.md`.
+
+Visu workspace moduliu ownership/aprasai laikomi `docs/modules/WORKSPACE_MODULES.md`.
+
+Templates ir Output Layouts source of truth laikomas `docs/modules/TEMPLATES_MODULE.md`.
+
+Cross-module linkinimo ir pipeline logika laikoma `docs/modules/LINKING_AND_PIPELINE_LOGIC.md`.
+
 ### Dokumentų tipai
 
 Atliktu darbu aktas / Diagnostikos ataskaita / Komercinis pasiūlymas / Sutarties priedas / Garantijos patvirtinimas / Parts request / Vendor return note / Priėmimo aktas / Invoice
@@ -286,11 +297,10 @@ Draft / generated draft
   -> preview/download generated file
   -> collect signature outside the system
   -> upload signed copy into the same document record
-  -> Finish
-  -> DONE / case-ticket closed
+  -> Status changes to green Download
 ```
 
-Reject path:
+Reject path is not exposed in the Documents index table:
 
 ```text
 Review / Customer / Signature
@@ -314,7 +324,7 @@ Permanentinis rejection: komentaras → Admin resolves
 Current split:
 
 - Create/generate happens in `Template Generation`.
-- Repository search, preview, download, signed upload, and finish/close happen in `Documents`.
+- Repository search, preview, signed upload, and signed-file download happen in `Documents`.
 - Uploaded and generated files go through `document-service` file registry where possible.
 
 **Create (generate from template):** Carbone mock šiame etape. Vėliau tikras backend. User generuoja doc iš template, parsisiunta, surenka parašą, re-uploadina.
@@ -400,13 +410,13 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 | Reminders strip | Sidebar spalvoti priminimai (overdue docs, parts, PM visits) |
 | New service job wizard | 8 žingsniai, Pipeline type routing (A/B/C/D), Contract balance info |
 | Role sistema | 9 rolės, role switcher, role-filtruoti vaizdai visuose moduliuose |
-| Document pipeline | Upload signed copy + Finish/DONE workflow, rejection path su privalomu komentaru, Back to Draft, generatedDocPreview |
+| Document pipeline | Upload signed copy, green signed-file download in Status, generatedDocPreview; index actions stay minimal without Reject/Finish/DONE |
 | Generated document preview | Tomis tipo print preview modalas: inline PDF, A4 mock fallback, zoom, print/quick print, export/download, email compose, delivery audit |
 | Feedback / bug reporting | Globalus Report issue: screen capture/snipping flow, red-pencil annotation, admin-only queue, backend storage/API foundation |
 | Unified file storage foundation | `document-service` registruoja generated/uploaded/signed/template/feedback failus per `files.json`; runtime storage ignoruojamas git |
 | localStorage persistence | Mutable kolekcijos (jobs, documents, equipment ir kt.) išsaugomos per puslapio reload |
 | Carbone document-service | Node.js + Carbone + LibreOffice Docker konteineris; `/health`, `/preview`, `/generate`, `/download` API; nginx proxy; `work-act.fodt`, `commercial-offer.fodt`, `defect-act.fodt`, `generic-document.fodt` šablonai |
-| **Template Generation modulis** | Atskiras sidebar modulis su 5 sub-tabs: Work Acts, Defect Acts, Commercial Offers, Templates, Output Layouts |
+| **Templates modulis** | Atskiras sidebar modulis su Tomis tipo Work List Template konfiguratoriumi: Company, Entry person, Template name, Service type, Equipment, Hospitals, Work Equipment, Advanced editor preview |
 | Work Acts workspace | Job selector, draft create, equipment search/add/remove, Template picker, Work Description + Work Rows editor, Service act document draft → Documents |
 | Defect Acts workspace | Job selector, draft create, defect description/findings/correction/risk/acknowledgement editor, Defect act document draft → Documents |
 | Commercial Offers workspace | Source quotation selector, draft create, scope/line items/validity/payment terms/notes editor, `Create document draft` → Documents; `commercialOfferDrafts` kolekcija su localStorage |
@@ -420,7 +430,7 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 
 | # | Užduotis | Aprašas |
 |---|---|---|
-| ~~B-01~~ | ~~**Document workflow controls**~~ | ✅ Implementuota — bendras perstumimo mygtukas pasalintas; dokumentai valdosi per `Upload signed`, `Finish`, `DONE` ir `Back to Draft` reject atveju. |
+| ~~B-01~~ | ~~**Document workflow controls**~~ | ✅ Implementuota — bendras perstumimo mygtukas pasalintas; Documents index valdosi per `Upload signed` ir zalia `Download` busena, be `Reject` / `Finish` / `DONE` action triuksmo. |
 | ~~B-02~~ | ~~**Document rejection path**~~ | ✅ Implementuota — Review/Customer/Signature dokumentai turi Reject veiksma su privalomu komentaru, `Rejected` busena ir `Back to Draft` grizima. |
 | ~~B-03~~ | ~~**Service job detail panel**~~ | ✅ Implementuota — paspaudus Service jobs eilute rodoma desine detales panele: job info, current stage, susieti dokumentai ir parts requests. |
 | ~~B-04~~ | ~~**Finance modulis**~~ | ✅ Implementuota — pridetas Finance puslapis su invoice sarasu, job linkais, payment statusais ir mock `Generate invoice` / `Mark paid` / `Mark cancelled` veiksmais. |
@@ -446,13 +456,13 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 | ~~B-14~~ | ~~**Carbone document service**~~ | ~~Phase 4B: backend container su Node.js + Carbone + LibreOffice, realus DOCX/ODT/PDF generavimas.~~ **Done:** pridetas `document-service` konteineris su Carbone/LibreOffice API (`/health`, `/preview`, `/generate`, `/download`), nginx proxy ir Documents UI `Generate via service` veiksmas. |
 | ~~B-15~~ | ~~**Work Act draft + Work List Template flow**~~ | **Done:** Service job detaleje sukuriamas Work Act draft, job equipment preselect'inamas automatiskai, galima per search/dropdown pasirinkti papildoma kliento equipment, pritaikyti Work List Template kaip izoliuota kopija, redaguoti `Work Description` / `Work: List` ir sukurti Service act dokumento draft. |
 | ~~B-16~~ | ~~**Standardized document output templates**~~ | **Done:** Carbone output sablonai atskirti nuo Work List Template registry; prideti `work-act.fodt`, `commercial-offer.fodt`, `defect-act.fodt`, backend `templateMap`, Documents UI `Commercial offer` / `Defect act` pasirinkimai ir payload laukai equipment/work rows, quotation, defect bei signatures turiniui. |
-| ~~B-17~~ | ~~**Template Generation module split**~~ | **Done:** pridetas `Template Generation` sidebar modulis ir puslapis; `Documents` nebemaiso template generation panelio su repository/search/detail/upload sritimi. Toliau reikia siame modulyje isskirti Work Acts, Defect Acts, Commercial Offers, Work List Templates ir Output Templates i atskirus sub-tabs. |
-| ~~B-18~~ | ~~**Template Generation sub-tabs**~~ | **Done:** `Template Generation` modulyje prideti sub-tabs: Work Acts, Defect Acts, Commercial Offers, Work List Templates ir Output Templates. Output Templates tab'e veikia dabartinis Carbone generavimo/editoriaus panelis; kiti tab'ai paruosia atskirus Tomis krypties workspace'us. |
+| ~~B-17~~ | ~~**Template Generation module split**~~ | **Done:** pridetas `Templates` sidebar modulis ir puslapis; `Documents` nebemaiso template generation panelio su repository/search/detail/upload sritimi. Dabartinis landing yra Work List Template konfiguratorius. |
+| ~~B-18~~ | ~~**Template Generation sub-tabs**~~ | **Done:** ankstesni top-level sub-tabs isimti is `Templates` landing. Work/Defect/Commercial source flows lieka techniniame kode/linkuose, o sidebar `Templates` atidaro template konfiguravima. |
 | ~~B-19~~ | ~~**Work Acts workspace in Template Generation**~~ | **Done:** Work Acts tab'e pridetas source service job selector, Work Act draft create flow ir pernaudotas pilnas Work Act builderis: equipment search/dropdown, Work List Template apply, Work Description / Work: List editorius ir Service act dokumento draft kurimas. |
 | ~~B-20~~ | ~~**Defect Acts workspace in Template Generation**~~ | **Done:** Defect Acts tab'e pridetas source service job selector, Defect Act draft create flow, defect description / engineer findings / recommended correction / risk / customer acknowledgement editorius ir Defect act dokumento draft kurimas i `Documents`. |
 | ~~B-21~~ | ~~**Work Act builder UX labels and equipment search**~~ | **Done:** `Work List Template` pervadintas i `Work List Template Name`, Work Text terminas pakeistas i `Work Description`, o equipment selection pakeistas i search/dropdown su `Add equipment` ir pasirinktu equipment juosta su `X` pasalinimu. |
 | ~~B-22~~ | ~~**Commercial Offers workspace**~~ | **Done:** `Template Generation / Commercial Offers` tab turi pilna kūrimo/redagavimo flow: source quotation selector, draft create, scope/line items/validity/payment terms/notes editor, `Create document draft` veiksmas. `commercialOfferDrafts` kolekcija su `localStorage` persistencija. |
-| ~~B-23~~ | ~~**Templates CRUD**~~ | **Done:** `Template Generation / Templates` tab turi `+ New template` forma, selected template detail/edit panel, `Duplicate` ir `Archive/Restore` mygtukus, inline work row add/remove/text-edit edit mode'e. `isActive` flag valdo archyvavima be trynimo. |
+| ~~B-23~~ | ~~**Templates CRUD**~~ | **Done:** `Templates` workspace turi selected template konfiguratoriu su Company, Entry person, Template name, Service type, Equipment/Hospitals/Work Equipment linkais, Advanced editor preview, `Open in advanced editor`, `Save`, `Delete`, `Cancel`, ir inline work row add/remove/text-edit. |
 
 ---
 
@@ -491,8 +501,8 @@ Papildomai: jei buvo Tomis crawl, naudoti `docs/TOMIS_CRAWL_PLAYBOOK.md` ir radi
 
 Kitas chat turetu:
 
-1. Perskaityti visus failus `docs/` aplanke: `PROJECT_PLAN.md`, `CHANGELOG.md`, `WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md`, `DOCUMENT_GENERATION_TOMIS_FINDINGS.md`.
-   Pirmas skaitomas dokumentas nuo 2026-04-15: `docs/CURRENT_STATUS_AND_ROADMAP.md`; Tomis crawl darbams naudoti `docs/TOMIS_CRAWL_PLAYBOOK.md`.
+1. Perskaityti pagrindinius failus: `docs/CURRENT_STATUS_AND_ROADMAP.md`, `docs/CHANGELOG.md`, `docs/modules/README.md`.
+   Moduliu darbams naudoti `docs/modules/WORKSPACE_MODULES.md`, Documents darbams `docs/modules/DOCUMENTS_MODULE.md`, Templates/Output Layouts darbams `docs/modules/TEMPLATES_MODULE.md`, cross-module workflow darbams `docs/modules/LINKING_AND_PIPELINE_LOGIC.md`; Tomis crawl darbams naudoti `docs/TOMIS_CRAWL_PLAYBOOK.md`.
 2. Patikrinti `git status` ir `git log --oneline -5`.
 3. Phase A prototipas yra pilnai implementuotas (B-01–B-23). Visi backlog punktai pažymėti Done.
 4. Sekantys žingsniai apibrėžti § 19 "Atviri klausimai ir sekantys žingsniai".
@@ -524,16 +534,16 @@ Kitas chat turetu:
 | ~~B-29~~ | ~~**Defect Act Tomis-aligned visits**~~ | **Done:** Defect Acts pridetas Actual Visits grid su DA/WA, planned start, work/travel hours, completed, comments, add/remove eilutemis, document-service payload laukais, preview renderinimu ir `Create Part Request Offer` placeholder. |
 | ~~B-30~~ | ~~**Output template conditional rendering**~~ | **Done:** `.fodt` output sablonuose prideti Carbone conditional blokai Work Act report options/signature zonai, Commercial Offer header/scope/footer/line items laukams ir Defect Act visits/findings/correction/risk laukams. |
 | ~~B-31~~ | ~~**Tomis visual editor crawl**~~ | **Done:** read-only perziuretas Tomis `Work List Template (Aespire TB)` detail, embedded rich/table editorius, service/equipment/hospital/work-equipment applicability tab'ai, dual-list assignment controls ir `Template - Advanced Editor` Word-like ribbon. Radiniai dokumentuoti `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`. |
-| ~~B-32~~ | ~~**User-accessible visual template editor**~~ | **Done as MVP:** `Template Generation / Templates` turi document-like visual preview, contenteditable rich editoriu, basic formatting/list toolbar, checklist-row insertion, visual HTML persistence ir bug/workaround note lauka, bet strukturuotos work rows ir applicability metadata lieka default generavimo source. |
+| ~~B-32~~ | ~~**User-accessible visual template editor**~~ | **Done as MVP:** `Templates` workspace turi same-page advanced editor preview, contenteditable rich editoriu, basic formatting/list toolbar, checklist-row insertion, visual HTML persistence ir bug/workaround note lauka, bet strukturuotos work rows ir applicability metadata lieka default generavimo source. |
 | ~~B-33~~ | ~~**Generated document preview and delivery**~~ | **Done as MVP:** source record'uose, generated output preview, Work Act linkuose ir `Documents` eilutese pridetas `Open preview`; Tomis tipo modalas turi print/quick print, zoom, export/download, email compose, inline service PDF preview, delivery statusa ir audit history. `document-service` grazina atskira inline `previewUrl`, todel PDF preview nebeatidaro download dialogo. |
 | ~~B-34~~ | ~~**Bug/feedback capture for production**~~ | **Done as MVP:** visi useriai turi `Report issue`, kuris ijungia Windows snipping tipo click-drag pasirinkimo rezima, padaro tik pasirinktos zonos screenshot, prisega ji kaip admin-only papildoma informacija, prireikus atidaro red-pencil anotavimo canvas, reikalauja trumpo komentaro, issaugo context/page/role/selected records ir ikelia reporta i demo state. Report queue, screenshot, komentaras, statusas ir history matomi tik aktyviai `admin` role. |
 | ~~B-35-lite~~ | ~~**Production feedback backend foundation**~~ | **Done as storage/API foundation:** bug reports perkelti is browser `localStorage` i `document-service` backend storage: persistent `storage` volume, screenshot attachment failai, `feedback-reports.json`, `files.json`, `POST/GET/PATCH /feedback/reports`, admin status/assignee filtrai ir workflow. Pilna auth/permissions ir DB migracija lieka backend fazei. |
 | ~~B-36-lite~~ | ~~**Unified document file storage foundation**~~ | **Started as file registry foundation:** generated documents, uploaded documents, output template uploads ir feedback screenshots dabar registruojami per `files.json` su kind/owner/source links/checksum/dydziu/download/preview metadata; binary failai saugomi `document-service/storage` arba `generated`. Pilnas DB file modelis, signed-file versijos, permission checks ir retention taisykles lieka backend fazei. |
 | ~~B-37~~ | ~~**Production Work Act generation storage**~~ | **Done:** Work Act generavimas dabar sukuria `generated-document` file registry irasa su stabiliu `fileId`, `downloadUrl`, PDF `previewUrl`, Work Act source linku ir `version/versionLabel`. Source Work Act gauna generated file/version, preview/download/email audit irasai remiasi tuo paciu file/version, o Work Act panelis gali generuoti PDF tiesiai po document draft sukurimo. |
 | ~~B-38~~ | ~~**Defect Act / Commercial Offer generation parity**~~ | **Done:** Defect Acts ir Commercial Offers source paneliai dabar rodo generated file/version metadata, turi direct `Generate PDF file`, `Open preview` ir `Download` veiksmus po document draft sukurimo, o preview/download/print/export/email audit irasai susiejami su source recordu ir tuo paciu Documents file registry objektu. |
-| B-39 | **Document repository workflow polish** | Patobulinti Documents kaip paprasta work queue: row signalai `Needs signed upload` / `Signed uploaded` / `Ready to finish` / `DONE`, geresni empty states, file history row expansion, be archyvavimo kol nera retention dizaino. |
+| B-39 | **Document repository workflow polish** | Patobulinti Documents kaip paprasta repository queue: row signalai `Upload signed` / green `Download`, geresni empty states, file history row expansion, be archyvavimo kol nera retention dizaino. |
 | B-40 | **Finance invoice register polish** | Finance yra invoice ownership vieta: prideti paieska/filtrus kaip Documents, geresne upload metadata (amount, invoice no, due, terms), source quotation/job/document linkus ir paid/signed invoice flow jei reikia. |
-| B-41 | **Visual template editor V2** | Po papildomo Tomis crawl: table editing, merge fields, logo/image placeholders, autosave, dirty-state warning, revert, duplicate as personal template, version history. |
+| B-41 | **Visual template editor V2** | Started: Templates landing perdarytas i Tomis tipo Work List Template konfiguratoriu su same-page advanced editor preview. Toliau po papildomo Tomis crawl: table editing, merge fields, logo/image placeholders, autosave, dirty-state warning, revert, duplicate as personal template, version history. |
 | B-42 | **Backend data model and auth** | PostgreSQL + migracijos, users/roles/permissions, customers/equipment/jobs/documents/templates/files/feedback/audit modeliai, auth/session, route permission checks. |
 | B-43 | **Production file custody** | `files.json` perkelti i DB, file version chains, signed upload versions, object storage adapter, checksum/MIME/size validation, retention and backup policy. |
 | B-44 | **Real email delivery** | SMTP/API provider, outbound email drafts/sent audit, attachments from file registry, customer contact autofill, send failure/retry flow. |
@@ -567,3 +577,21 @@ Dokumentu generavimui velesniame backend etape planuojama naudoti Carbone (`http
 2026-04-15 owner logic patikslinta: user-facing Owner yra zmogaus, kuris irasa sukure/pridejo, inicialai (pvz. Andrejus Lomovas -> AL). Admin kuriant useri inicialai generuojami is pilno vardo ir saugomi usage tikslais. Nauji dokumentai/source irasai turi `createdBy` + `createdByInitials`; vidinis dokumento `owner` gali likti modulio queue (`Service`, `Sales`, `Finance`) filtrams ir routingui.
 
 2026-04-15 naujai sukurti dokumentu draft'ai privalo auto-generuoti PDF per `document-service`, kad `View` ir `Download` veiksmai butu naudingi is karto. Jei dokumento tipas dar neturi dedikuoto output layout, naudoti `Generic document` fallback layout iki tol, kol bus sukurtas specialus layout.
+
+2026-04-15 dokumentu statusas turi buti automatiskai isvedamas is failu busenos: sugeneruotas failas perkelia dokumenta i `Signature` / `Needs signed upload`, pasirasytas failas rodo uploaded busena ir zalia `Download`. Persisted `Auto generating` tarpine busena neturi blokuoti naujo auto-generavimo po reload.
+
+2026-04-15 Documents repository pagrindine datos kolona pakeista is `Due` i `Created`, nes sukurimo/ikelimo data yra geresnis dokumentu atskaitos taskas. Datos filtravimas supaprastintas i viena `Created` lauka, kuris priima nepilna data arba pilna data per kalendoriaus picker'i. `Due` lieka vidinei SLA/overdue priminimu logikai.
+
+2026-04-15 topbar wordmark subtitle pakeistas is `Service IS` / `Serviso IS` i `Informational system` / `Informacine sistema`.
+
+2026-04-15 theme toggle perkeltas is topbar i apatini kairi ekrano kampa, centruotas pagal `Workspace` sidebar stulpeli ir papildytas `☀️` / `🌙` emoji.
+
+2026-04-15 Documents lentele supaprastinta: pasalintas atskiras workflow `Status` stulpelis, delivery-derived `Status`/`Delivery` stulpelis, `File` stulpelis ir atskiras `Uploaded` stulpelis. Delivery busena priklauso Parts/Shipping sritims, o dokumentu index turi fokusuotis i viena upload `Status` ir veiksmus. `Status` rodo upload veiksma: `Upload signed` geltonai, o kai signed/uploaded failas yra - `Download` zaliai.
+
+2026-04-15 Documents signed upload veiksmas perkeltas i `Status` stulpeli: `Upload signed` atidaro centruota modal pop-up su drag-and-drop/click file zona ir `Upload` / `Cancel` mygtukais. Sugeneruoto failo `Download` pasalintas is Documents index `Action`; zalia `Download` rodoma `Status` stulpelyje tik kai signed/uploaded failas jau yra.
+
+2026-04-15 Documents index eilučių legacy overdue red stripe indikatorius pasalintas. Overdue gali likti Command Center/sidebar priminimuose, bet Documents lenteleje nebemaisomas su upload statusu.
+
+2026-04-15 Documents index `Action` stulpelyje pasalinti `Reject` ir `Finish` / `DONE`; kasdieniame sarase lieka `View` ir `Edit`, o upload/download flow valdomas per `Status` stulpeli.
+
+2026-04-15 moduliu dokumentacija atskirta i `docs/modules/`: `WORKSPACE_MODULES.md` apraso workspace moduliu ownership ir ribas, `DOCUMENTS_MODULE.md` detaliai apraso Documents moduli, `TEMPLATES_MODULE.md` apraso Templates/Output Layouts moduli ir modifikaciju vieta, o `LINKING_AND_PIPELINE_LOGIC.md` apraso cross-module linkinima ir pipeline logika.

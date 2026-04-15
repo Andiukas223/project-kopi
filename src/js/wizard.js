@@ -363,6 +363,7 @@ function submitJob() {
   const customer = W.customer || "New customer";
   const equipment = W.equipment || "Medical equipment";
   const due = W.edd || "2026-04-22";
+  const created = new Date().toISOString().slice(0, 10);
 
   jobs.unshift({
     id,
@@ -386,6 +387,8 @@ function submitJob() {
     customer,
     owner: "Service",
     ...creatorMeta(),
+    created,
+    createdAt: new Date().toISOString(),
     status: "Draft",
     due,
     pipelineStep: "Draft"

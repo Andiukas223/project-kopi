@@ -1,5 +1,5 @@
 import { qs, qsa } from "./dom.js";
-import { contracts, documents, invoices, jobs, partsRequests, roles, vendorReturns } from "./data.js";
+import { contracts, documents, invoices, jobs, partsRequests, roles, vendorReturns, workActs } from "./data.js";
 import { applyStaticTranslations, t } from "./i18n.js";
 import { saveDemoState } from "./persistence.js";
 import { renderPage, renderRemindersStrip } from "./render.js";
@@ -49,12 +49,14 @@ function updateSidebarBadges() {
     ? documents.filter((d) => d.owner === docsOwnerLabel && !["Approved", "Archived"].includes(d.pipelineStep)).length
     : overdueCount;
   const financeCount = invoices.filter((inv) => inv.paymentStatus === "Pending").length;
+  const workActsCount = workActs.filter((act) => ["Draft", "Signature"].includes(act.status || "Draft")).length;
 
   setBadge("sb-command",   overdueCount,  "warn");
   setBadge("sb-service",   serviceCount,  "warn");
+  setBadge("sb-workacts",  workActsCount, "warn");
   setBadge("sb-parts",     partsCount,    "warn");
   setBadge("sb-documents", docsCount,     "warn");
-  setBadge("sb-templategen", 0, "warn");
+  setBadge("sb-templates", 0, "warn");
   setBadge("sb-finance",   financeCount,  "warn");
   setBadge("sb-contracts", contracts.filter((ct) => ct.status === "Edit mode" || ct.status === "Expired").length, "warn");
 }
@@ -119,8 +121,9 @@ export function bindNavigation() {
 }
 
 function updateActiveNav() {
+  const activePage = state.page === "templategen" ? "templates" : state.page;
   qsa(".sb-item").forEach((item) => {
-    item.classList.toggle("active", item.dataset.nav === state.page);
+    item.classList.toggle("active", item.dataset.nav === activePage);
   });
 }
 
@@ -136,7 +139,8 @@ function applyTheme() {
   const toggle = qs("[data-theme-toggle]");
   if (toggle) {
     const dark = theme === "dark";
-    toggle.textContent = dark ? t("theme.light") : t("theme.dark");
+    toggle.textContent = dark ? `☀️ ${t("theme.light")}` : `🌙 ${t("theme.dark")}`;
     toggle.setAttribute("aria-pressed", String(dark));
+    toggle.setAttribute("aria-label", toggle.textContent);
   }
 }

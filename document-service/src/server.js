@@ -1,11 +1,14 @@
 import crypto from "node:crypto";
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 import carbone from "carbone";
 import cors from "cors";
 import express from "express";
 
+const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, "..");
 const templatesDir = path.join(appRoot, "templates");
@@ -15,10 +18,17 @@ const storageDir = process.env.STORAGE_DIR || path.join(appRoot, "storage");
 const feedbackAttachmentDir = path.join(storageDir, "attachments", "bug-reports");
 const feedbackReportsPath = path.join(storageDir, "feedback-reports.json");
 const fileIndexPath = path.join(storageDir, "files.json");
+const wopiStorageDir = path.join(storageDir, "collabora-wopi");
+const wopiSessionsPath = path.join(wopiStorageDir, "sessions.json");
 const app = express();
 const port = Number(process.env.PORT || 3001);
 const maxFeedbackAttachmentBytes = Number(process.env.FEEDBACK_ATTACHMENT_MAX_BYTES || 5 * 1024 * 1024);
 const maxUploadedFileBytes = Number(process.env.UPLOAD_MAX_BYTES || 7 * 1024 * 1024);
+const maxWopiFileBytes = Number(process.env.WOPI_FILE_MAX_BYTES || 30 * 1024 * 1024);
+const collaboraInternalUrl = String(process.env.COLLABORA_INTERNAL_URL || "http://collabora:9980").replace(/\/$/, "");
+const collaboraPublicUrl = String(process.env.COLLABORA_PUBLIC_URL || "http://localhost:8080").replace(/\/$/, "");
+const wopiInternalBaseUrl = String(process.env.WOPI_INTERNAL_BASE_URL || `http://document-service:${port}`).replace(/\/$/, "");
+const libreOfficeBinary = process.env.LIBREOFFICE_BIN || "soffice";
 
 const templateMap = {
   "tpl-service-act": "work-act.fodt",
@@ -35,6 +45,7 @@ const allowedTemplateIds = new Set(Object.keys(templateMap));
 const feedbackStatuses = new Set(["New", "Assigned", "In progress", "Fixed", "Reviewed", "Closed"]);
 
 app.use(cors());
+app.post("/wopi/files/:fileId/contents", express.raw({ type: "*/*", limit: `${Math.ceil(maxWopiFileBytes / 1024 / 1024)}mb` }), handleWopiPutFile);
 app.use(express.json({ limit: "10mb" }));
 app.use((error, _req, res, next) => {
   if (!error) {
@@ -60,6 +71,59 @@ app.use((error, _req, res, next) => {
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "document-service", engine: "carbone+libreoffice" });
 });
+
+app.post("/collabora/sessions", async (req, res) => {
+  try {
+    const session = await createCollaboraSession(req.body || {});
+    res.status(201).json({ ok: true, session });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ ok: false, error: error.message || "Could not create Collabora session." });
+  }
+});
+
+app.get("/collabora/sessions/:sessionId", async (req, res) => {
+  const session = await findWopiSessionById(req.params.sessionId);
+  if (!session) {
+    res.status(404).json({ ok: false, error: "Collabora session not found." });
+    return;
+  }
+
+  res.json({ ok: true, session: publicWopiSession(session) });
+});
+
+app.get("/collabora/sessions/:sessionId/download", async (req, res) => {
+  try {
+    const session = await findWopiSessionById(req.params.sessionId);
+    if (!session) {
+      res.status(404).json({ ok: false, error: "Collabora session not found." });
+      return;
+    }
+
+    const format = String(req.query.format || "fodt").toLowerCase();
+    if (format === "pdf") {
+      const pdf = await exportWopiSessionPdf(session);
+      res.setHeader("Content-Type", "application/pdf");
+      res.download(pdf.filePath, pdf.fileName);
+      return;
+    }
+    if (format && format !== "fodt") {
+      res.status(400).json({ ok: false, error: `Unsupported Collabora download format: ${format}.` });
+      return;
+    }
+
+    const filePath = resolveStoredFilePath(session.storagePath);
+    res.setHeader("Content-Type", contentTypeForFile(session.fileName));
+    res.download(filePath, session.fileName);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ ok: false, error: error.message || "Collabora session download failed." });
+  }
+});
+
+app.get("/wopi/files/:fileId", handleWopiCheckFileInfo);
+app.get("/wopi/files/:fileId/contents", handleWopiGetFile);
+app.post("/wopi/files/:fileId", handleWopiFileOperation);
 
 app.post("/preview", async (req, res) => {
   const payload = normalisePayload(req.body);
@@ -215,6 +279,429 @@ app.listen(port, () => {
   console.log(`Document service listening on ${port}`);
 });
 
+async function createCollaboraSession(body = {}) {
+  await fs.mkdir(wopiStorageDir, { recursive: true });
+  const sessionId = `wopi-${crypto.randomUUID().slice(0, 12)}`;
+  const fileId = `wopi-file-${crypto.randomUUID().slice(0, 12)}`;
+  const accessToken = crypto.randomBytes(32).toString("base64url");
+  const title = String(body.title || body.name || "Work List Template").slice(0, 180);
+  const sourceType = String(body.sourceType || "work-list-template").slice(0, 80);
+  const sourceId = String(body.sourceId || body.templateId || sessionId).slice(0, 120);
+  const fileName = `${safeFilePart(sourceId)}-${safeFilePart(title)}-${sessionId}.fodt`;
+  const filePath = path.join(wopiStorageDir, fileName);
+  const now = new Date().toISOString();
+  const buffer = Buffer.from(renderWorkListTemplateFodt({ ...body, title }), "utf8");
+
+  await fs.writeFile(filePath, buffer);
+
+  const wopiSrc = `${wopiInternalBaseUrl}/wopi/files/${encodeURIComponent(fileId)}`;
+  const editorUrl = await buildCollaboraEditorUrl({ wopiSrc, accessToken, extension: "fodt" });
+  const session = {
+    id: sessionId,
+    fileId,
+    accessToken,
+    sourceType,
+    sourceId,
+    ownerId: String(body.ownerId || "local-owner").slice(0, 120),
+    userId: String(body.userId || "local-owner").slice(0, 120),
+    userName: String(body.userName || body.entryPerson || "Local owner").slice(0, 180),
+    title,
+    fileName,
+    storagePath: path.relative(appRoot, filePath).replaceAll("\\", "/"),
+    mimeType: contentTypeForFile(fileName),
+    sizeBytes: buffer.length,
+    sha256: crypto.createHash("sha256").update(buffer).digest("hex"),
+    version: 1,
+    lock: "",
+    createdAt: now,
+    updatedAt: now,
+    lastAccessedAt: "",
+    lastSavedAt: "",
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    wopiSrc,
+    editorUrl,
+    downloadUrl: `/api/documents/collabora/sessions/${sessionId}/download`,
+    pdfDownloadUrl: `/api/documents/collabora/sessions/${sessionId}/download?format=pdf`,
+    meta: {
+      company: String(body.company || "").slice(0, 180),
+      entryPerson: String(body.entryPerson || "").slice(0, 180),
+      serviceType: String(body.serviceType || "").slice(0, 80)
+    }
+  };
+
+  await upsertWopiSession(session);
+  return publicWopiSession(session);
+}
+
+async function buildCollaboraEditorUrl({ wopiSrc, accessToken, extension }) {
+  const actionUrl = await collaboraActionUrlForExtension(extension);
+  const joiner = actionUrl.endsWith("?") || actionUrl.endsWith("&")
+    ? ""
+    : actionUrl.includes("?") ? "&" : "?";
+  const accessTokenTtl = Date.now() + 24 * 60 * 60 * 1000;
+  return `${actionUrl}${joiner}WOPISrc=${encodeURIComponent(wopiSrc)}&access_token=${encodeURIComponent(accessToken)}&access_token_ttl=${accessTokenTtl}&permission=edit`;
+}
+
+async function collaboraActionUrlForExtension(extension = "fodt") {
+  const response = await fetch(`${collaboraInternalUrl}/hosting/discovery`);
+  if (!response.ok) {
+    throw new Error(`Collabora discovery failed with HTTP ${response.status}.`);
+  }
+
+  const discovery = await response.text();
+  const actionTags = discovery.match(/<action\b[^>]*>/g) || [];
+  const actionTag = actionTags.find((tag) =>
+    xmlAttr(tag, "ext") === extension &&
+    xmlAttr(tag, "name") === "edit"
+  ) || actionTags.find((tag) => xmlAttr(tag, "ext") === extension);
+  const urlsrc = xmlAttr(actionTag || "", "urlsrc");
+  if (!urlsrc) {
+    throw new Error(`Collabora does not advertise an editor action for .${extension}.`);
+  }
+
+  const parsed = new URL(xmlUnescape(urlsrc));
+  return `${collaboraPublicUrl}${parsed.pathname}${parsed.search}`;
+}
+
+function xmlAttr(tag = "", name = "") {
+  const match = tag.match(new RegExp(`${name}="([^"]*)"`));
+  return match ? xmlUnescape(match[1]) : "";
+}
+
+function xmlUnescape(value = "") {
+  return String(value)
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function renderWorkListTemplateFodt(body = {}) {
+  const title = body.title || body.name || "Work List Template";
+  const bodyText = body.bodyText || body.description || "";
+  const metadataRows = [
+    ["Company", body.company || ""],
+    ["Entry person", body.entryPerson || ""],
+    ["Template name", title],
+    ["Service type", body.serviceType || ""],
+    ["Equipment", asLabelText(body.equipmentLabels || body.linkedEquipment || body.equipment)],
+    ["Hospitals", asLabelText(body.hospitalLabels || body.linkedHospitals || body.hospitals)],
+    ["Work equipment", asLabelText(body.workEquipmentLabels || body.linkedWorkEquipment || body.workEquipment)]
+  ];
+  const workRows = Array.isArray(body.workRows) ? body.workRows : [];
+  const richParagraphs = stripHtmlToLines(body.richBodyHtml || "");
+  const workRowsSection = workRows.length ? `
+      <text:p text:style-name="Heading">Work Act additional rows</text:p>
+      ${wopiTableXml(["No.", "Work description", "Expected / measured value", "Notes"], workRows.map((row, index) => [String(index + 1), row, "Check / fill", ""]))}` : "";
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" office:version="1.2" office:mimetype="application/vnd.oasis.opendocument.text">
+  <office:styles>
+    <style:style style:name="Standard" style:family="paragraph"><style:text-properties fo:font-size="10pt"/></style:style>
+    <style:style style:name="Title" style:family="paragraph"><style:text-properties fo:font-size="16pt" fo:font-weight="bold"/></style:style>
+    <style:style style:name="Heading" style:family="paragraph"><style:text-properties fo:font-size="12pt" fo:font-weight="bold"/></style:style>
+  </office:styles>
+  <office:automatic-styles>
+    <style:style style:name="TableCell" style:family="table-cell"><style:table-cell-properties fo:border="0.5pt solid #000000" fo:padding="0.05in"/></style:style>
+  </office:automatic-styles>
+  <office:body>
+    <office:text>
+      <text:p text:style-name="Title">${escapeXml(title)}</text:p>
+      <text:p>${escapeXml(bodyText)}</text:p>
+      <text:p text:style-name="Heading">Template configuration</text:p>
+      ${wopiTableXml(["Field", "Value"], metadataRows)}
+      <text:p text:style-name="Heading">Advanced editor body</text:p>
+      ${(richParagraphs.length ? richParagraphs : [bodyText || ""]).map((line) => `<text:p>${escapeXml(line)}</text:p>`).join("\n      ")}
+      ${workRowsSection}
+    </office:text>
+  </office:body>
+</office:document>`;
+}
+
+function asLabelText(value) {
+  if (Array.isArray(value)) return value.filter(Boolean).join(", ");
+  return String(value || "");
+}
+
+function stripHtmlToLines(html = "") {
+  const normalized = String(html)
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'");
+  return normalized
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .slice(0, 200);
+}
+
+function wopiTableXml(headers = [], rows = []) {
+  const safeRows = rows.length ? rows : [["", ""]];
+  return `<table:table table:name="Table${crypto.randomUUID().slice(0, 8)}">
+        ${headers.map(() => `<table:table-column/>`).join("")}
+        <table:table-row>${headers.map((header) => wopiCellXml(header)).join("")}</table:table-row>
+        ${safeRows.map((row) => `<table:table-row>${row.map((cell) => wopiCellXml(cell)).join("")}</table:table-row>`).join("\n        ")}
+      </table:table>`;
+}
+
+function wopiCellXml(value = "") {
+  return `<table:table-cell table:style-name="TableCell" office:value-type="string"><text:p>${escapeXml(value)}</text:p></table:table-cell>`;
+}
+
+async function handleWopiCheckFileInfo(req, res) {
+  const session = await authorizeWopiRequest(req, res);
+  if (!session) return;
+
+  const filePath = resolveStoredFilePath(session.storagePath);
+  const stat = await fs.stat(filePath);
+  session.lastAccessedAt = new Date().toISOString();
+  session.sizeBytes = stat.size;
+  await upsertWopiSession(session);
+
+  res.setHeader("X-WOPI-ItemVersion", String(session.version || 1));
+  res.json({
+    BaseFileName: session.fileName,
+    OwnerId: session.ownerId || "local-owner",
+    Size: stat.size,
+    UserId: session.userId || "local-owner",
+    UserFriendlyName: session.userName || "Local owner",
+    UserCanWrite: true,
+    ReadOnly: false,
+    SupportsUpdate: true,
+    SupportsLocks: true,
+    SupportsGetLock: true,
+    SupportsExtendedLockLength: true,
+    SupportsRename: false,
+    SupportsUserInfo: false,
+    Version: String(session.version || 1),
+    LastModifiedTime: stat.mtime.toISOString(),
+    PostMessageOrigin: collaboraPublicUrl,
+    DisablePrint: false,
+    DisableExport: false,
+    DisableCopy: false
+  });
+}
+
+async function handleWopiGetFile(req, res) {
+  const session = await authorizeWopiRequest(req, res);
+  if (!session) return;
+
+  const filePath = resolveStoredFilePath(session.storagePath);
+  res.setHeader("Content-Type", contentTypeForFile(session.fileName));
+  res.setHeader("X-WOPI-ItemVersion", String(session.version || 1));
+  res.sendFile(filePath);
+}
+
+async function handleWopiPutFile(req, res) {
+  const session = await authorizeWopiRequest(req, res);
+  if (!session) return;
+
+  const requestLock = String(req.header("X-WOPI-Lock") || "");
+  if (session.lock && session.lock !== requestLock) {
+    sendWopiLockConflict(res, session.lock, "File is locked by another Collabora session.");
+    return;
+  }
+
+  const buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || "");
+  if (buffer.length > maxWopiFileBytes) {
+    res.status(413).json({ ok: false, error: "WOPI file is too large." });
+    return;
+  }
+
+  const filePath = resolveStoredFilePath(session.storagePath);
+  await fs.writeFile(filePath, buffer);
+  const now = new Date().toISOString();
+  session.version = (Number(session.version) || 1) + 1;
+  session.sizeBytes = buffer.length;
+  session.sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
+  session.updatedAt = now;
+  session.lastSavedAt = now;
+  await upsertWopiSession(session);
+
+  res.setHeader("X-WOPI-ItemVersion", String(session.version));
+  res.status(200).json({ LastModifiedTime: now });
+}
+
+async function handleWopiFileOperation(req, res) {
+  const session = await authorizeWopiRequest(req, res);
+  if (!session) return;
+
+  const override = String(req.header("X-WOPI-Override") || "").toUpperCase();
+  const requestLock = String(req.header("X-WOPI-Lock") || "");
+
+  if (override === "LOCK") {
+    if (!requestLock) {
+      res.status(400).json({ ok: false, error: "X-WOPI-Lock header is required." });
+      return;
+    }
+    if (session.lock && session.lock !== requestLock) {
+      sendWopiLockConflict(res, session.lock, "File already has a different lock.");
+      return;
+    }
+    session.lock = requestLock;
+    session.updatedAt = new Date().toISOString();
+    await upsertWopiSession(session);
+    res.status(200).end();
+    return;
+  }
+
+  if (override === "GET_LOCK") {
+    res.setHeader("X-WOPI-Lock", session.lock || "");
+    res.status(200).end();
+    return;
+  }
+
+  if (override === "REFRESH_LOCK") {
+    if (session.lock && session.lock !== requestLock) {
+      sendWopiLockConflict(res, session.lock, "Cannot refresh a different lock.");
+      return;
+    }
+    session.lock = requestLock || session.lock;
+    session.updatedAt = new Date().toISOString();
+    await upsertWopiSession(session);
+    res.status(200).end();
+    return;
+  }
+
+  if (override === "UNLOCK") {
+    if (session.lock && session.lock !== requestLock) {
+      sendWopiLockConflict(res, session.lock, "Cannot unlock a different lock.");
+      return;
+    }
+    session.lock = "";
+    session.updatedAt = new Date().toISOString();
+    await upsertWopiSession(session);
+    res.status(200).end();
+    return;
+  }
+
+  res.status(501).json({ ok: false, error: `Unsupported WOPI operation: ${override || "none"}.` });
+}
+
+async function authorizeWopiRequest(req, res) {
+  const session = await findWopiSessionByFileId(req.params.fileId);
+  if (!session) {
+    res.status(404).json({ ok: false, error: "WOPI file not found." });
+    return null;
+  }
+
+  const token = String(req.query.access_token || "").trim();
+  if (!token || token !== session.accessToken) {
+    res.status(401).json({ ok: false, error: "Invalid WOPI access token." });
+    return null;
+  }
+
+  return session;
+}
+
+function sendWopiLockConflict(res, lock, reason) {
+  res.setHeader("X-WOPI-Lock", lock || "");
+  res.setHeader("X-WOPI-LockFailureReason", reason);
+  res.status(409).end();
+}
+
+function publicWopiSession(session = {}) {
+  return {
+    id: session.id,
+    fileId: session.fileId,
+    sourceType: session.sourceType,
+    sourceId: session.sourceId,
+    title: session.title,
+    fileName: session.fileName,
+    mimeType: session.mimeType,
+    sizeBytes: session.sizeBytes,
+    version: session.version,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+    lastSavedAt: session.lastSavedAt,
+    expiresAt: session.expiresAt,
+    editorUrl: session.editorUrl,
+    downloadUrl: session.downloadUrl,
+    fodtDownloadUrl: session.downloadUrl,
+    pdfDownloadUrl: session.pdfDownloadUrl || `${session.downloadUrl}?format=pdf`,
+    meta: session.meta || {}
+  };
+}
+
+async function exportWopiSessionPdf(session = {}) {
+  const sourcePath = resolveStoredFilePath(session.storagePath);
+  const sourceStat = await fs.stat(sourcePath);
+  const baseName = path.basename(session.fileName, path.extname(session.fileName));
+  const pdfFileName = `${baseName}-v${Number(session.version) || 1}.pdf`;
+  const exportDir = path.join(wopiStorageDir, "exports");
+  const pdfPath = path.join(exportDir, pdfFileName);
+
+  try {
+    const pdfStat = await fs.stat(pdfPath);
+    if (pdfStat.mtimeMs >= sourceStat.mtimeMs) {
+      return { filePath: pdfPath, fileName: pdfFileName };
+    }
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+
+  await fs.mkdir(exportDir, { recursive: true });
+  const tempDir = path.join(exportDir, `tmp-${crypto.randomUUID()}`);
+  const tempProfileDir = path.join(tempDir, "lo-profile");
+  const tempSourceName = `${baseName}-v${Number(session.version) || 1}.fodt`;
+  const tempSourcePath = path.join(tempDir, tempSourceName);
+  const tempPdfPath = path.join(tempDir, tempSourceName.replace(/\.fodt$/i, ".pdf"));
+
+  try {
+    await fs.mkdir(tempProfileDir, { recursive: true });
+    await fs.copyFile(sourcePath, tempSourcePath);
+    await execFileAsync(libreOfficeBinary, [
+      "--headless",
+      "--nologo",
+      "--nofirststartwizard",
+      `-env:UserInstallation=${pathToFileURL(tempProfileDir).href}`,
+      "--convert-to",
+      "pdf",
+      "--outdir",
+      tempDir,
+      tempSourcePath
+    ], { timeout: 60000, maxBuffer: 1024 * 1024 });
+    await fs.rm(pdfPath, { force: true });
+    await fs.rename(tempPdfPath, pdfPath);
+    return { filePath: pdfPath, fileName: pdfFileName };
+  } catch (error) {
+    const detail = [error.message, error.stderr, error.stdout].filter(Boolean).join(" ");
+    throw new Error(`PDF export failed. Make sure LibreOffice/soffice is available. ${detail}`.trim());
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function readWopiSessions() {
+  return readJsonArray(wopiSessionsPath);
+}
+
+async function upsertWopiSession(session) {
+  const sessions = await readWopiSessions();
+  const nextSessions = [
+    session,
+    ...sessions.filter((item) => item.id !== session.id && item.fileId !== session.fileId)
+  ].slice(0, 200);
+  await writeJsonArray(wopiSessionsPath, nextSessions);
+}
+
+async function findWopiSessionById(sessionId) {
+  const sessions = await readWopiSessions();
+  return sessions.find((session) => session.id === sessionId) || null;
+}
+
+async function findWopiSessionByFileId(fileId) {
+  const sessions = await readWopiSessions();
+  return sessions.find((session) => session.fileId === fileId) || null;
+}
+
 async function saveTemplateUpload(body = {}) {
   const templateId = String(body.templateId || "");
   if (!allowedTemplateIds.has(templateId)) {
@@ -307,6 +794,7 @@ function contentTypeForFile(fileName = "") {
   if (ext === ".pdf") return "application/pdf";
   if (ext === ".docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   if (ext === ".odt") return "application/vnd.oasis.opendocument.text";
+  if (ext === ".fodt") return "application/vnd.oasis.opendocument.text-flat-xml";
   if (ext === ".png") return "image/png";
   if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
   if (ext === ".webp") return "image/webp";
@@ -804,13 +1292,32 @@ async function readFeedbackReports() {
 
 async function readJsonArray(filePath) {
   try {
-    const raw = await fs.readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return parseJsonArray(await fs.readFile(filePath, "utf8"));
   } catch (error) {
     if (error.code === "ENOENT") return [];
+    if (error instanceof SyntaxError) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      try {
+        return parseJsonArray(await fs.readFile(filePath, "utf8"));
+      } catch (retryError) {
+        if (retryError instanceof SyntaxError) {
+          const corruptPath = `${filePath}.corrupt-${Date.now()}`;
+          await fs.copyFile(filePath, corruptPath).catch(() => {});
+          console.warn(`Ignoring malformed JSON registry ${path.basename(filePath)}; backup: ${path.basename(corruptPath)}`);
+          return [];
+        }
+        throw retryError;
+      }
+    }
     throw error;
   }
+}
+
+function parseJsonArray(rawValue) {
+  const raw = String(rawValue || "").replace(/^\uFEFF/, "").trim();
+  if (!raw) return [];
+  const parsed = JSON.parse(raw);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 async function writeJsonArray(filePath, items) {

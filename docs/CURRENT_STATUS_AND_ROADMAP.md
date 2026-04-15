@@ -22,17 +22,37 @@ The app currently runs as:
 
 - `web`: nginx static frontend, served on `http://localhost:8080`.
 - `document-service`: Node.js + Carbone + LibreOffice service, served behind nginx under `/api/documents/`.
+- `collabora`: Collabora Online Development Edition (`CODE`) container for LibreOffice-like advanced template editing. It has no public host port and is attached only to the internal `collabora-net` Docker network; browser access is through the `web` nginx proxy, while WOPI file access goes to `document-service` on the same internal network.
 - `document-service/generated`: generated document output.
-- `document-service/storage`: persistent local runtime storage for uploaded files, feedback screenshots, and file registry JSON. Runtime contents are ignored by git; only `.gitkeep` is tracked.
+- `document-service/storage`: persistent local runtime storage for uploaded files, feedback screenshots, WOPI Collabora `.fodt` sessions, and file registry JSON. Runtime contents are ignored by git; only `.gitkeep` is tracked.
+
+Server deployment is now documented separately in `docs/PRODUCTION_DEPLOYMENT.md`. Treat the current compose setup as local/private-server prototype baseline until a production override, HTTPS reverse proxy, secrets, backups, and backend auth/storage blockers are completed.
 
 Frontend is still vanilla JavaScript modules. Backend is still a prototype document/feedback service, not the final app API.
 
+Key project/runbook docs:
+
+- `docs/DOCUMENTATION_RULES.md` - mandatory documentation method for future chats/agents: reading order, source-of-truth rules, module doc structure, UI terminology, ownership, production notes, changelog, and definition of done for docs.
+- `docs/PRODUCTION_DEPLOYMENT.md` - server configuration, launch, backup/restore, health checks, Collabora/WOPI production notes, and go-live checklist.
+
 ## Implemented Modules
+
+Detailed module documentation now lives in `docs/modules/`:
+
+- `docs/modules/WORKSPACE_MODULES.md` - current workspace module ownership and UI rules.
+- `docs/modules/DOCUMENTS_MODULE.md` - detailed Documents repository/file custody behavior.
+- `docs/modules/WORK_ACTS_MODULE.md` - detailed Work Acts source draft behavior and Work Act/Templates/Documents boundary.
+- `docs/modules/TEMPLATES_MODULE.md` - detailed Templates and Output Layouts behavior.
+- `docs/modules/WORK_EQUIPMENT_FUTURE_MODULE.md` - future Work Equipment/metrology tool module context.
+- `docs/modules/COLLABORA_WOPI_INTEGRATION.md` - shared Collabora CODE/WOPI runtime and module adoption playbook.
+- `docs/modules/LINKING_AND_PIPELINE_LOGIC.md` - cross-module linking and pipeline logic.
 
 ### App Shell
 
 - Fixed topbar, sidebar, main workspace, role switcher, dynamic navigation badges.
+- Topbar wordmark subtitle is `Informational system` in EN and `Informacine sistema` in LT.
 - Light and dark mode with persisted theme state.
+- Theme toggle is fixed near the bottom-left and centered within the `Workspace` sidebar column, using `☀️` / `🌙` labels.
 - LT/EN language toggle foundation for topbar/sidebar/global shell labels.
 - Docker/web control is intentionally outside the web UI through `vm-web-control.ps1` / `.cmd`.
 - `Report issue` is global and available from every page.
@@ -41,7 +61,7 @@ Frontend is still vanilla JavaScript modules. Backend is still a prototype docum
 
 - Role-filtered overview panels.
 - Service/job/document/parts reminders in sidebar.
-- Document pipeline health card still exists as a high-level operational overview, but daily document handling is now done in `Documents` and `Template Generation`.
+- Document pipeline health card still exists as a high-level operational overview, but daily document handling is now done in `Documents`, `Work Acts`, and `Templates`.
 
 ### Service
 
@@ -50,7 +70,7 @@ Frontend is still vanilla JavaScript modules. Backend is still a prototype docum
 - Diagnostics and repair use manual duration entry, not live timers.
 - PM scheduling with month-limited reschedule logic.
 - Service Manager parts approval queue.
-- Work Act creation flow moved into `Template Generation`, but service context still links into it.
+- Work Act creation flow now has its own `Work Acts` workspace, and service context links into it.
 
 ### Sales
 
@@ -81,27 +101,31 @@ Documents is now a repository and file custody module, not the main template edi
 
 Implemented behavior:
 
-- Search/filter table by text, type, customer, creator initials, and compact date range. Queue and status filters were removed from the active UI to reduce clutter.
-- Table contains the important file custody fields directly; the old selected document side panel is no longer needed as the primary source of information.
+- Search/filter table by text, type, customer, creator initials, and a single compact created-date query. The created-date filter accepts partial dates (`2026`, `2026-04`, `2026-04-15`) or a calendar picker selection. Queue and status filters were removed from the active UI to reduce clutter.
+- Table contains the important document custody fields directly; the old selected document side panel is no longer needed as the primary source of information. Documents index does not show delivery status; delivery belongs to Parts/Shipping flows. The document register focuses on one upload `Status`: before signed/uploaded file exists it shows a yellow `Upload signed` action, and after upload it shows a green `Download` link. File names are not shown as a separate index column.
+- The repository table shows document `Created` date instead of `Due`; creation/upload date is the daily reference point. Internal due dates can still support SLA/overdue reminders.
+- Documents index rows no longer show the old red overdue stripe; overdue remains a reminder/overview concern, while the table focuses on upload status and actions.
 - `View` opens the generated/uploaded document preview.
 - `Edit` routes to the correct source workspace where possible:
-  - Work Act -> `Template Generation / Work Acts`
+  - Work Act -> `Work Acts`
   - Defect Act -> `Template Generation / Defect Acts`
   - Commercial Offer/Quotation -> `Template Generation / Commercial Offers`
   - Invoice -> `Finance`
   - Parts/vendor documents -> `Parts`
-- `Download` appears when a file is available.
-- `Reject` remains for review/customer/signature correction paths.
+- `Download` appears in the table `Status` column when a signed/uploaded file is available. Generated-file download remains available from preview/source contexts rather than as a separate Documents index action.
+- `Reject` is not exposed in the Documents index action column.
 - The generic `Advance` button was removed.
 - Archiving is removed from the active Documents workflow for now.
-- Generated documents now signal `Upload signed copy`.
-- After a signed copy is uploaded, the row shows `Signed copy uploaded` and exposes `Finish`.
-- `Finish` marks the document `Done`, shows green `DONE`, and closes the linked case/ticket in demo state.
+- Generated documents expose the `Upload signed` action directly in the table `Status` column. The action opens a centered upload modal with drag-and-drop/click file selection plus `Upload` and `Cancel`.
+- After a signed copy is uploaded, the table `Status` column changes to green `Download`; `Finish` / `DONE` is not exposed in the Documents index action column.
 - Uploaded signed copies are stored through `document-service` and linked back to the same document record.
 - Nginx allows larger document uploads with `client_max_body_size 20m`.
 - The table reference uses the source/job reference (`VM-SV-...`, `QTE-...`) instead of exposing the internal `DOC-...` as the primary daily identifier. Internal document IDs remain for system links and logs.
 - User-facing Owner is the creator initials (`AL`, `VK`, `RP`). Internal module queue ownership remains in data for routing, but it is no longer exposed as an active Documents filter.
 - Newly created document drafts auto-generate a PDF through `document-service` by default, with file registry metadata, preview URL, and download URL. Manual generate remains available as a regenerate action.
+- Document workflow status is normalized from file state: generated file -> `Signature` / `Needs signed upload`, signed file -> green `Download` in Status. Persisted `Auto generating` states are reset on load and queued again so documents do not get stuck without a generated file.
+- Mock preview artifacts are not treated as real generated files in the repository. A document must have a `document-service` download/preview URL before it can signal signed-upload readiness.
+- Documents table text remains selectable for copy/paste; row selection must not clear an active text selection.
 - Document types without a dedicated output layout use `tpl-generic-document` / `generic-document.fodt` until a specific layout is designed.
 
 Current active document lifecycle:
@@ -111,11 +135,10 @@ Draft / generated draft
   -> Preview or download generated file
   -> Collect signature outside the system
   -> Upload signed copy into the same document record
-  -> Finish
-  -> DONE / case-ticket closed
+  -> Status changes to green Download
 ```
 
-Reject path:
+Reject path is not exposed in the Documents index table:
 
 ```text
 Review / Customer / Signature
@@ -132,17 +155,32 @@ Deferred:
 - Legal retention policy.
 - Real e-mail sending.
 
-### Template Generation
+### Templates
 
-Template Generation is the document creation workspace. It is separate from Documents.
+Templates is the reusable Work List Template configuration workspace. It is separate from Documents.
 
-Implemented tabs:
+Current landing screen:
 
-- `Work Acts`
-- `Defect Acts`
-- `Commercial Offers`
-- `Templates`
-- `Output Layouts`
+- Work List Template configurator.
+- Fields: Company, Entry person, Template name, Service type.
+- Link configuration: searchable combobox/autocomplete dropdowns for Equipment, Hospitals, and Work Equipment. The field itself acts as the search input; options are clicked in the dropdown rows, not selected through a checkbox list.
+- Actions: Open in advanced editor, Save, Delete, Cancel.
+- Same-page advanced-editor document preview.
+- `Open in advanced editor` now creates a local Collabora WOPI session, renders the generated `.fodt` in a same-page iframe, opens in `Editing` mode, and saves back into `document-service/storage/collabora-wopi`.
+- Edited Collabora `.fodt` source is kept in the session, and the user-facing download exports the latest saved version as PDF. Edited files are not yet parsed back into template links/body fields.
+- Work rows are no longer edited in Templates. Concrete Work Act points/rows belong to the `Work Acts` module and are appended to generated Work Act documents.
+
+### Work Acts
+
+Work Acts is the concrete Work Act source workspace. It is separate from Templates.
+
+Current state:
+
+- Sidebar module `Work Acts` exists.
+- Internal route/page id is `workacts`.
+- The page reuses the existing Work Act draft/list/builder implementation that previously lived under the legacy Template Generation source-flow naming.
+- `Documents -> Edit` for Work Act routes to `Work Acts`.
+- Detailed implementation handoff lives in `docs/modules/WORK_ACTS_MODULE.md`.
 
 Work Acts implemented:
 
@@ -186,18 +224,21 @@ Commercial Offers implemented:
 
 Templates implemented:
 
-- Registry list with search/filter concepts.
-- Template name, company, entry person/date metadata.
+- Selected-template configurator based on the Tomis Work List Template screen.
+- Template picker for existing procedure/checklist templates.
+- Template name, company, entry person, service type, and description metadata.
 - Linked service types, equipment, hospitals, work equipment.
+- Work equipment now means service/metrology tools such as digital multimeter, oscilloscope, safety analyzer, pressure gauge, thermometer, flow meter, or load-test set. It is seed data for a future `Work Equipment` module.
 - Applicability logic for Work Act template selection.
+- Delete action for prototype template records.
 - Visual/rich editor MVP:
-  - document-like preview
+  - same-page document-like preview
   - contenteditable rich editing
   - basic formatting/list toolbar
   - checklist row insertion
   - visual HTML persistence
   - bug/workaround note field
-- Structured work rows and applicability metadata remain the default generation source. The visual editor is for controlled micro edits and future template authoring, not for forcing daily users to lay out documents from scratch.
+- Template applicability metadata remains a reusable source. Concrete Work Act rows now belong to Work Acts. The visual editor is for controlled template body/layout micro edits, not for forcing daily users to lay out documents from scratch.
 
 Output Layouts implemented:
 
@@ -268,14 +309,15 @@ Not implemented yet:
 ## Product Decisions Locked For Now
 
 - `Documents` is a repository/search/file-custody module.
-- `Template Generation` is the creation/editor/generation module.
+- `Work Acts` is the concrete Work Act source/generation module.
+- `Templates` is the reusable procedure/checklist and output-layout configuration module.
 - User-facing equipment/procedure checklists are called `Templates` in the web UI. Internal notes may still refer to Tomis `Work List Templates` when describing the old system.
 - `Output Layouts` are advanced/admin printable form layouts for Carbone/LibreOffice generation; they should not dominate the daily document creation flow and may later move under Admin/settings.
 - Daily users should normally generate documents from structured records and prepared templates, not design each document from scratch.
 - Daily users still need access to a controlled visual/rich editor for micro edits, user-specific templates, and production bug/workaround capture.
 - Admin is an overseer for users, roles, permissions, pipeline progress, and exception queues, not just a final approver.
-- Archive in Documents is deferred. The current working close state is `DONE`.
-- The main document return path is: generate -> preview/download -> collect signature -> upload signed copy -> Finish -> DONE.
+- Archive in Documents is deferred.
+- The main document return path is: generate -> preview/download -> collect signature -> upload signed copy -> green Download in Status.
 - Page/document previews should stay white even in dark mode because they represent printable output.
 - Runtime files and captured screenshots should not be committed to git.
 
@@ -312,10 +354,8 @@ Plan:
 
 1. Keep table-first layout.
 2. Add clearer row signals:
-   - `Needs signed upload`
-   - `Signed uploaded`
-   - `Ready to finish`
-   - `DONE`
+   - `Upload signed`
+   - green `Download`
 3. Add upload affordance next to the exact matching document row.
 4. Add better empty states for filtered searches.
 5. Add a concise row audit popover or expandable row for file history.
@@ -347,7 +387,7 @@ Plan:
 3. Add table editing, merge fields, image/logo placeholders, page breaks, signature placeholders.
 4. Add autosave draft, dirty-state warning, revert, duplicate as personal template.
 5. Add version history and compare/diff.
-6. Keep structured work rows as canonical for automated generation.
+6. Keep concrete Work Act rows canonical in Work Acts for automated generation.
 
 ### B-42 - Backend Data Model And Auth
 
@@ -423,7 +463,7 @@ Goal: prepare the system for real users.
 Plan:
 
 1. Add automated smoke tests for critical flows.
-2. Add Playwright flows for document generation, signed upload, Finish/DONE, feedback capture, and admin queue.
+2. Add Playwright flows for document generation, signed upload, Status-column download, feedback capture, and admin queue.
 3. Add logging and error boundaries.
 4. Add DB backups and restore drills.
 5. Add environment config and secrets handling.

@@ -1,7 +1,7 @@
 import {
   allPermissions, bugReports, calendarEvents, commercialOfferDrafts, companyProfiles, contracts, customers, defectActs, documents, equipment,
   documentTemplateBlueprints, invoices, jobs, partsRequests, pipelineStages, quotations, roles, templates, users, vendorReturns,
-  workActs, workListTemplates
+  workActs, workEquipmentTools, workListTemplates
 } from "./data.js";
 import { escapeHtml } from "./dom.js";
 import { state } from "./state.js";
@@ -13,7 +13,9 @@ const pageMeta = {
   sales:     ["Sales", "Commercial offers, customer approval, and service handoff."],
   contracts: ["Contracts", "Signed customer contracts, PM/install/service specifications, and validity tracking."],
   documents: ["Documents", "Document repository, search, status tracking, and file custody."],
-  templategen: ["Template Generation", "Work Act, Defect Act, Commercial Offer, Templates, and advanced output layout workspace."],
+  workacts: ["Work Acts", "Work act drafts, source service context, template selection, generated PDF, and signed return handoff."],
+  templates: ["Templates", "Reusable procedure/checklist template configuration and advanced output layout workspace."],
+  templategen: ["Templates", "Reusable procedure/checklist template configuration and advanced output layout workspace."],
   finance:   ["Finance", "Invoice generation, payment status, and job-linked billing queue."],
   customers: ["Customers", "Hospitals, clinics, and customer activity overview."],
   equipment: ["Equipment", "Customer equipment registry and service status."],
@@ -98,16 +100,32 @@ const moduleSpecs = {
     roles: "All roles create documents of their own type. Admin has full pipeline control. All roles can upload external documents with metadata. Rejection with comment can be raised by any reviewer; permanent resolution by Admin.",
     submodules: "Pipeline view · Document table with filters · Selected document detail panel · Template generation panel (Carbone mock) · Upload panel (create or upload external) · Global search with indexed metadata",
     pipeline: "Draft → Review → Customer → Signature → Approved\nReject path: Rejected → Draft (comment required, visible in document history)\nPermanent rejection: add comment explaining why → Admin resolves and closes issue\nSigned doc return: engineer/sales downloads generated doc → collects physical signature → re-uploads into same document record",
-    actions: "Create (from template) · Upload external document · Upload signed copy · Finish document · Reject with comment · Search with filters · Download generated file",
-    planned: "Global search with indexed metadata (location / contract / date / executor / who signed / description) · Search UI: filter chips + text field + Search / Cancel buttons · Carbone backend integration for real document generation · Rejection comment thread · Re-upload signed version flow"
+    actions: "Create (from template) · Upload external document · Upload signed copy · Search with filters · View generated file · Download signed/uploaded file",
+    planned: "Global search with indexed metadata (location / contract / date / executor / who signed / description) · Search UI: filter chips + text field + Search / Cancel buttons · Carbone backend integration for real document generation · Re-upload signed version flow"
+  },
+  workacts: {
+    purpose: "Own Work Act source drafts before they become generated/signed documents. Work Acts copy reusable Templates into concrete job-specific rows, link service job/equipment context, generate PDF drafts, and hand signed-file custody to Documents.",
+    roles: "Service Engineer creates and edits own Work Acts. Service Manager reviews service-side completeness. Admin can oversee all drafts and exceptions. Manager can review read-only.",
+    submodules: "Work Act list - source service job selector - selected draft builder - equipment picker - Template picker - work rows - report options - generated document metadata",
+    pipeline: "Service job context -> Work Act draft -> choose equipment -> choose Template -> copy rows into Work Act -> fill work description/options -> Create document draft -> Generate PDF -> collect signature outside app -> Documents handles signed upload/download",
+    actions: "Create Work Act draft - Select draft - Apply Template - Add/remove/edit work rows - Generate document draft/PDF - Open preview/download generated PDF",
+    planned: "Move remaining Work Act-specific code out of legacy template-generation naming, add permissions, add backend persistence, add version history, add explicit close/revision states, and add Playwright smoke tests"
+  },
+  templates: {
+    purpose: "Reusable Work List Template configuration separated from the Documents repository.",
+    roles: "Service and Service Manager maintain procedure templates. Admin can manage advanced editor/layout behavior. Manager can review as read-only.",
+    submodules: "Work List Template configurator - applicability links - same-page advanced editor preview",
+    pipeline: "Select template -> set company/person/name/service type -> link equipment/hospitals/work equipment -> edit preview in advanced editor -> save reusable template",
+    actions: "Open in advanced editor - Save - Delete - Cancel - Add/remove work rows",
+    planned: "Advanced editor V2 with table editing, merge fields, logo/image placeholders, autosave, dirty-state warning, revert, and version history"
   },
   templategen: {
-    purpose: "Dedicated document creation workspace separated from the Documents repository. This is where Work Acts, Defect Acts, Commercial Offers, and reusable Templates are prepared and generated.",
-    roles: "Service owns Work Acts, Defect Acts, and Templates. Sales owns Commercial Offers. Admin manages advanced output layouts. Manager can review as read-only.",
-    submodules: "Work Acts · Defect Acts · Commercial Offers · Templates · Advanced output layouts · Preview/generate panel",
-    pipeline: "Create draft -> choose source job/equipment/customer -> apply Template when needed -> edit content/sections -> generate PDF/DOCX/ODT -> save generated file into Documents",
-    actions: "Create draft · Apply work list template · Edit output template · Generate document · Save generated file into Documents",
-    planned: "Move Work Act draft list here from Service detail · Dedicated Templates registry CRUD · advanced output layout versioning and file upload"
+    purpose: "Reusable Work List Template configuration separated from the Documents repository.",
+    roles: "Service and Service Manager maintain procedure templates. Admin can manage advanced editor/layout behavior. Manager can review as read-only.",
+    submodules: "Work List Template configurator · applicability links · same-page advanced editor preview",
+    pipeline: "Select template -> set company/person/name/service type -> link equipment/hospitals/work equipment -> edit preview in advanced editor -> save reusable template",
+    actions: "Open in advanced editor · Save · Delete · Cancel · Add/remove work rows",
+    planned: "Advanced editor V2 with table editing, merge fields, logo/image placeholders, autosave, dirty-state warning, revert, and version history"
   },
   customers: {
     purpose: "Registry of hospitals, clinics, and private medical institutions. Central reference for jobs, documents, equipment, and parts delivery addresses. Office Manager is primary manager; all roles use it read-only for autofill in forms.",
@@ -432,6 +450,21 @@ function dueCell(doc) {
   return `<span class="due-cell"><span class="mono">${escapeHtml(doc.due)}</span>${badge}</span>`;
 }
 
+function documentCreatedDate(doc) {
+  return String(
+    doc?.created ||
+    doc?.createdAt?.slice?.(0, 10) ||
+    doc?.uploadedAt?.slice?.(0, 10) ||
+    doc?.generatedFile?.generatedAt?.slice?.(0, 10) ||
+    doc?.due ||
+    ""
+  );
+}
+
+function createdCell(doc) {
+  return `<span class="mono">${escapeHtml(documentCreatedDate(doc) || "-")}</span>`;
+}
+
 function documentStageForUi(doc) {
   const stage = doc?.pipelineStep || doc?.status || "";
   return stage === "Archived" ? "Approved" : stage;
@@ -454,7 +487,7 @@ function documentIsDone(doc) {
 }
 
 function documentNeedsSignedUpload(doc, generatedFile = null) {
-  return Boolean(doc && !documentIsDone(doc) && !documentHasSignedUpload(doc) && (generatedFile?.fileName || generatedFile?.downloadUrl));
+  return Boolean(doc && !documentIsDone(doc) && !documentHasSignedUpload(doc) && generatedFile?.downloadUrl);
 }
 
 function jobsTable(rows = jobs) {
@@ -506,11 +539,8 @@ function documentsTable(rows = documents) {
               <th>Type</th>
               <th>Customer</th>
               <th>Owner</th>
+              <th>Created</th>
               <th>Status</th>
-              <th>Due</th>
-              <th>Delivery</th>
-              <th>File</th>
-              <th>Signed / Uploaded</th>
               <th>Action</th>
             </tr>
           </thead>
@@ -518,23 +548,17 @@ function documentsTable(rows = documents) {
             ${rows.map((doc) => {
               const generatedFile = documentGeneratedFileFor(doc);
               return `
-                <tr class="${doc.id === state.selectedDocumentId ? "selected" : ""} ${documentIsOverdue(doc) ? "overdue" : ""}" data-doc-row="${escapeHtml(doc.id)}">
+                <tr class="${doc.id === state.selectedDocumentId ? "selected" : ""}" data-doc-row="${escapeHtml(doc.id)}">
                   <td class="mono">${escapeHtml(doc.jobId || doc.quotationId || doc.id)}</td>
                   <td>${escapeHtml(doc.type)}</td>
                   <td>${escapeHtml(doc.customer || "Not assigned")}</td>
                   <td><span class="role-tag">${escapeHtml(displayInitialsForRecord(doc))}</span></td>
-                  <td>${statusChip(documentStatusForUi(doc))}</td>
-                  <td>${dueCell(doc)}</td>
-                  <td>${documentDeliveryCell(doc, generatedFile)}</td>
-                  <td>${documentFileCell(doc, generatedFile)}</td>
-                  <td>${documentSignedUploadCell(doc)}</td>
+                  <td>${createdCell(doc)}</td>
+                  <td>${documentUploadStatusCell(doc)}</td>
                   <td>
                     <div class="table-actions">
                       <button class="btn primary compact" type="button" data-doc-view="${escapeHtml(doc.id)}">View</button>
                       <button class="btn ghost compact" type="button" data-doc-edit="${escapeHtml(doc.id)}">Edit</button>
-                      ${documentDownloadUrl(doc, generatedFile) ? `<a class="btn ghost compact" href="${escapeHtml(documentDownloadUrl(doc, generatedFile))}" target="_blank" rel="noopener">Download</a>` : ""}
-                      ${rejectableDocumentStages.includes(doc.pipelineStep) ? `<button class="btn ghost compact danger" type="button" data-doc-reject-start="${escapeHtml(doc.id)}">Reject</button>` : ""}
-                      ${documentWorkflowActions(doc, generatedFile)}
                     </div>
                   </td>
                 </tr>
@@ -543,7 +567,6 @@ function documentsTable(rows = documents) {
           </tbody>
         </table>
       </div>
-      ${documentRejectInlinePanel()}
     </section>
   `;
 }
@@ -557,10 +580,6 @@ function documentWorkflowActions(doc, generatedFile) {
     return `<button class="btn warn compact" type="button" data-doc-finish="${escapeHtml(doc.id)}">Finish</button>`;
   }
 
-  if (documentNeedsSignedUpload(doc, generatedFile)) {
-    return `<button class="btn warn compact" type="button" data-doc-upload-signed-open="${escapeHtml(doc.id)}">Upload signed</button>`;
-  }
-
   if (doc.pipelineStep === "Rejected") {
     return `<button class="btn dark compact" type="button" data-doc-back-draft="${escapeHtml(doc.id)}">Back to Draft</button>`;
   }
@@ -568,36 +587,40 @@ function documentWorkflowActions(doc, generatedFile) {
   return "";
 }
 
-function documentDeliveryCell(doc, generatedFile) {
-  if (documentIsDone(doc)) return `<span class="doc-signal done">Case/ticket closed</span>`;
-  if (documentHasSignedUpload(doc)) return `<span class="doc-signal signed">Signed copy uploaded</span>`;
-  if (documentNeedsSignedUpload(doc, generatedFile)) return `<span class="doc-signal warn">Upload signed copy</span>`;
-  return escapeHtml(doc.deliveryStatus || (generatedFile ? "Generated" : doc.uploadedFile ? "Uploaded" : "Not generated"));
+function documentUploadedAt(doc) {
+  return (
+    doc?.signedUploadedAt ||
+    doc?.uploadedAt ||
+    doc?.signedFile?.uploadedAt ||
+    doc?.signedFile?.createdAt ||
+    doc?.uploadedFile?.uploadedAt ||
+    doc?.uploadedFile?.createdAt ||
+    ""
+  );
 }
 
-function documentFileCell(doc, generatedFile) {
-  const generatedName = generatedFileDisplayName(generatedFile);
-  const signedName = doc.signedFile?.fileName || (doc.signedUploadedAt ? doc.uploadedFile?.fileName : "");
-  const uploadName = !signedName ? doc.uploadedFile?.fileName || "" : "";
-  const items = [];
-  if (generatedName) items.push(`<span class="doc-table-file"><strong>Generated:</strong> ${escapeHtml(generatedName)}</span>`);
-  if (signedName) items.push(`<span class="doc-table-file"><strong>Signed:</strong> ${escapeHtml(signedName)}</span>`);
-  if (uploadName) items.push(`<span class="doc-table-file">${escapeHtml(uploadName)}</span>`);
-  return items.length ? items.join("") : `<span class="muted">No file</span>`;
+function documentUploadStatusCell(doc) {
+  const uploadedUrl = documentUploadedDownloadUrl(doc);
+  const isUploaded = Boolean(documentUploadedAt(doc) || doc?.signedFile || doc?.uploadedFile || doc?.uploaded);
+  if (uploadedUrl) {
+    return `<a class="btn done compact" href="${escapeHtml(uploadedUrl)}" target="_blank" rel="noopener">Download</a>`;
+  }
+
+  if (isUploaded) {
+    return `<button class="btn done compact" type="button" disabled>Download</button>`;
+  }
+
+  return `<button class="btn warn compact" type="button" data-doc-upload-signed-open="${escapeHtml(doc.id)}">Upload signed</button>`;
 }
 
-function documentSignedUploadCell(doc) {
-  const items = [];
-  if (documentIsDone(doc)) items.push(`DONE: ${doc.finishedAt.slice(0, 10)}`);
-  if (doc.signedBy) items.push(`Signed: ${doc.signedBy}`);
-  if (doc.signedUploadedAt) items.push(`Uploaded: ${doc.signedUploadedAt.slice(0, 10)}`);
-  else if (doc.uploadedAt) items.push(`Uploaded: ${doc.uploadedAt.slice(0, 10)}`);
-  if (doc.warrantySynced) items.push(`Warranty: ${doc.warrantyExpiryDate || "synced"}`);
-  return items.length ? escapeHtml(items.join(" / ")) : `<span class="muted">-</span>`;
-}
-
-function documentDownloadUrl(doc, generatedFile) {
-  return generatedFile?.downloadUrl || doc.uploadedFile?.downloadUrl || "";
+function documentUploadedDownloadUrl(doc) {
+  return (
+    doc?.signedFile?.downloadUrl ||
+    doc?.uploadedFile?.downloadUrl ||
+    doc?.signedFile?.previewUrl ||
+    doc?.uploadedFile?.previewUrl ||
+    ""
+  );
 }
 
 function documentRejectInlinePanel() {
@@ -676,13 +699,12 @@ function documentFilters() {
             ${customersList.map((customer) => `<option value="${escapeHtml(customer)}" ${state.documentCustomerFilter === customer ? "selected" : ""}>${escapeHtml(customer)}</option>`).join("")}
           </select>
         </label>
-        <label class="filter-control doc-date-filter" for="doc-date-from">
-          <span>From</span>
-          <input id="doc-date-from" type="date" value="${escapeHtml(state.documentDateFrom)}">
-        </label>
-        <label class="filter-control doc-date-filter" for="doc-date-to">
-          <span>To</span>
-          <input id="doc-date-to" type="date" value="${escapeHtml(state.documentDateTo)}">
+        <label class="filter-control doc-date-filter doc-date-query-filter" for="doc-date-query">
+          <span>Created</span>
+          <div class="date-combo">
+            <input id="doc-date-query" type="text" inputmode="numeric" value="${escapeHtml(state.documentDateQuery || "")}" placeholder="2026 / 2026-04 / 2026-04-15">
+            <input class="date-combo-picker" type="date" value="${escapeHtml(fullIsoDateOrEmpty(state.documentDateQuery || ""))}" aria-label="Pick created date" data-doc-date-picker>
+          </div>
         </label>
         <div class="doc-search-actions">
           <button class="btn dark compact" type="button" data-doc-search-apply>Search</button>
@@ -716,7 +738,7 @@ function documentDetailPanel(doc) {
         ${detailItem("Customer", doc.customer)}
         ${detailItem("Owner", displayInitialsForRecord(doc))}
         ${doc.createdBy ? detailItem("Created by", doc.createdBy) : ""}
-        ${detailItem("Due", `${doc.due}${documentIsOverdue(doc) ? " / Overdue" : documentIsDueToday(doc) ? " / Today" : ""}`)}
+        ${detailItem("Created", documentCreatedDate(doc) || "-")}
         ${detailItem("Delivery", doc.deliveryStatus || (generatedFile ? "Generated" : "Not generated"))}
         ${generatedFile ? detailItem("Generated file", generatedFileDisplayName(generatedFile)) : ""}
         ${generatedFile?.fileId ? detailItem("File id", generatedFile.fileId) : ""}
@@ -841,67 +863,72 @@ function documentUploadPanel() {
   const defaultJob = targetDoc ? jobs.find((job) => job.id === targetDoc.jobId) : jobs[0];
   const defaultType = state.documentUploadDefaultType || documentTypeOptions[0];
   return `
-    <section class="panel">
-      <div class="section-heading">
-        <div>
-          <div class="section-title">${targetDoc ? `Upload signed copy for ${escapeHtml(targetDoc.id)}` : "Upload external document"}</div>
-          <div class="filter-note">${targetDoc ? "Use this after the generated document was printed/sent and signed by the customer." : "Create a new document record from an external file."}</div>
-        </div>
-        <span class="chip ${targetDoc ? "signature" : "pending"}">${targetDoc ? "Signed return" : "Metadata"}</span>
-      </div>
-      ${targetDoc ? `
-        <div class="doc-return-summary">
-          ${detailItem("Document", targetDoc.id)}
-          ${detailItem("Type", targetDoc.type)}
-          ${detailItem("Job", targetDoc.jobId)}
-          ${detailItem("Customer", targetDoc.customer)}
-          ${detailItem("Generated file", generatedFileDisplayName(documentGeneratedFileFor(targetDoc)) || "Preview/download first")}
-        </div>
-      ` : ""}
-      <div class="field-stack upload-form">
-        ${targetDoc ? "" : `
-          <div class="field">
-            <label for="doc-upload-type">Document type</label>
-            <select id="doc-upload-type">
-              ${documentTypeOptions.map((type) => `<option value="${escapeHtml(type)}" ${type === defaultType ? "selected" : ""}>${escapeHtml(type)}</option>`).join("")}
-            </select>
+    <div class="document-upload-modal-backdrop" role="presentation">
+      <section class="document-upload-modal" role="dialog" aria-modal="true" aria-labelledby="doc-upload-title">
+        <div class="document-upload-head">
+          <div>
+            <div class="section-title" id="doc-upload-title">${targetDoc ? `Upload signed copy for ${escapeHtml(targetDoc.id)}` : "Upload document"}</div>
+            <div class="filter-note">${targetDoc ? "Use the signed copy returned by the customer." : "Create a document record from an external file."}</div>
           </div>
-          <div class="field">
-            <label for="doc-upload-job">Job ref</label>
-            <select id="doc-upload-job">
-              ${jobs.map((job) => `<option value="${escapeHtml(job.id)}">${escapeHtml(job.id)} / ${escapeHtml(job.customer)}</option>`).join("")}
-            </select>
-          </div>
-          <div class="field">
-            <label for="doc-upload-customer">Customer</label>
-            <input id="doc-upload-customer" value="${escapeHtml(defaultJob?.customer || "")}" placeholder="Customer name">
-          </div>
-        `}
-        <div class="field">
-          <label for="doc-upload-signed-by">Who signed</label>
-          <input id="doc-upload-signed-by" placeholder="Name or department" value="${escapeHtml(targetDoc ? "Customer representative" : "")}">
+          <span class="chip ${targetDoc ? "signature" : "pending"}">${targetDoc ? "Signed return" : "Upload"}</span>
         </div>
-        <div class="field">
-          <label for="doc-upload-file">${targetDoc ? "Signed file" : "File"}</label>
-          <input id="doc-upload-file" type="file" accept=".pdf,.odt,.docx,.doc,.png,.jpg,.jpeg,.webp">
-        </div>
-        ${targetDoc ? "" : `
-          <div class="field">
-            <label for="doc-upload-due">Due date</label>
-            <input id="doc-upload-due" type="date" value="${escapeHtml(new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10))}">
+        ${targetDoc ? `
+          <div class="doc-return-summary">
+            ${detailItem("Document", targetDoc.id)}
+            ${detailItem("Type", targetDoc.type)}
+            ${detailItem("Job", targetDoc.jobId)}
+            ${detailItem("Customer", targetDoc.customer)}
           </div>
-        `}
-        <div class="field full">
-          <label for="doc-upload-description">Short description</label>
-          <textarea id="doc-upload-description" rows="3" placeholder="${targetDoc ? "Optional note about signature / received copy" : "Location, contract reference, date, executor, or other indexed metadata"}">${targetDoc ? "Signed document returned by customer." : ""}</textarea>
+        ` : ""}
+        <div class="field-stack upload-form">
+          ${targetDoc ? "" : `
+            <div class="field">
+              <label for="doc-upload-type">Document type</label>
+              <select id="doc-upload-type">
+                ${documentTypeOptions.map((type) => `<option value="${escapeHtml(type)}" ${type === defaultType ? "selected" : ""}>${escapeHtml(type)}</option>`).join("")}
+              </select>
+            </div>
+            <div class="field">
+              <label for="doc-upload-job">Job ref</label>
+              <select id="doc-upload-job">
+                ${jobs.map((job) => `<option value="${escapeHtml(job.id)}">${escapeHtml(job.id)} / ${escapeHtml(job.customer)}</option>`).join("")}
+              </select>
+            </div>
+            <div class="field">
+              <label for="doc-upload-customer">Customer</label>
+              <input id="doc-upload-customer" value="${escapeHtml(defaultJob?.customer || "")}" placeholder="Customer name">
+            </div>
+          `}
+          <div class="field">
+            <label for="doc-upload-signed-by">Who signed</label>
+            <input id="doc-upload-signed-by" placeholder="Name or department" value="${escapeHtml(targetDoc ? "Customer representative" : "")}">
+          </div>
+          ${targetDoc ? "" : `
+            <div class="field">
+              <label for="doc-upload-created">Created</label>
+              <input id="doc-upload-created" type="date" value="${escapeHtml(new Date().toISOString().slice(0, 10))}">
+            </div>
+          `}
+          <div class="field full">
+            <label class="upload-dropzone" for="doc-upload-file" data-doc-upload-dropzone>
+              <input id="doc-upload-file" class="upload-dropzone-input" type="file" accept=".pdf,.odt,.docx,.doc,.png,.jpg,.jpeg,.webp">
+              <span class="upload-dropzone-title">Drag and drop file here</span>
+              <span class="upload-dropzone-note">or click to choose a file</span>
+              <span class="upload-dropzone-file" data-doc-upload-file-name>No file selected</span>
+            </label>
+          </div>
+          <div class="field full">
+            <label for="doc-upload-description">Short description</label>
+            <textarea id="doc-upload-description" rows="3" placeholder="${targetDoc ? "Optional note about signature / received copy" : "Location, contract reference, date, executor, or other indexed metadata"}">${targetDoc ? "Signed document returned by customer." : ""}</textarea>
+          </div>
         </div>
-      </div>
-      ${state.documentUploadError ? `<div class="form-error">${escapeHtml(state.documentUploadError)}</div>` : ""}
-      <div class="doc-action-row">
-        <button class="btn primary" type="button" data-doc-upload-submit>${targetDoc ? "Upload signed copy" : "Upload and create record"}</button>
-        <button class="btn ghost" type="button" data-doc-upload-cancel>Cancel</button>
-      </div>
-    </section>
+        ${state.documentUploadError ? `<div class="form-error">${escapeHtml(state.documentUploadError)}</div>` : ""}
+        <div class="document-upload-actions">
+          <button class="btn primary" type="button" data-doc-upload-submit>Upload</button>
+          <button class="btn ghost" type="button" data-doc-upload-cancel>Cancel</button>
+        </div>
+      </section>
+    </div>
   `;
 }
 
@@ -1683,17 +1710,17 @@ function documentsTableRows(rows) {
     <table class="data-table">
       <thead>
         <tr>
-          <th>Doc ID</th><th>Type</th><th>Customer</th><th>Stage</th><th>Due</th>
+          <th>Doc ID</th><th>Type</th><th>Customer</th><th>Stage</th><th>Created</th>
         </tr>
       </thead>
       <tbody>
         ${rows.map((doc) => `
-          <tr class="${documentIsOverdue(doc) ? "overdue" : ""}">
+          <tr>
             <td class="mono">${escapeHtml(doc.id)}</td>
             <td>${escapeHtml(doc.type)}</td>
             <td>${escapeHtml(doc.customer)}</td>
             <td>${statusChip(documentStageForUi(doc))}</td>
-            <td>${dueCell(doc)}</td>
+            <td>${createdCell(doc)}</td>
           </tr>
         `).join("")}
       </tbody>
@@ -2636,8 +2663,7 @@ function applyDocumentTableFilters(rows) {
   return rows.filter((doc) => {
     if (state.documentTypeFilter !== "All" && doc.type !== state.documentTypeFilter) return false;
     if (state.documentCustomerFilter !== "All" && doc.customer !== state.documentCustomerFilter) return false;
-    if (state.documentDateFrom && doc.due < state.documentDateFrom) return false;
-    if (state.documentDateTo && doc.due > state.documentDateTo) return false;
+    if (!documentCreatedDateMatches(doc, state.documentDateQuery)) return false;
     if (!query) return true;
     return [
       doc.id,
@@ -2645,6 +2671,7 @@ function applyDocumentTableFilters(rows) {
       doc.jobId,
       doc.customer,
       doc.owner,
+      documentCreatedDate(doc),
       doc.createdBy,
       doc.createdByInitials,
       displayInitialsForRecord(doc),
@@ -2669,46 +2696,22 @@ function documentsPage() {
   `;
 }
 
-function templateGenerationPage() {
-  const doc = selectedDocument();
-  const activeTab = state.templateGenTab || "work-acts";
-
+function templatesPage() {
   return `
     <div class="page-content">
-      <section class="panel">
-        ${templateGenerationTabs(activeTab)}
-      </section>
-      ${templateGenerationTabContent(activeTab, doc)}
-      ${devSpecPanel("templategen")}
+      ${workListTemplatesWorkspace()}
+      ${devSpecPanel("templates")}
     </div>
   `;
 }
 
-function templateGenerationTabs(activeTab) {
-  const tabs = [
-    ["work-acts", "Work Acts"],
-    ["defect-acts", "Defect Acts"],
-    ["commercial-offers", "Commercial Offers"],
-    ["work-list-templates", "Templates"],
-    ["output-templates", "Output Layouts"]
-  ];
+function workActsPage() {
   return `
-    <div class="eq-tab-bar">
-      ${tabs.map(([id, label]) => `
-        <button class="eq-tab ${activeTab === id ? "active" : ""}" type="button" data-template-gen-tab="${id}">
-          ${escapeHtml(label)}
-        </button>
-      `).join("")}
+    <div class="page-content">
+      ${workActsWorkspace()}
+      ${devSpecPanel("workacts")}
     </div>
   `;
-}
-
-function templateGenerationTabContent(activeTab, doc) {
-  if (activeTab === "defect-acts") return defectActsWorkspace(doc);
-  if (activeTab === "commercial-offers") return commercialOffersWorkspace();
-  if (activeTab === "work-list-templates") return workListTemplatesWorkspace();
-  if (activeTab === "output-templates") return outputTemplatesWorkspace(doc);
-  return workActsWorkspace();
 }
 
 function workActsWorkspace() {
@@ -2728,9 +2731,6 @@ function workActsWorkspace() {
         <div>
           <div class="section-title">Work Acts</div>
           <div class="filter-note">Drafts are generated from service jobs or created manually. Templates are copied into a concrete Work Act as isolated rows.</div>
-        </div>
-        <div class="tg-heading-actions">
-          <button class="btn ghost compact" type="button" data-output-template-route="tpl-service-act">Open output template</button>
         </div>
       </div>
       <div class="tg-command-bar">
@@ -2879,9 +2879,6 @@ function defectActsWorkspace(doc) {
           <div class="section-title">Defect Acts</div>
           <div class="filter-note">Use this workspace for defect description, engineer findings, recommended correction, and customer acknowledgement.</div>
         </div>
-        <div class="tg-heading-actions">
-          <button class="btn ghost compact" type="button" data-output-template-route="tpl-defect-act">Open output template</button>
-        </div>
       </div>
       <div class="tg-command-bar">
         <label class="filter-control">
@@ -2936,7 +2933,6 @@ function defectActsWorkspace(doc) {
           <div class="section-title">Defect Acts</div>
           <div class="filter-note">Use this workspace for defect description, engineer findings, recommended correction, and customer acknowledgement.</div>
         </div>
-        <button class="btn primary" type="button" data-output-template-route="tpl-defect-act">Open Defect Act output</button>
       </div>
       <div class="two-col docs-layout">
         <div class="info-box">
@@ -3075,9 +3071,6 @@ function commercialOffersWorkspace() {
         <div>
           <div class="section-title">Commercial Offers</div>
           <div class="filter-note">Create Commercial Offer drafts from quotations. Edit scope, line items, and validity before generating the document.</div>
-        </div>
-        <div class="tg-heading-actions">
-          <button class="btn ghost compact" type="button" data-output-template-route="tpl-quotation">Open output template</button>
         </div>
       </div>
       <div class="tg-command-bar">
@@ -3300,100 +3293,186 @@ function commercialOfferField(draft, field, label, placeholder = "") {
 }
 
 function workListTemplatesWorkspace() {
-  const rows = filteredWorkListTemplates();
-  const selectedId = rows.some((tpl) => tpl.id === state.selectedWltId) ? state.selectedWltId : rows[0]?.id || workListTemplates[0]?.id;
+  const selectedId = workListTemplates.some((tpl) => tpl.id === state.selectedWltId) ? state.selectedWltId : workListTemplates[0]?.id;
   const selected = workListTemplates.find((tpl) => tpl.id === selectedId);
-  const entryPeople = ["all", ...new Set(workListTemplates.map((tpl) => tpl.entryPerson).filter(Boolean))];
+
+  if (!selected) {
+    return `
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <div class="section-title">Templates</div>
+            <div class="filter-note">No templates exist yet.</div>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  const linkedEquipmentIds = wltArray(selected.linkedEquipmentIds);
+  const linkedHospitalIds = wltArray(selected.linkedHospitalIds);
+  const linkedWorkEquipmentIds = wltArray(selected.linkedWorkEquipmentIds);
+  const advancedOpen = state.wltEditMode && state.selectedWltId === selected.id;
+  const collaboraSession = advancedOpen && state.wltCollaboraSession?.sourceId === selected.id ? state.wltCollaboraSession : null;
+  const collaboraPdfDownloadUrl = collaboraSession?.pdfDownloadUrl || (collaboraSession?.downloadUrl
+    ? `${collaboraSession.downloadUrl}${collaboraSession.downloadUrl.includes("?") ? "&" : "?"}format=pdf`
+    : "");
+  const companyValue = selected.company || selected.companyName || companyProfiles[0]?.name || "Viva Medical, UAB";
 
   return `
-    <section class="panel">
+    <section class="panel wlt-config-workspace">
       <div class="section-heading">
         <div>
-          <div class="section-title">Templates</div>
-          <div class="filter-note">Equipment/procedure-specific checklists. Select a template to edit, duplicate, or archive it.</div>
+          <div class="section-title">Register / Work List Template</div>
+          <div class="filter-note">Configure who owns the template, what service it belongs to, and where it can be used.</div>
         </div>
-        <div class="tg-heading-actions">
-          <button class="btn primary compact" type="button" data-wlt-new-open>New template</button>
+        <div class="wlt-template-picker">
+          <label class="filter-control">
+            <span>Template</span>
+            <select data-wlt-template-select>
+              ${workListTemplates.map((tpl) => `<option value="${escapeHtml(tpl.id)}" ${tpl.id === selected.id ? "selected" : ""}>${escapeHtml(tpl.name)}</option>`).join("")}
+            </select>
+          </label>
         </div>
       </div>
 
-      ${state.wltNewOpen ? wltNewForm() : ""}
+      ${state.wltError ? `<div class="form-error">${escapeHtml(state.wltError)}</div>` : ""}
 
-      <div class="wlt-filter-bar tg-filter-strip">
+      <div class="wlt-config-form">
         <label class="filter-control">
-          <span>Search</span>
-          <input type="search" value="${escapeHtml(state.wltSearchQuery || "")}" placeholder="Find by name, equipment, hospital..." data-wlt-search>
-        </label>
-        <label class="filter-control">
-          <span>Filter</span>
-          <select data-wlt-status-filter>
-            ${[
-              ["all", "All Templates"],
-              ["active", "Active"],
-              ["equipment-unassigned", "Equipment not assigned"],
-              ["archived", "Archived"]
-            ].map(([value, label]) => `<option value="${value}" ${state.wltStatusFilter === value ? "selected" : ""}>${label}</option>`).join("")}
+          <span>Company</span>
+          <select id="wlt-edit-company">
+            ${companyProfiles.map((company) => `<option value="${escapeHtml(company.name)}" ${company.name === companyValue ? "selected" : ""}>${escapeHtml(company.name)}</option>`).join("")}
+            ${companyProfiles.some((company) => company.name === companyValue) ? "" : `<option value="${escapeHtml(companyValue)}" selected>${escapeHtml(companyValue)}</option>`}
           </select>
         </label>
         <label class="filter-control">
           <span>Entry person</span>
-          <select data-wlt-entry-person-filter>
-            ${entryPeople.map((person) => `<option value="${escapeHtml(person)}" ${state.wltEntryPersonFilter === person ? "selected" : ""}>${escapeHtml(person === "all" ? "All entry persons" : person)}</option>`).join("")}
+          <select id="wlt-edit-entry-person">
+            ${users.map((user) => `<option value="${escapeHtml(user.name)}" ${user.name === selected.entryPerson ? "selected" : ""}>${escapeHtml(user.name)}</option>`).join("")}
           </select>
         </label>
-        <div class="tg-action-cluster">
-          <button class="btn compact" type="button" data-wlt-find>Find</button>
-          <button class="btn ghost compact" type="button" data-wlt-clear-filters>Clear</button>
-        </div>
+        <label class="filter-control wlt-name-field">
+          <span>Template name</span>
+          <input type="text" id="wlt-edit-name" value="${escapeHtml(selected.name)}" placeholder="Custom template name">
+        </label>
+        <label class="filter-control">
+          <span>Service type</span>
+          <select id="wlt-edit-service-type">
+            ${wltServiceTypeOptions().map(([type, label]) => `<option value="${escapeHtml(type)}" ${type === selected.serviceType ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
+          </select>
+        </label>
+        <label class="filter-control wlt-description-field">
+          <span>Description</span>
+          <input type="text" id="wlt-edit-body" value="${escapeHtml(selected.bodyText || "")}" placeholder="Short internal description">
+        </label>
       </div>
 
-      <table class="data-table wlt-table">
-        <thead><tr><th>Name</th><th>Equipment</th><th>Service T.</th><th>Hospitals</th><th>Work Eq.</th><th>Entry Person</th><th>Entry Date</th><th></th></tr></thead>
-        <tbody>
-          ${rows.map((tpl) => `
-            <tr class="${tpl.id === selectedId ? "selected" : ""}" style="cursor:pointer" data-wlt-select="${escapeHtml(tpl.id)}">
-              <td>${tpl.isActive === false ? `<span style="text-decoration:line-through">${escapeHtml(tpl.name)}</span> <span class="chip" style="font-size:9px">Archived</span>` : escapeHtml(tpl.name)}</td>
-              <td>${escapeHtml(wltLinkedEquipmentLabel(tpl))}</td>
-              <td>${escapeHtml(wltLinkedServiceTypeLabel(tpl))}</td>
-              <td>${escapeHtml(wltLinkedHospitalLabel(tpl))}</td>
-              <td>${escapeHtml(wltLinkedWorkEquipmentLabel(tpl))}</td>
-              <td>${escapeHtml(tpl.entryPerson || "Unassigned")}</td>
-              <td class="mono">${escapeHtml(tpl.entryDate || "-")}</td>
-              <td style="white-space:nowrap">
-                <button class="btn ghost compact" type="button" data-wlt-duplicate="${escapeHtml(tpl.id)}">Duplicate</button>
-                <button class="btn ghost compact" type="button" data-wlt-archive="${escapeHtml(tpl.id)}" style="color:${tpl.isActive === false ? "var(--green)" : "var(--amber)"}">${tpl.isActive === false ? "Restore" : "Archive"}</button>
-              </td>
-            </tr>
-          `).join("")}
-          ${rows.length ? "" : `<tr><td colspan="8" class="muted">No templates match the current filters.</td></tr>`}
-        </tbody>
-      </table>
+      <div class="wlt-config-actions">
+        <button class="btn done compact" type="button" data-wlt-edit-open="${escapeHtml(selected.id)}">${advancedOpen ? "Advanced editor open" : "Open in advanced editor"}</button>
+        <button class="btn primary compact" type="button" data-wlt-edit-save="${escapeHtml(selected.id)}">Save</button>
+        <button class="btn ghost compact danger" type="button" data-wlt-delete="${escapeHtml(selected.id)}">Delete</button>
+        <button class="btn ghost compact" type="button" data-wlt-edit-cancel>Cancel</button>
+      </div>
 
-      ${selected ? `
-        <div class="detail-block" style="margin-top:16px">
+      <div class="wlt-config-layout">
+        <div class="wlt-editor-preview-panel">
           <div class="section-heading" style="margin-bottom:8px">
-            <div class="detail-group-title">${escapeHtml(selected.name)}${selected.isActive === false ? " (Archived)" : ""}</div>
-            ${state.wltEditMode && state.selectedWltId === selected.id
-              ? `<div class="tg-action-cluster">
-                   <button class="btn ghost compact" type="button" data-wlt-edit-cancel>Cancel</button>
-                   <button class="btn primary compact" type="button" data-wlt-edit-save="${escapeHtml(selected.id)}">Save changes</button>
-                 </div>`
-              : `<button class="btn ghost compact" type="button" data-wlt-edit-open="${escapeHtml(selected.id)}">Edit</button>`
-            }
+            <div>
+              <div class="detail-group-title">Advanced editor preview</div>
+              <div class="filter-note">${advancedOpen ? "Collabora CODE runs locally through the app proxy, saves the edited FODT source, and exports PDF on download." : "This window mirrors the document body saved by the advanced editor."}</div>
+            </div>
           </div>
-          ${state.wltError ? `<div class="form-error">${escapeHtml(state.wltError)}</div>` : ""}
-          ${state.wltEditMode && state.selectedWltId === selected.id
-            ? wltEditPanel(selected)
-            : wltDetailPanel(selected)
-          }
+          ${advancedOpen ? `
+            ${state.wltCollaboraError ? `<div class="form-error">${escapeHtml(state.wltCollaboraError)}</div>` : ""}
+            ${state.wltCollaboraStatus ? `<div class="info-box" style="margin-bottom:10px"><div class="info-title">Collabora session</div><div class="info-body">${escapeHtml(state.wltCollaboraStatus)}</div></div>` : ""}
+            ${collaboraSession?.editorUrl ? `
+              <iframe class="wlt-collabora-frame" title="Collabora advanced editor" src="${escapeHtml(collaboraSession.editorUrl)}"></iframe>
+              <div class="wlt-collabora-actions">
+                <span class="filter-note">Saved edits are stored in the local document-service WOPI session.</span>
+                <a class="btn ghost compact" href="${escapeHtml(collaboraPdfDownloadUrl)}" target="_blank" rel="noreferrer">Download PDF</a>
+              </div>
+            ` : `
+              <div class="wlt-collabora-loading">
+                <div class="detail-group-title">Starting Collabora...</div>
+                <div class="filter-note">Creating a local FODT file, WOPI token, and editor session.</div>
+              </div>
+            `}
+          ` : `
+            <div class="wlt-document-preview">${wltVisualHtml(selected)}</div>
+          `}
         </div>
-      ` : ""}
+
+        <div class="wlt-link-config">
+          <div class="wlt-link-grid">
+            ${wltSearchableCombobox({
+              title: "Equipment",
+              options: equipment.map((eq) => [eq.id, `${eq.name}${eq.serial ? ` / SN ${eq.serial}` : ""}`, eq.customer || ""]),
+              selectedValues: linkedEquipmentIds,
+              dataAttr: "wlt-edit-equipment",
+              placeholder: "Search equipment by name, serial, or hospital",
+              note: "Customer devices this template can be used with."
+            })}
+            ${wltSearchableCombobox({
+              title: "Hospitals",
+              options: customers.map((customer) => [customer.id, customer.name, [customer.city, customer.type].filter(Boolean).join(" / ")]),
+              selectedValues: linkedHospitalIds,
+              dataAttr: "wlt-edit-hospital",
+              placeholder: "Search hospital or clinic",
+              note: "Hospitals/customers where this template is allowed."
+            })}
+            ${wltSearchableCombobox({
+              title: "Work Equipment",
+              options: wltWorkEquipmentOptions(),
+              selectedValues: linkedWorkEquipmentIds,
+              dataAttr: "wlt-edit-work-equipment",
+              placeholder: "Search multimeter, oscilloscope, safety analyzer...",
+              note: "Service/metrology tools used during checks; future Work Equipment module."
+            })}
+          </div>
+          ${selected.editorNote ? `
+            <div class="info-box warn" style="margin-top:10px">
+              <div class="info-title">Editor note</div>
+              <div class="info-body">${escapeHtml(selected.editorNote)}</div>
+            </div>
+          ` : ""}
+        </div>
+      </div>
     </section>
   `;
 }
+function wltTemplateStats() {
+  return workListTemplates.reduce((stats, tpl) => {
+    const active = tpl.isActive !== false;
+    const hasTargeting = wltArray(tpl.linkedEquipmentIds).length || wltArray(tpl.linkedHospitalIds).length || wltArray(tpl.linkedWorkEquipmentIds).length;
+    stats.total += 1;
+    stats.rows += (tpl.workRows || []).length;
+    if (active) stats.active += 1;
+    if (!active) stats.archived += 1;
+    if (hasTargeting) stats.targeted += 1;
+    else stats.broad += 1;
+    return stats;
+  }, { total: 0, active: 0, archived: 0, targeted: 0, broad: 0, rows: 0 });
+}
+
+function wltStatCard(label, value, note, tone = "neutral") {
+  return `
+    <div class="wlt-stat ${escapeHtml(tone)}">
+      <div class="wlt-stat-label">${escapeHtml(label)}</div>
+      <div class="wlt-stat-value">${escapeHtml(String(value))}</div>
+      <div class="wlt-stat-note">${escapeHtml(note)}</div>
+    </div>
+  `;
+}
+
+function wltServiceTypeFilterOptions() {
+  return ["all", ...Array.from(new Set(workListTemplates.flatMap((tpl) => [
+    tpl.serviceType,
+    ...wltArray(tpl.linkedServiceTypes)
+  ]).filter(Boolean)))];
+}
 
 function wltNewForm() {
-  const serviceTypes = wltServiceTypeOptions();
   const defaultPerson = users.find((user) => user.roles?.some((role) => ["service", "svcmgr"].includes(role)))?.name || "";
   return `
     <div class="detail-block" style="margin-bottom:12px">
@@ -3411,10 +3490,7 @@ function wltNewForm() {
         <label class="filter-control">
           <span>Service type</span>
           <select id="wlt-new-service-type">
-            <option value="PM">PM</option>
-            <option value="Service">Service</option>
-            <option value="Installation">Installation</option>
-            <option value="Repair">Repair</option>
+            ${wltServiceTypeOptions().map(([type, label]) => `<option value="${escapeHtml(type)}">${escapeHtml(label)}</option>`).join("")}
           </select>
         </label>
         <label class="filter-control">
@@ -3435,18 +3511,37 @@ function wltNewForm() {
           <input type="date" id="wlt-new-entry-date" value="${new Date().toISOString().slice(0, 10)}">
         </label>
       </div>
-      <div class="wlt-applicability-grid">
-        ${wltCheckboxGroup("Service Types", serviceTypes, ["PM"], "wlt-new-service-type-link")}
-        ${wltCheckboxGroup("Equipment", equipment.map((eq) => [eq.id, eq.name]), [], "wlt-new-equipment")}
-        ${wltCheckboxGroup("Hospitals", customers.map((customer) => [customer.id, customer.name]), [], "wlt-new-hospital")}
-        ${wltCheckboxGroup("Work Equipment", wltWorkEquipmentOptions(), [], "wlt-new-work-equipment")}
+      <div class="wlt-link-grid">
+        ${wltSearchableCombobox({
+          title: "Equipment",
+          options: equipment.map((eq) => [eq.id, `${eq.name}${eq.serial ? ` / SN ${eq.serial}` : ""}`, eq.customer || ""]),
+          selectedValues: [],
+          dataAttr: "wlt-new-equipment",
+          placeholder: "Search equipment by name, serial, or hospital",
+          note: "Customer devices this template can be used with."
+        })}
+        ${wltSearchableCombobox({
+          title: "Hospitals",
+          options: customers.map((customer) => [customer.id, customer.name, [customer.city, customer.type].filter(Boolean).join(" / ")]),
+          selectedValues: [],
+          dataAttr: "wlt-new-hospital",
+          placeholder: "Search hospital or clinic",
+          note: "Hospitals/customers where this template is allowed."
+        })}
+        ${wltSearchableCombobox({
+          title: "Work Equipment",
+          options: wltWorkEquipmentOptions(),
+          selectedValues: [],
+          dataAttr: "wlt-new-work-equipment",
+          placeholder: "Search multimeter, oscilloscope, safety analyzer...",
+          note: "Service/metrology tools used during checks; future Work Equipment module."
+        })}
       </div>
       <label class="field work-act-text">
         <span>Body text</span>
         <textarea id="wlt-new-body" rows="2" placeholder="Summary sentence for this template"></textarea>
       </label>
-      <div class="filter-note" style="margin:8px 0 4px">Work rows (one per line):</div>
-      <textarea id="wlt-new-rows" rows="4" style="width:100%;font-family:var(--mono);font-size:12px" placeholder="First row&#10;Second row&#10;Third row"></textarea>
+      <div class="filter-note" style="margin-top:8px">Concrete Work Act rows are added later in Work Acts and appended to generated Work Act documents.</div>
       <div class="tg-action-cluster left" style="margin-top:10px">
         <button class="btn primary compact" type="button" data-wlt-new-save>Save template</button>
         <button class="btn ghost compact" type="button" data-wlt-new-cancel>Cancel</button>
@@ -3461,7 +3556,6 @@ function wltDetailPanel(tpl) {
       ${detailItem("Category", tpl.equipmentCategory)}
       ${detailItem("Service type", tpl.serviceType)}
       ${detailItem("Language", tpl.language)}
-      ${detailItem("Rows", String(tpl.workRows.length))}
       ${detailItem("Entry person", tpl.entryPerson || "Unassigned")}
       ${detailItem("Entry date", tpl.entryDate || "-")}
     </div>
@@ -3471,6 +3565,7 @@ function wltDetailPanel(tpl) {
       ${detailItem("Linked hospitals", wltLinkedHospitalLabel(tpl))}
       ${detailItem("Linked work equipment", wltLinkedWorkEquipmentLabel(tpl))}
     </div>
+    ${wltApplicabilityPreview(tpl)}
     ${tpl.bodyText ? `<div class="info-box" style="margin-top:8px"><div class="info-body">${escapeHtml(tpl.bodyText)}</div></div>` : ""}
     <div class="wlt-visual-shell">
       <div class="section-heading" style="margin-bottom:8px">
@@ -3487,17 +3582,40 @@ function wltDetailPanel(tpl) {
         <div class="info-body">${escapeHtml(tpl.editorNote)}</div>
       </div>
     ` : ""}
-    <div style="margin-top:10px">
-      <div class="filter-note" style="margin-bottom:6px">Work rows:</div>
-      <ol style="margin:0;padding-left:20px;font-size:13px;line-height:1.7">
-        ${tpl.workRows.map((row) => `<li>${escapeHtml(row)}</li>`).join("")}
-      </ol>
+    <div class="filter-note" style="margin-top:10px">Concrete rows/points are owned by Work Acts, not by this template.</div>
+  `;
+}
+
+function wltApplicabilityPreview(tpl) {
+  const matches = wltApplicableJobs(tpl);
+  const primary = matches[0] || null;
+  return `
+    <div class="wlt-route-panel">
+      <div>
+        <div class="detail-group-title">Work Act fit</div>
+        <div class="wlt-route-list">
+          ${matches.length ? matches.slice(0, 4).map((job) => `
+            <div class="wlt-route-item">
+              <strong>${escapeHtml(job.id)}</strong>
+              <span>${escapeHtml(job.customer)} / ${escapeHtml(job.equipment || "Equipment pending")}</span>
+            </div>
+          `).join("") : `
+            <div class="wlt-route-item muted">
+              <strong>No exact job match</strong>
+              <span>Use Work Acts to pick a source job manually.</span>
+            </div>
+          `}
+        </div>
+      </div>
+      <div class="wlt-route-actions">
+        <button class="btn primary compact" type="button" ${primary ? `data-wlt-start-work-act="${escapeHtml(tpl.id)}:${escapeHtml(primary.id)}"` : "disabled"}>Start Work Act</button>
+        <button class="btn ghost compact" type="button" data-template-gen-tab="work-acts">Open Work Acts</button>
+      </div>
     </div>
   `;
 }
 
 function wltEditPanel(tpl) {
-  const linkedServiceTypes = wltArray(tpl.linkedServiceTypes);
   const linkedEquipmentIds = wltArray(tpl.linkedEquipmentIds);
   const linkedHospitalIds = wltArray(tpl.linkedHospitalIds);
   const linkedWorkEquipmentIds = wltArray(tpl.linkedWorkEquipmentIds);
@@ -3514,7 +3632,7 @@ function wltEditPanel(tpl) {
       <label class="filter-control">
         <span>Service type</span>
         <select id="wlt-edit-service-type">
-          ${["PM", "Service", "Installation", "Repair"].map((t) => `<option value="${t}" ${t === tpl.serviceType ? "selected" : ""}>${t}</option>`).join("")}
+          ${wltServiceTypeOptions().map(([t, label]) => `<option value="${escapeHtml(t)}" ${t === tpl.serviceType ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}
         </select>
       </label>
       <label class="filter-control">
@@ -3534,11 +3652,31 @@ function wltEditPanel(tpl) {
         <input type="date" id="wlt-edit-entry-date" value="${escapeHtml(tpl.entryDate || new Date().toISOString().slice(0, 10))}">
       </label>
     </div>
-    <div class="wlt-applicability-grid">
-      ${wltCheckboxGroup("Service Types", wltServiceTypeOptions(), linkedServiceTypes, "wlt-edit-service-type-link")}
-      ${wltCheckboxGroup("Equipment", equipment.map((eq) => [eq.id, eq.name]), linkedEquipmentIds, "wlt-edit-equipment")}
-      ${wltCheckboxGroup("Hospitals", customers.map((customer) => [customer.id, customer.name]), linkedHospitalIds, "wlt-edit-hospital")}
-      ${wltCheckboxGroup("Work Equipment", wltWorkEquipmentOptions(), linkedWorkEquipmentIds, "wlt-edit-work-equipment")}
+    <div class="wlt-link-grid">
+      ${wltSearchableCombobox({
+        title: "Equipment",
+        options: equipment.map((eq) => [eq.id, `${eq.name}${eq.serial ? ` / SN ${eq.serial}` : ""}`, eq.customer || ""]),
+        selectedValues: linkedEquipmentIds,
+        dataAttr: "wlt-edit-equipment",
+        placeholder: "Search equipment by name, serial, or hospital",
+        note: "Customer devices this template can be used with."
+      })}
+      ${wltSearchableCombobox({
+        title: "Hospitals",
+        options: customers.map((customer) => [customer.id, customer.name, [customer.city, customer.type].filter(Boolean).join(" / ")]),
+        selectedValues: linkedHospitalIds,
+        dataAttr: "wlt-edit-hospital",
+        placeholder: "Search hospital or clinic",
+        note: "Hospitals/customers where this template is allowed."
+      })}
+      ${wltSearchableCombobox({
+        title: "Work Equipment",
+        options: wltWorkEquipmentOptions(),
+        selectedValues: linkedWorkEquipmentIds,
+        dataAttr: "wlt-edit-work-equipment",
+        placeholder: "Search multimeter, oscilloscope, safety analyzer...",
+        note: "Service/metrology tools used during checks; future Work Equipment module."
+      })}
     </div>
     <label class="field work-act-text">
       <span>Body text</span>
@@ -3548,7 +3686,7 @@ function wltEditPanel(tpl) {
       <div class="section-heading" style="margin-bottom:8px">
         <div>
           <div class="detail-group-title">Visual editor</div>
-          <div class="filter-note">Rich micro edits stay on this template copy. Structured work rows remain the default generation source.</div>
+          <div class="filter-note">Rich micro edits stay on this template copy. Structured Work Act rows are added in Work Acts.</div>
         </div>
       </div>
       <div class="wlt-rich-toolbar" role="toolbar" aria-label="Visual template editor tools">
@@ -3557,30 +3695,16 @@ function wltEditPanel(tpl) {
           ["italic", "Italic"],
           ["underline", "Underline"],
           ["insertUnorderedList", "List"],
-          ["insertOrderedList", "Numbered"],
-          ["addChecklistRow", "Add checklist row"]
+          ["insertOrderedList", "Numbered"]
         ].map(([command, label]) => `<button class="btn ghost compact" type="button" data-wlt-rich-command="${command}" data-wlt-rich-target="${escapeHtml(tpl.id)}">${label}</button>`).join("")}
       </div>
       <div class="wlt-document-editor" contenteditable="true" spellcheck="true" data-wlt-rich-editor="${escapeHtml(tpl.id)}">${wltVisualHtml(tpl)}</div>
-      <div class="filter-note" style="margin-top:6px">Save changes stores the visual editor HTML plus the structured metadata above. Cancel leaves persisted data untouched.</div>
+      <div class="filter-note" style="margin-top:6px">Save changes stores the visual editor HTML plus the structured metadata above. Concrete rows are added in Work Acts.</div>
     </div>
     <label class="field work-act-text">
       <span>Bug / workaround note</span>
       <textarea id="wlt-edit-note" rows="2" data-wlt-editor-note="${escapeHtml(tpl.id)}" placeholder="Optional: what was adjusted, what failed, or what should be reviewed later.">${escapeHtml(tpl.editorNote || "")}</textarea>
     </label>
-    <div class="work-act-section" style="margin-top:8px">
-      <div class="section-heading" style="margin-bottom:6px">
-        <div class="filter-note">Work rows</div>
-        <button class="btn ghost compact" type="button" data-wlt-add-row="${escapeHtml(tpl.id)}">+ Add row</button>
-      </div>
-      ${tpl.workRows.map((row, index) => `
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <span class="mono" style="min-width:20px;color:var(--text-muted)">${index + 1}.</span>
-          <input type="text" value="${escapeHtml(row)}" data-wlt-row-text="${escapeHtml(tpl.id)}:${index}" style="flex:1">
-          <button class="btn ghost compact" type="button" data-wlt-remove-row="${escapeHtml(tpl.id)}:${index}" style="color:var(--red)">✕</button>
-        </div>
-      `).join("")}
-    </div>
   `;
 }
 
@@ -3589,23 +3713,11 @@ function wltVisualHtml(tpl) {
 }
 
 function defaultWltVisualHtml(tpl) {
-  const rows = (tpl.workRows || []).map((row, index) => `
-    <tr>
-      <td>${escapeHtml(String(index + 1))}</td>
-      <td>${escapeHtml(row)}</td>
-      <td>Check / fill</td>
-      <td></td>
-    </tr>
-  `).join("");
   return `
     <h3>${escapeHtml(tpl.name || "Template")}</h3>
     ${tpl.bodyText ? `<p>${escapeHtml(tpl.bodyText)}</p>` : ""}
-    <table>
-      <thead>
-        <tr><th>No.</th><th>Work description</th><th>Expected / measured value</th><th>Notes</th></tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
+    <p><strong>Applicability:</strong> configured by service type, equipment, hospital, and work equipment.</p>
+    <p>Concrete checklist rows are added in the Work Acts module and appended to the generated Work Act document.</p>
   `;
 }
 
@@ -3620,11 +3732,13 @@ function sanitizeRichTemplateHtml(html = "") {
 
 function filteredWorkListTemplates() {
   const query = (state.wltSearchQuery || "").trim().toLowerCase();
+  const serviceTypeFilter = state.wltServiceTypeFilter || "all";
   return workListTemplates.filter((tpl) => {
     if (state.wltStatusFilter === "active" && tpl.isActive === false) return false;
     if (state.wltStatusFilter === "archived" && tpl.isActive !== false) return false;
     if (state.wltStatusFilter === "equipment-unassigned" && wltArray(tpl.linkedEquipmentIds).length) return false;
     if (state.wltEntryPersonFilter && state.wltEntryPersonFilter !== "all" && tpl.entryPerson !== state.wltEntryPersonFilter) return false;
+    if (serviceTypeFilter !== "all" && !wltArray(tpl.linkedServiceTypes).concat(tpl.serviceType || []).includes(serviceTypeFilter)) return false;
     if (!query) return true;
     const haystack = [
       tpl.name,
@@ -3640,6 +3754,33 @@ function filteredWorkListTemplates() {
     ].join(" ").toLowerCase();
     return haystack.includes(query);
   });
+}
+
+function wltApplicableJobs(tpl) {
+  return jobs.filter((job) => isWorkListTemplateApplicableToAct(tpl, wltActContextFromJob(job)));
+}
+
+function wltActContextFromJob(job) {
+  const jobEquipment = wltJobEquipment(job);
+  return {
+    jobId: job.id,
+    type: wltServiceTypeFromJob(job),
+    equipmentIds: jobEquipment ? [jobEquipment.id] : [],
+    equipmentItems: jobEquipment ? [{ id: jobEquipment.id, equipmentId: jobEquipment.id, name: jobEquipment.name, serial: jobEquipment.serial }] : []
+  };
+}
+
+function wltJobEquipment(job) {
+  return equipment.find((eq) => eq.name === job.equipment || eq.serial === job.serial || eq.id === job.equipmentId);
+}
+
+function wltServiceTypeFromJob(job) {
+  const stage = String(job?.stage || "").toLowerCase();
+  if (stage.includes("pm") || stage.includes("maintenance")) return "PM";
+  if (stage.includes("install")) return "Installation";
+  if (stage.includes("diagnostic")) return "Diagnostic";
+  if (stage.includes("repair")) return "Repair";
+  return job?.type || "Service";
 }
 
 function workListTemplateOptionsForAct(act) {
@@ -3673,37 +3814,88 @@ function isWorkListTemplateApplicableToAct(tpl, act) {
   return equipmentMatches && hospitalMatches && serviceTypeMatches;
 }
 
-function wltCheckboxGroup(title, options, selectedValues, dataAttr) {
-  const selected = new Set(selectedValues || []);
+function wltSearchableCombobox({ title, options, selectedValues, dataAttr, placeholder, note, multiple = true }) {
+  const selected = new Set(wltArray(selectedValues || []));
+  const normalizedOptions = (options || []).map(([value, label, detail]) => ({
+    value,
+    label,
+    detail: detail || ""
+  }));
+  const selectedLabels = normalizedOptions
+    .filter((option) => selected.has(option.value))
+    .map((option) => option.label);
+  const selectedText = selectedLabels.length === 1
+    ? selectedLabels[0]
+    : selectedLabels.length
+      ? `${selectedLabels.length} selected: ${selectedLabels.slice(0, 2).join(", ")}${selectedLabels.length > 2 ? ", ..." : ""}`
+      : "";
+  const summaryText = selectedText || "No specific link";
+
   return `
-    <div class="wlt-link-box">
-      <div class="filter-note">${escapeHtml(title)}</div>
-      <div class="wlt-check-list">
-        ${options.map(([value, label]) => `
-          <label class="wlt-check">
-            <input type="checkbox" value="${escapeHtml(value)}" data-${dataAttr} ${selected.has(value) ? "checked" : ""}>
-            <span>${escapeHtml(label)}</span>
-          </label>
-        `).join("")}
+    <div class="wlt-combo" data-wlt-combobox data-wlt-combobox-data-attr="${escapeHtml(dataAttr)}" data-wlt-combobox-multiple="${multiple ? "true" : "false"}">
+      <div class="wlt-combo-summary">
+        <span>${escapeHtml(title)}</span>
+        <strong data-wlt-combobox-summary>${escapeHtml(summaryText)}</strong>
+      </div>
+      <div class="wlt-combobox-control">
+        <input
+          class="wlt-combobox-input"
+          type="search"
+          data-wlt-combobox-search
+          value="${escapeHtml(selectedText)}"
+          data-selected-text="${escapeHtml(selectedText)}"
+          placeholder="${escapeHtml(placeholder || `Search ${title}`)}"
+          autocomplete="off"
+          role="combobox"
+          aria-expanded="false"
+          aria-label="${escapeHtml(title)}"
+        >
+        <button class="wlt-combobox-toggle" type="button" data-wlt-combobox-toggle aria-label="Open ${escapeHtml(title)} options">▾</button>
+      </div>
+      ${note ? `<div class="filter-note">${escapeHtml(note)}</div>` : ""}
+      <div class="wlt-combobox-menu" role="listbox" aria-label="${escapeHtml(title)}">
+          ${normalizedOptions.map((option) => {
+            const haystack = [option.label, option.detail, option.value].join(" ").toLowerCase();
+            const isSelected = selected.has(option.value);
+            return `
+              <button
+                class="wlt-combobox-option ${isSelected ? "is-selected" : ""}"
+                type="button"
+                data-wlt-combobox-option
+                data-value="${escapeHtml(option.value)}"
+                data-label="${escapeHtml(option.label)}"
+                data-search="${escapeHtml(haystack)}"
+                aria-selected="${isSelected ? "true" : "false"}"
+              >
+                <span>
+                  <strong>${escapeHtml(option.label)}</strong>
+                  ${option.detail ? `<small>${escapeHtml(option.detail)}</small>` : ""}
+                </span>
+              </button>
+            `;
+          }).join("")}
+          <div class="modal-placeholder" data-wlt-combobox-empty hidden>No matches.</div>
+      </div>
+      <div data-wlt-combobox-values>
+        ${normalizedOptions
+          .filter((option) => selected.has(option.value))
+          .map((option) => `<input type="hidden" value="${escapeHtml(option.value)}" data-${dataAttr} data-wlt-combobox-value data-wlt-label="${escapeHtml(option.label)}">`)
+          .join("")}
       </div>
     </div>
   `;
 }
 
 function wltServiceTypeOptions() {
-  return ["PM", "Service", "Installation", "Repair", "TB", "Diagnostic"].map((type) => [type, type]);
+  return ["PM", "Service"].map((type) => [type, type]);
 }
 
 function wltWorkEquipmentOptions() {
-  return [
-    ["ultrasound-probes", "Ultrasound probes"],
-    ["printer-export", "Printer / export"],
-    ["water-supply", "Water supply"],
-    ["chemistry-dosing", "Chemistry dosing"],
-    ["battery-charger", "Battery charger"],
-    ["safety-load", "Safety load"],
-    ["calibration-tools", "Calibration tools"]
-  ];
+  return workEquipmentTools.map((tool) => [
+    tool.id,
+    tool.name,
+    [tool.category, tool.purpose].filter(Boolean).join(" / ")
+  ]);
 }
 
 function wltArray(value) {
@@ -3711,7 +3903,14 @@ function wltArray(value) {
     "EQ-1001": "EQ-501",
     "EQ-1005": "EQ-505",
     "EQ-2001": "EQ-502",
-    "EQ-3001": "EQ-503"
+    "EQ-3001": "EQ-503",
+    "ultrasound-probes": "digital-multimeter",
+    "printer-export": "electrical-safety-analyzer",
+    "water-supply": "pressure-gauge",
+    "chemistry-dosing": "thermometer",
+    "battery-charger": "digital-multimeter",
+    "safety-load": "load-cell-tester",
+    "calibration-tools": "electrical-safety-analyzer"
   };
   return Array.isArray(value) ? value.map((item) => aliases[item] || item) : [];
 }
@@ -5025,7 +5224,7 @@ function generatedFileDisplayName(generatedFile) {
 }
 
 function documentGeneratedFileFor(doc) {
-  if (doc.generatedFile?.downloadUrl) return doc.generatedFile;
+  if (doc.generatedFile?.downloadUrl && doc.generatedFile.source !== "mock") return doc.generatedFile;
   if (state.generatedDocPreview?.docId === doc.id && state.generatedDocPreview.serviceDownloadUrl) {
     return {
       id: state.generatedDocPreview.fileId || state.generatedDocPreview.fileRecord?.id || "",
@@ -5041,7 +5240,49 @@ function documentGeneratedFileFor(doc) {
       fileRecord: state.generatedDocPreview.fileRecord || null
     };
   }
-  return doc.generatedFile || null;
+  return null;
+}
+
+function fullIsoDateOrEmpty(value = "") {
+  const normalized = normalizeDateQuery(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : "";
+}
+
+function documentCreatedDateMatches(doc, query = "") {
+  const normalizedQuery = normalizeDateQuery(query);
+  if (!normalizedQuery) return true;
+
+  const createdDate = documentCreatedDate(doc);
+  const normalizedDate = normalizeDateQuery(createdDate);
+  const queryDigits = normalizedQuery.replace(/\D/g, "");
+  const dateDigits = normalizedDate.replace(/\D/g, "");
+
+  if (!queryDigits) return true;
+  if (normalizedDate.startsWith(normalizedQuery)) return true;
+  if (dateDigits.startsWith(queryDigits)) return true;
+  return dateDigits.includes(queryDigits);
+}
+
+function normalizeDateQuery(value = "") {
+  let text = String(value || "")
+    .trim()
+    .replace(/[./\\_\s]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  if (/^\d{8}$/.test(text)) {
+    return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
+  }
+  if (/^\d{6}$/.test(text)) {
+    return `${text.slice(0, 4)}-${text.slice(4, 6)}`;
+  }
+  const parts = text.split("-");
+  if (/^\d{4}$/.test(parts[0] || "")) {
+    if (parts[1]?.length === 1) parts[1] = `0${parts[1]}`;
+    if (parts[2]?.length === 1) parts[2] = `0${parts[2]}`;
+    return parts.filter(Boolean).join("-");
+  }
+  return text;
 }
 
 function documentGeneratedPreviewUrl(generatedFile) {
@@ -5324,7 +5565,9 @@ export function renderPage() {
     case "sales":     pageHtml = salesPage(); break;
     case "contracts": pageHtml = contractsPage(); break;
     case "documents": pageHtml = documentsPage(); break;
-    case "templategen": pageHtml = templateGenerationPage(); break;
+    case "workacts": pageHtml = workActsPage(); break;
+    case "templates":
+    case "templategen": pageHtml = templatesPage(); break;
     case "finance":   pageHtml = financePage(); break;
     case "customers": pageHtml = customersPage(); break;
     case "equipment": pageHtml = equipmentPage(); break;

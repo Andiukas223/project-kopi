@@ -8,6 +8,18 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 
 ### Added
 
+- Sukurtas `docs/DOCUMENTATION_RULES.md` kaip privalomas dokumentavimo metodikos failas busimiems chatams/agentams: skaitymo tvarka, source-of-truth taisykles, modulio dokumento struktura, UI terminai, ownership, future module docs, production/runbook kriterijai, changelog ir dokumentacijos definition-of-done.
+- Templates konfiguratoriuje `Equipment`, `Hospitals` ir `Work Equipment` pakeisti i searchable combobox/autocomplete dropdown'us: pagrindinis laukas veikia kaip paieska, dropdown eilutes pasirenkamos pele, checkbox sarasas sitiems laukams nebenaudojamas, o pasirinkimai issaugomi tik paspaudus `Save`.
+- `Work Equipment` perorientuotas i serviso/metrologine iranga ir pridetas seed registras `workEquipmentTools`: digital multimeter, oscilloscope, electrical safety analyzer, pressure gauge, calibrated thermometer, flow meter, load cell/test weight set, insulation tester. Sukurtas `docs/modules/WORK_EQUIPMENT_FUTURE_MODULE.md` ateities moduliui.
+- Is aktyvaus Templates konfiguratoriaus pasalinta `Work rows` redagavimo sekcija; konkretus work rows/points priklauso `Work Acts` moduliui ir bus append'inami i sugeneruota Work Act dokumenta.
+- Pridetas atskiras `Work Acts` sidebar modulis su `workacts` route, naudojantis esama Work Act draft/list/builder logika, kad konkretus Work Act kurimas butu atskirtas nuo reusable `Templates` konfiguravimo.
+- Prideta `docs/modules/WORK_ACTS_MODULE.md` kaip Work Acts modulio handoff dokumentacija kitam implementacijos chat'ui: ownership, workflow, fields, statusai, linkai i Service/Templates/Documents, PDF generavimo taisykles ir migracija is legacy `Template Generation / Work Acts`.
+- Sidebar `Workspace` stulpelyje modulis `Template Generation` pervadintas i `Templates`; canonical route dabar `templates`, o `templategen` paliktas kaip compatibility alias seniems linkams/state.
+- `Templates` landing perdarytas i Tomis tipo Work List Template konfiguratoriu: `Company`, `Entry person`, `Template name`, `Service type`, linkinami `Equipment` / `Hospitals` / `Work Equipment`, veiksmai `Open in advanced editor`, `Save`, `Delete`, `Cancel`, ir tame paciame puslapyje rodomas advanced editor dokumento preview.
+- Uzfiksuotas advanced editor runtime sprendimas: personal/dev naudojimui bus taikomas Collabora Online Development Edition (`CODE`), nes app veikia savame kompiuteryje/serveryje, dokumentus redaguoja tik savininkas, nera production/SLA/support poreikio; production/company naudojimui sprendimas turi buti perziuretas del mokamo support/subscription.
+- Pridetas lokalus `collabora` Docker service su `collabora/code:latest`; jis neturi public host port'o, veikia tik vidiniame `collabora-net` tinkle, o nginx proxy'ina Collabora kelius per `web` konteineri.
+- Implementuotas Templates advanced editor WOPI MVP: `Open in advanced editor` sukuria `.fodt` sesija per `document-service`, atidaro Collabora iframe tame paciame Templates puslapyje `Editing` rezimu, Collabora `Save` raso atgal i `document-service/storage/collabora-wopi`, o UI rodo `Download PDF` linka, kuris eksportuoja paskutini issaugota sesija i PDF.
+- Collabora runtime sukonfiguruotas local-only keliui: WOPI host allowlist naudoja `aliasgroup1=http://document-service:3001`, `localhost:9980` nera publikuojamas i hosta, Docker mount namespace triuksmas isjungtas per `mount_jail_tree=false`, update/welcome/feedback call'ai isjungti per `fetch_update_check=0`, `allow_update_popup=false`, `home_mode.enable=true`, o pirmo paleidimo welcome dialogas papildomai uzgesinamas per same-origin browser storage pries atidarant editoriu.
 - Implementuotas B-38 Defect Act / Commercial Offer generation parity: Defect Acts ir Commercial Offers source paneliai dabar rodo generated file/version metadata, turi direct `Generate PDF file`, `Open preview` ir `Download` veiksmus po document draft sukurimo, o preview/download/print/export/email audit irasai mirror'inami i source recorda. Sugeneruoti dokumentai ir source irasai naudoja ta pati `document-service` file registry objekta.
 - Patikslinta Template Generation terminija: user-facing `Work List Templates` pervadinti i `Templates`, o `Output Templates` UI pervadinti i `Output Layouts`, kad kasdieniam useriui template reikstu pasirenkama darbo/proceduros sablona, o Carbone/LibreOffice spausdinami layout'ai liktu advanced/admin sritis.
 - Pataisytas Template Generation Output Layouts toolbar responsive layout'as: template/output select'ai ir `Generate mock` / `Generate via service` / `Edit template` veiksmai wrap'ina vietoje horizontalaus overflow. `Report issue` pakeistas i maza apvalu raudona mygtuka su `!` zenklu.
@@ -21,8 +33,31 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 - Sales supaprastintas iki commercial offer/customer approval/handoff flow: isimtas contract/warranty tab'as, contract management blokas ir sales dokumentu invoice action'ai, kad kontraktu ir invoice atsakomybes nesidubliuotu.
 - Finance patikslintas kaip invoice register: puslapis prasideda nuo sukurtu/ikeltu invoice saraso su payment statusu, file busena ir upload invoice veiksmu, be pertekliniu dashboard korteliu.
 
+### Fixed
+
+- Pataisytas Documents auto-generation/status flow: dokumento busena dabar normalizuojama pagal faktinius failus (`generatedFile`, `signedFile`, `finishedAt`), todel sugeneruotas dokumentas automatiskai pereina i `Signature` / `Needs signed upload`, pasirasytas dokumentas rodo `Signed copy uploaded`, o uzstriges `Auto generating` po reload nebeuzrakina dokumento ir yra queued generuoti is naujo.
+- Pataisytas `document-service` failu registro skaitymas: `files.json` su BOM, tuscias arba laikinai malformed JSON failas nebeuzlauzia `/api/documents/generate`, todel dokumentu auto-generavimas nebekrenta su 500 vien del registro encoding'o/runtime registro korupcijos.
+- Seni `Generate mock` failai nebelaikomi tikrais sugeneruotais dokumentais Documents sarase. Jei irasas turi tik `*-mock.pdf` be `document-service` download/preview URL, jis vel auto-generuojamas i realu PDF.
+- Documents lenteles eilutes nebeperrenderina UI, kai vartotojas pazymi teksta kopijavimui; lenteleje aiskiai leidziamas text selection.
+- Documents sarase ir date range filtre `Due` pakeistas i `Created`, nes dokumentu repository pagrindinis atskaitos taskas yra sukurimo/ikelimo data. Vidinis `due` lieka SLA/overdue priminimu logikai.
+- Documents `Created` filtravimas supaprastintas i viena modernu datos lauka: galima ivesti nepilna data (`2026`, `2026-04`, `2026-04-15`, `202604`) arba pasirinkti pilna data per native kalendoriaus picker'i.
+- Topbar logo subtitle pakeistas is `Service IS` / `Serviso IS` i `Informational system` / `Informacine sistema`.
+- Theme toggle perkeltas is topbar i apatini kairi ekrano kampa, centruotas pagal `Workspace` sidebar stulpeli ir papildytas `☀️` / `🌙` emoji pagal perjungimo krypti.
+- Documents search ir Created datos laukeliuose `Enter` dabar paleidzia filtravima taip pat kaip `Search` mygtukas.
+- Documents lentele supaprastinta: senas workflow `Status` stulpelis, delivery-derived `Status`/`Delivery` stulpelis, `File` stulpelis ir atskiras `Uploaded` stulpelis pasalinti is index page. Delivery busena bus tvarkoma Parts/Shipping kontekste, o dokumentu sarase lieka vienas upload `Status` ir veiksmai.
+- Documents `Status` stulpelis dabar yra upload veiksmo vieta: kol signed/uploaded failo nera, rodomas geltonas `Upload signed` mygtukas; kai signed/uploaded failas yra, tame paciame stulpelyje rodomas zalias `Download` linkas.
+- Documents `File` stulpelis pasalintas; sugeneruotas failas pasiekiamas per `View`, o signed/uploaded failas per zalia `Download` veiksma `Status` stulpelyje.
+- Documents signed upload forma perkelta i centruota modal pop-up su drag-and-drop/click file zona ir dviem veiksmais: `Upload` ir `Cancel`.
+- Documents index `Action` stulpelyje pasalinti `Reject` ir `Finish` / `DONE`; kasdieniame sarase lieka tik `View` ir `Edit`, o upload/download gyvena `Status` stulpelyje.
+- Pataisytas Documents `Created` datos picker'io vizualus glitch'as, kai suspaustas native date input rodydavo atsitiktine teksto raide salia kalendoriaus ikoneles.
+- Is Documents lenteliu pasalintas legacy overdue red stripe row marker; overdue logika lieka Command Center/sidebar priminimams, bet nebezymi dokumentu index eilučių.
+
 ### Documentation
 
+- Pridetas `docs/PRODUCTION_DEPLOYMENT.md` production/private server runbook: domenas/DNS, TLS, firewall, Docker Compose, `.env`, reverse proxy, Collabora/WOPI, persistent storage, backup/restore, health checks, log checks, production blockers ir go-live checklist.
+- Pridetas `docs/modules/COLLABORA_WOPI_INTEGRATION.md` kaip shared Collabora CODE/WOPI playbook: Docker topology, nginx proxy keliai, session API, WOPI endpointai, payload contract, kaip prijungti advanced editor prie kitu moduliu, verification ir troubleshooting.
+- Prideta atskira Templates modulio dokumentacija `docs/modules/TEMPLATES_MODULE.md`: aprasyti user-facing procedure/checklist templates, `Output Layouts`, merge fields, FODT/template failu atsakomybes ir vieta ateities template modifikacijoms.
+- Prideta atskira moduliu dokumentacijos struktura `docs/modules/`: `WORKSPACE_MODULES.md` workspace moduliu ownership/aprasams, `DOCUMENTS_MODULE.md` detaliam Documents modulio aprasui, `TEMPLATES_MODULE.md` Templates/Output Layouts taisyklems ir `LINKING_AND_PIPELINE_LOGIC.md` smulkiai cross-module linkinimo/pipeline logikai.
 - Atnaujintos darbo taisykles dokumentacijoje: `git commit` / `git push` vykdomi tik gavus aisku userio leidima, o kodo komentarai turi buti EN kalba, kad ateities chat'ai greitai suprastu implementacija.
 - Prideta LT/EN kalbu pasirinkimo uzuomazga: globalus `state.language`, topbar kalbos perjungiklis, `src/js/i18n.js` vertimu helperis ir pirmas shell/sidebar/topbar tekstu vertimu sluoksnis tolimesnei revizijai.
 - Is Documents lenteles pasalintas `Last activity` stulpelis; Admin puslapyje pridetas pradinis `Admin logs` subsection, kuris kol kas surenka dokumentu delivery/upload/rejection/finish demo audit ivykius.
@@ -34,7 +69,7 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 - Is Documents filtro panelio pasalintas perteklinis `Document repository` pavadinimas ir aprasomasis tekstas, kad vartotojas iskart matytu veiksmus.
 - Pridetas `docs/CURRENT_STATUS_AND_ROADMAP.md` kaip 2026-04-15 projekto busenos, atliktu darbu, technines skolos ir B-38+ roadmap source of truth.
 - Pridetas `docs/TOMIS_CRAWL_PLAYBOOK.md` su saugaus read-only Tomis crawl procesu, efektyvaus letos app navigavimo taktika, screenshot naming taisyklemis, ekranu duomenu rinkimo sablonu ir prioritetinemis crawl sritimis.
-- Atnaujinti `README.md`, `docs/PROJECT_PLAN.md`, `docs/WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md` ir `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`, kad atspindetu nauja Documents workflow: be generic `Advance`, be aktyvaus archyvavimo, su `Upload signed` -> `Finish` -> `DONE` logika.
+- Atnaujinti `README.md`, `docs/PROJECT_PLAN.md`, `docs/WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md` ir `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`, kad atspindetu nauja Documents workflow: be generic `Advance`, be aktyvaus archyvavimo, su `Upload signed` -> green `Download` statuso logika.
 
 ## [0.1.0] - 2026-04-13
 
