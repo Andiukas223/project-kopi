@@ -11,6 +11,9 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 - Implementuotas B-38 Defect Act / Commercial Offer generation parity: Defect Acts ir Commercial Offers source paneliai dabar rodo generated file/version metadata, turi direct `Generate PDF file`, `Open preview` ir `Download` veiksmus po document draft sukurimo, o preview/download/print/export/email audit irasai mirror'inami i source recorda. Sugeneruoti dokumentai ir source irasai naudoja ta pati `document-service` file registry objekta.
 - Patikslinta Template Generation terminija: user-facing `Work List Templates` pervadinti i `Templates`, o `Output Templates` UI pervadinti i `Output Layouts`, kad kasdieniam useriui template reikstu pasirenkama darbo/proceduros sablona, o Carbone/LibreOffice spausdinami layout'ai liktu advanced/admin sritis.
 - Pataisytas Template Generation Output Layouts toolbar responsive layout'as: template/output select'ai ir `Generate mock` / `Generate via service` / `Edit template` veiksmai wrap'ina vietoje horizontalaus overflow. `Report issue` pakeistas i maza apvalu raudona mygtuka su `!` zenklu.
+- Pataisytas `Report issue` snipping startas: ikoninis mygtukas neberodo `Preparing snip...` teksto ir lieka stabilus kol ruosiamas screenshot pasirinkimas.
+- Pataisytas Documents search/filter wrap: paieskos, statusu, klientu ir datu laukai wrap'ina eilutemis vietoje puslapio horizontalaus overflow; lenteliu horizontalus scroll lieka tik lenteles konteineryje.
+- `Issue sent to admin.` patvirtinimas po report issue issiuntimo dabar pats pranyksta su fade animacija po 2 sekundziu.
 
 ### Documentation
 

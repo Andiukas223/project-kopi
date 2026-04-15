@@ -9,6 +9,7 @@ let lastPoint = null;
 let selecting = false;
 let selectionStart = null;
 let selectionPointerId = null;
+let feedbackNoticeTimer = null;
 
 export function bindFeedback(renderApp) {
   renderAppCallback = renderApp;
@@ -134,9 +135,9 @@ async function openFeedbackSnipping(button) {
   state.feedbackCaptureDataUrl = "";
   state.feedbackCommentDraft = "";
 
-  const originalText = button.textContent;
   button.disabled = true;
-  button.textContent = "Preparing snip...";
+  button.setAttribute("aria-busy", "true");
+  button.title = "Preparing snip";
 
   try {
     state.feedbackCaptureDataUrl = await captureCurrentScreen();
@@ -146,7 +147,8 @@ async function openFeedbackSnipping(button) {
     state.feedbackSelecting = true;
     renderFeedback();
     button.disabled = false;
-    button.textContent = originalText;
+    button.removeAttribute("aria-busy");
+    button.title = "Report issue";
   }
 }
 
@@ -212,6 +214,7 @@ async function saveFeedbackReport() {
   state.feedbackError = "";
   state.feedbackSavedNotice = "Issue sent to admin.";
   renderFeedback();
+  queueFeedbackNoticeClear();
 }
 
 async function loadFeedbackReports({ force = false } = {}) {
@@ -738,4 +741,17 @@ function currentUserName() {
 
 function renderFeedback() {
   if (renderAppCallback) renderAppCallback();
+}
+
+function queueFeedbackNoticeClear() {
+  if (feedbackNoticeTimer) {
+    window.clearTimeout(feedbackNoticeTimer);
+  }
+
+  feedbackNoticeTimer = window.setTimeout(() => {
+    feedbackNoticeTimer = null;
+    if (state.feedbackSavedNotice !== "Issue sent to admin.") return;
+    state.feedbackSavedNotice = "";
+    renderFeedback();
+  }, 2600);
 }
