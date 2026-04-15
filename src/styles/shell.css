@@ -68,6 +68,7 @@
   width: 24px;
 }
 
+.language-toggle,
 .theme-toggle {
   background: rgba(255, 255, 255, .07);
   border: 1px solid rgba(255, 255, 255, .14);
@@ -79,6 +80,13 @@
   padding: 0 10px;
 }
 
+.language-toggle {
+  font-family: var(--mono);
+  min-width: 38px;
+}
+
+.language-toggle:hover,
+.language-toggle[aria-pressed="true"],
 .theme-toggle:hover,
 .theme-toggle[aria-pressed="true"] {
   background: var(--brand);

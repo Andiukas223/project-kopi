@@ -2,9 +2,17 @@
 
 Date: 2026-04-15
 
-Latest pushed implementation baseline when this document was created: `8b461fd Implement document workflow and feedback storage`.
+Latest pushed implementation baseline noted before the current uncommitted review pass: `28fd1dd refactor: split contracts from sales and finance`.
 
 This document is the current operating truth for the Viva Medical web prototype. It summarizes what has been built, what product decisions are locked for now, what is still missing, and how the next implementation steps should be done.
+
+## Active Working Rules
+
+- Do not run `git commit` or `git push` automatically. Commit/push only when the user explicitly asks for it.
+- Code comments must be written in English. User-facing UI copy may follow the product language/context, but implementation comments stay EN so future chats can parse the code quickly.
+- Keep documentation current after meaningful implementation work, but leave git changes uncommitted until the user approves commit/push.
+- LT/EN language support is now scaffolded, not complete: use `src/js/i18n.js` and `state.language` for new global UI copy, then revise module-level copy in later passes.
+- User-facing Owner means creator initials: the person who produced/added the record. Admin user creation generates initials from full name for later record ownership display. Document `owner` can still be an internal queue/module bucket (`Service`, `Sales`, `Finance`) for filters and routing; show `createdByInitials` to users.
 
 ## Current Product Shape
 
@@ -25,6 +33,7 @@ Frontend is still vanilla JavaScript modules. Backend is still a prototype docum
 
 - Fixed topbar, sidebar, main workspace, role switcher, dynamic navigation badges.
 - Light and dark mode with persisted theme state.
+- LT/EN language toggle foundation for topbar/sidebar/global shell labels.
 - Docker/web control is intentionally outside the web UI through `vm-web-control.ps1` / `.cmd`.
 - `Report issue` is global and available from every page.
 
@@ -45,16 +54,25 @@ Frontend is still vanilla JavaScript modules. Backend is still a prototype docum
 
 ### Sales
 
-- Quotation pipeline with offer/contract/approval/handoff detail tabs.
+- Quotation pipeline with offer/approval/handoff detail tabs.
 - New quotation form.
-- Contract management edit mode.
-- Sales document list now mirrors document repository logic and includes `Generate invoice`.
-- Invoice generation is still a prototype action and will need deeper Finance/Sales integration.
+- Sales owns commercial offers, customer approval, and service handoff only.
+- Contract upload/configuration moved to `Contracts`.
+- Invoice creation/upload/payment status moved to `Finance`.
+
+### Contracts
+
+- Signed contract intake opens the shared document upload flow preselected as `Contract`.
+- Contract register and detail/configuration panel.
+- Admin can configure type/status/value/consumed/remaining/start/end/PM visits per year/notes.
+- Contracts are the source for PM/install/service agreement specifications consumed by Service and Calendar.
 
 ### Finance
 
-- Job-linked invoice queue.
-- Mock `Generate invoice`, `Mark paid`, `Mark cancelled`.
+- Invoice register for created and uploaded invoices.
+- Upload invoice opens the shared document upload flow preselected as `Invoice`.
+- Uploaded invoice files create invoice register rows.
+- `Generate invoice`, `Mark paid`, `Mark cancelled` remain prototype actions.
 - Payment status and invoice links are still frontend/demo-state logic.
 
 ### Documents
@@ -63,7 +81,7 @@ Documents is now a repository and file custody module, not the main template edi
 
 Implemented behavior:
 
-- Search/filter table by text, type, status, customer, owner, date.
+- Search/filter table by text, type, customer, creator initials, and compact date range. Queue and status filters were removed from the active UI to reduce clutter.
 - Table contains the important file custody fields directly; the old selected document side panel is no longer needed as the primary source of information.
 - `View` opens the generated/uploaded document preview.
 - `Edit` routes to the correct source workspace where possible:
@@ -81,6 +99,10 @@ Implemented behavior:
 - `Finish` marks the document `Done`, shows green `DONE`, and closes the linked case/ticket in demo state.
 - Uploaded signed copies are stored through `document-service` and linked back to the same document record.
 - Nginx allows larger document uploads with `client_max_body_size 20m`.
+- The table reference uses the source/job reference (`VM-SV-...`, `QTE-...`) instead of exposing the internal `DOC-...` as the primary daily identifier. Internal document IDs remain for system links and logs.
+- User-facing Owner is the creator initials (`AL`, `VK`, `RP`). Internal module queue ownership remains in data for routing, but it is no longer exposed as an active Documents filter.
+- Newly created document drafts auto-generate a PDF through `document-service` by default, with file registry metadata, preview URL, and download URL. Manual generate remains available as a regenerate action.
+- Document types without a dedicated output layout use `tpl-generic-document` / `generic-document.fodt` until a specific layout is designed.
 
 Current active document lifecycle:
 
@@ -299,18 +321,17 @@ Plan:
 5. Add a concise row audit popover or expandable row for file history.
 6. Keep archive hidden until a future retention design exists.
 
-### B-40 - Sales Invoice Workflow Integration
+### B-40 - Finance Invoice Register Polish
 
-Goal: Sales and Finance should share a clean invoice path.
+Goal: Finance should be the single intuitive place for invoice files and payment status.
 
 Plan:
 
-1. On Sales document rows, keep `Generate invoice` as the sales-side trigger.
-2. Create or link invoice records in Finance.
-3. Add invoice status signals back to Sales rows.
-4. Add upload signed/paid invoice flow if needed.
-5. Define whether Finance or Sales owns final invoice PDF generation.
-6. Add tests for quotation -> invoice -> payment status.
+1. Add Finance filters/search similar to Documents.
+2. Improve uploaded invoice metadata: amount, invoice number, due date, payment terms.
+3. Link invoices back to source quotation/job/document without exposing invoice actions in Sales.
+4. Add paid/signed invoice upload flow if needed.
+5. Add tests for document upload -> invoice register -> payment status.
 
 ### B-41 - Visual Template Editor V2
 
@@ -417,4 +438,4 @@ For every implementation step:
 3. Use Playwright for at least one realistic UI path.
 4. Check browser console errors.
 5. Update docs and changelog.
-6. Commit and push when the implementation session is complete.
+6. Do not commit or push unless the user explicitly asks for it.

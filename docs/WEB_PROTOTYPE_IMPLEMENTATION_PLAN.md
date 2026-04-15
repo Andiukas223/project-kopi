@@ -20,7 +20,8 @@ The first prototype should support these workflows:
 - Job status monitoring from request to finished work act.
 - Document creation pipeline for service documents, sales documents, and administrative documents.
 - Service technician workflow with diagnostics, repair, parts, vendor return, and final checklist.
-- Sales workflow for quotations, customer approval, contract/warranty context, and handoff to service.
+- Sales workflow for quotations, customer approval, and handoff to service.
+- Contracts workflow for signed PM/install/service contract upload and specification configuration.
 - Admin workflow for user role visibility, overdue work, document exceptions, and system configuration.
 
 The prototype should use realistic demo data, not a real backend yet.
@@ -325,11 +326,13 @@ Purpose: document repository, search, status tracking, and file custody.
 Components:
 
 - Table-first document repository. Avoid pipeline counters and side panels that repeat information already visible in the list.
-- Filters by document type, owner, status, due date, customer, job, equipment, generated/uploaded/signed state.
-- Table with document ID, job ID, customer, equipment, owner, status, source, signed state, and file action.
+- Active filters: free-text search, document type, customer, and compact date range. Queue and status filters are intentionally removed from the visible Documents UI to keep the workflow lighter.
+- Table with source/job reference, customer, equipment, creator initials as user-facing Owner, status, source, signed state, and file action. Internal document IDs remain available for system links/logs, but are not the primary daily list identifier.
 - Row actions: `View`, `Edit`, `Download`, `Reject`, `Upload signed`, `Finish`, `DONE` depending on document state.
 - Upload external document panel.
 - Download/open generated or uploaded document action.
+- Newly created document drafts should auto-generate a PDF through `document-service` so `View` and `Download` are immediately useful. Manual generation remains a regenerate action.
+- Document types without a dedicated layout should use the generic output layout until a specific layout exists.
 - Audit/history section for generated, uploaded, signed, finished, and rejected events.
 
 Documents must not become the main template editing workspace. Template generation can link back to Documents after a generated file is saved.
@@ -483,8 +486,9 @@ Palette direction:
 |---|---|---|
 | Service Engineer | service | Creates technical cases, logs diagnostics/repair duration, uploads signed documents |
 | Service Manager | svcmgr | Approves parts requests, assigns engineers, controls service queue |
-| Sales / Sales Manager | sales | Commercial offers, contract upload/indexing, customer approval, invoice handoff |
-| Finance | finance | Generates/uploads invoices, manages payment status (paid/pending/canceled) |
+| Sales / Sales Manager | sales | Commercial offers, customer approval, service handoff |
+| Contracts / Admin | contracts | Signed contract upload/indexing, PM/install/service specification configuration |
+| Finance | finance | Invoice register, uploaded invoice files, payment status (paid/pending/canceled) |
 | Office Manager | office | Customer registry, contacts, calendar, case creation, reminders to engineers |
 | Logistics Manager | logistics | Parts delivery, vendor returns, logistics issue resolution |
 | Warehouse | warehouse | Stock confirmation, parts arrival, inventory management |
@@ -559,7 +563,7 @@ Create (from Carbone template, mock in prototype) or Upload (external document w
 
 Upload metadata fields (indexed for global search): location · contract reference · date · executor · who signed · short description.
 
-Search: filter chips (type / owner / status / customer / date range) + free text field + Search / Cancel buttons.
+Search: free text field that searches references/customer/creator initials/description + type/customer/date range filters + Search / Cancel buttons. `Upload document` lives in the same action row. Queue/status filters are not shown.
 
 ---
 
@@ -671,7 +675,7 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 - Documents page: default filter by role (service/svcmgr → Service, sales → Sales, finance → Finance).
 - Page header: "New service job" button hidden for roles that cannot create jobs.
 - Sales module: full quotation pipeline (Draft → Sent → Awaiting approval → Approved → Handed off / Rejected) with 4-tab detail (Offer / Contract / Approval / Handoff).
-- Finance module: invoice queue with job-linked invoice records, payment status, and mock Generate invoice / Mark paid / Mark cancelled actions.
+- Finance module: invoice register with created/uploaded invoice files, job-linked invoice records, payment status, and mock Generate invoice / Mark paid / Mark cancelled actions.
 
 ### Phase 5: Template Generation Workspaces ✅ DONE
 
@@ -700,7 +704,7 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 | ID | Task | Description |
 |---|---|---|
 | ~~B-05~~ | ~~**Document upload flow**~~ | Done: `Upload document` opens a metadata form (type, job ref, customer, who signed, due date, description) and inserts a Draft document record into the pipeline. |
-| ~~B-06~~ | ~~**Document search**~~ | Done: free-text search plus type/status/customer/date filters in the documents table with `Search` / `Cancel` actions. |
+| ~~B-06~~ | ~~**Document search**~~ | Done: free-text search plus type/customer/date filters in the documents table with `Search` / `Cancel` actions; queue/status filters were later removed for clarity. |
 | ~~B-07~~ | ~~**PM date reschedule**~~ | Done: PM submodule date fields allow moving a visit within the same month only and update Calendar PM events. |
 | ~~B-08~~ | ~~**Sales: New quotation**~~ | ~~"New quotation" button with a mini form (customer, equipment, type, amount) → creates a Draft QTE entry in memory.~~ **Done:** `New quotation` opens a mini form and creates a selected Draft QTE entry in memory. |
 | ~~B-09~~ | ~~**Vendor return flow**~~ | ~~From Parts module: "Create vendor return" button → creates return case → visible in Logistics queue.~~ **Done:** Parts detail creates a vendor return case that appears in the Parts vendor return queue and Logistics role queue / badge. |
@@ -709,7 +713,7 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 
 | ID | Task | Description |
 |---|---|---|
-| ~~B-10~~ | ~~**Contract management**~~ | ~~Dedicated contract view/edit screen in Sales module. Contracts currently read-only.~~ **Done:** Sales module has a contract management view with edit mode, validation, and automatic `remaining = value - consumed` recalculation. |
+| ~~B-10~~ | ~~**Contract management**~~ | **Done:** Contract management moved to a separate `Contracts` module with signed contract upload intake, edit mode, validation, and automatic `remaining = value - consumed` recalculation. |
 | ~~B-11~~ | ~~**Warranty/calendar sync**~~ | ~~Type C installation: acceptance act upload auto-populates warranty expiry date in calendar.~~ **Done:** `Acceptance report` upload updates linked equipment acceptance/warranty fields and creates a warranty expiry event in Calendar. |
 | ~~B-12~~ | ~~**Parts delivery address registry**~~ | ~~Autofill suggestions when entering delivery address on parts requests (populated from customer registry).~~ **Done:** Parts delivery flow has a registry autofill form with customer address/contact suggestions and saves the selected delivery address/contact to the parts request. |
 | ~~B-13~~ | ~~**localStorage persistence**~~ | ~~Optional: persist in-memory state across page reloads.~~ **Done:** UI state and mutable demo collections are saved to `localStorage`, so changes survive page reloads. |
@@ -744,7 +748,7 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 | ~~B-37~~ | ~~**Production Work Act generation storage**~~ | **Done:** Work Act generation now creates a `generated-document` file registry record with stable `fileId`, `downloadUrl`, PDF `previewUrl`, source Work Act link, and per-document `version/versionLabel`. The source Work Act receives the generated file/version, preview/download/email audit entries reference the same file/version, and the Work Act panel can generate the PDF directly after a document draft exists. |
 | ~~B-38~~ | ~~**Defect Act / Commercial Offer generation parity**~~ | **Done:** Defect Acts and Commercial Offers now use the same source-panel generated-file UX as Work Acts: generated file/version metadata, direct generate/open-preview/download actions, shared Documents file object, and source-aware delivery/email audit trail. |
 | B-39 | **Document repository workflow polish** | Make Documents a simpler work queue: row signals for needs signed upload / signed uploaded / ready to finish / DONE, row-level file history, better empty states, and no archive controls until retention design. |
-| B-40 | **Sales invoice workflow integration** | Link Sales `Generate invoice` to Finance records, reflect invoice status back in Sales lists, and define Finance vs Sales ownership of final invoice PDF. |
+| B-40 | **Finance invoice register polish** | Keep Finance as invoice owner: add search/filters, richer invoice upload metadata, source quotation/job/document links, and paid/signed invoice flow if needed. |
 | B-41 | **Visual template editor V2** | After deeper Tomis editor crawl, add table editing, merge fields, logo/image placeholders, autosave, dirty-state warning, revert, personal duplicate, and version history. |
 | B-42 | **Backend data model and auth** | Move from demo/localStorage state to PostgreSQL, migrations, users/roles/permissions, documents/templates/files/feedback/audit models, sessions, and route permission checks. |
 | B-43 | **Production file custody** | Move `files.json` metadata into DB, add file version chains, signed-copy versions, object storage adapter, checksum/MIME/size validation, retention, backup, and access rules. |
@@ -772,7 +776,9 @@ Core decision:
 After every implementation session:
 1. Update `docs/CHANGELOG.md` — add entries under `[Unreleased]`.
 2. Update `docs/PROJECT_PLAN.md` section 18 — mark completed backlog items ✅, add new items as they arise.
-3. `git commit` + `git push` — one commit per session's work.
+3. Do not run `git commit` or `git push` unless the user explicitly asks for it. Leave completed changes in the worktree until approval.
+4. Code comments must be written in English so future chats can understand the implementation quickly.
+5. User-facing Owner means the initials of the person who created/added the record. Admin-created users must get initials generated from full name for this purpose. Keep internal module ownership/queue fields separate when the UI needs role filtering.
 
 ---
 
@@ -796,7 +802,7 @@ All original criteria met and exceeded:
 
 | Question | Where it applies |
 |---|---|
-| App name in UI (`Viva Medical` / `Service IS` / other) | `src/index.html` topbar, all `pageHeader()` titles |
+| App name in UI (`Viva Medical` / `Service IS` / other) | `src/index.html` topbar; active module is shown in the sidebar, not in page headers |
 | Brand colour from logo → `--brand` CSS variable | `src/styles/base.css` `:root` |
 | Logo export → `assets/logo.svg` | `src/index.html` topbar |
-| UI language (Lithuanian / English / mixed) | All of `render.js` |
+| UI language (LT / EN) | `state.language` + `src/js/i18n.js` scaffold exists for shell/sidebar/topbar; module-level copy still needs a deliberate translation pass |

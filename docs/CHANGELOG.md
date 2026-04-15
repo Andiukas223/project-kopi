@@ -23,6 +23,15 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 
 ### Documentation
 
+- Atnaujintos darbo taisykles dokumentacijoje: `git commit` / `git push` vykdomi tik gavus aisku userio leidima, o kodo komentarai turi buti EN kalba, kad ateities chat'ai greitai suprastu implementacija.
+- Prideta LT/EN kalbu pasirinkimo uzuomazga: globalus `state.language`, topbar kalbos perjungiklis, `src/js/i18n.js` vertimu helperis ir pirmas shell/sidebar/topbar tekstu vertimu sluoksnis tolimesnei revizijai.
+- Is Documents lenteles pasalintas `Last activity` stulpelis; Admin puslapyje pridetas pradinis `Admin logs` subsection, kuris kol kas surenka dokumentu delivery/upload/rejection/finish demo audit ivykius.
+- Documents lenteles user-facing identifikatorius pakeistas is vidinio `DOC-...` i darbo/saltinio reference (`VM-SV-...`, `QTE-...`), o `File ID` stulpelis pasalintas is kasdienio userio saraso.
+- Owner logika patikslinta iki creator initials: Admin kuriant useri inicialai generuojami is pilno vardo (pvz. Andrejus Lomovas -> AL), primary role pritaiko bazinius leidimus, nauji dokumentai/offer/work/defect/invoice irasai gauna `createdBy` ir `createdByInitials`, o Documents/Sales/Finance user-facing Owner rodo inicialus. Vidinis `owner` laukas dokumentuose paliktas kaip modulio queue (`Service`, `Sales`, `Finance`) filtrams.
+- Nauji sukurti dokumentu draft'ai dabar automatiskai sugeneruoja PDF per `document-service`, gauna file registry metadata, `previewUrl` ir `downloadUrl`, todel Documents sarase `View` / `Download` tampa naudingi be atskiro manual generate paspaudimo. Pridetas `Generic document` fallback output layout Invoice/Contract/kitoms dar specialaus layout neturincioms dokumentu rusims.
+- Auto-generation papildyta backfill'u: Documents modulis po uzkrovimo suranda senus/persisted dokumentus be generated/uploaded/signed file ir paeiliui sugeneruoja jiems PDF, o kol vyksta darbas row delivery rodo `Auto generating`.
+- Documents filter juosta supaprastinta: pasalinti Queue ir Status filtrai, Upload document perkeltas i ta pacia eile kaip Search/Cancel, datos laukai susiaurinti iki date input dydzio, o dokumentu sarasas nebefiltruojamas pagal paslepta role queue.
+- Is Documents filtro panelio pasalintas perteklinis `Document repository` pavadinimas ir aprasomasis tekstas, kad vartotojas iskart matytu veiksmus.
 - Pridetas `docs/CURRENT_STATUS_AND_ROADMAP.md` kaip 2026-04-15 projekto busenos, atliktu darbu, technines skolos ir B-38+ roadmap source of truth.
 - Pridetas `docs/TOMIS_CRAWL_PLAYBOOK.md` su saugaus read-only Tomis crawl procesu, efektyvaus letos app navigavimo taktika, screenshot naming taisyklemis, ekranu duomenu rinkimo sablonu ir prioritetinemis crawl sritimis.
 - Atnaujinti `README.md`, `docs/PROJECT_PLAN.md`, `docs/WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md` ir `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`, kad atspindetu nauja Documents workflow: be generic `Advance`, be aktyvaus archyvavimo, su `Upload signed` -> `Finish` -> `DONE` logika.

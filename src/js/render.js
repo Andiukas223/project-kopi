@@ -5,6 +5,7 @@ import {
 } from "./data.js";
 import { escapeHtml } from "./dom.js";
 import { state } from "./state.js";
+import { displayInitialsForRecord, initialsFromName } from "./userIdentity.js";
 
 const pageMeta = {
   command:   ["Command Center", "Live overview for service work, documents, approvals, and overdue items."],
@@ -179,7 +180,7 @@ const moduleSpecs = {
     roles: "Manager — read-only full overview. Admin — full access. Service Manager — service metrics.",
     submodules: "SLA summary · Document cycle time · Jobs by stage · Sales-to-service handoff · Contract balance utilization · PM completion rate",
     pipeline: "Read-only. No pipeline actions from this page.",
-    actions: "Export view · Filter by date range / customer / engineer",
+    actions: "Filter by date range / customer / engineer",
     planned: "Full metrics with live aggregations from in-memory state · Chart components (bar, line, status distribution) · Export to CSV / PDF · SLA breach alerts · Contract balance burn-rate chart · PM schedule compliance rate"
   },
   admin: {
@@ -376,22 +377,6 @@ function chipClass(status) {
   return status.toLowerCase().replaceAll(" ", "-");
 }
 
-function pageHeader(page) {
-  return "";
-}
-
-function roleSwitcher() {
-  return `
-    <div class="role-switcher" aria-label="Role switcher">
-      ${roles.map((role) => `
-        <button class="role-btn ${state.role === role.id ? "active" : ""}" type="button" data-role="${role.id}">
-          ${escapeHtml(role.id.toUpperCase())}
-        </button>
-      `).join("")}
-    </div>
-  `;
-}
-
 function statCard(label, value, note, tone) {
   return `
     <article class="stat-card ${tone}">
@@ -517,18 +502,15 @@ function documentsTable(rows = documents) {
         <table class="data-table">
           <thead>
             <tr>
-              <th>Document</th>
+              <th>Reference</th>
               <th>Type</th>
-              <th>Job</th>
               <th>Customer</th>
               <th>Owner</th>
               <th>Status</th>
               <th>Due</th>
               <th>Delivery</th>
               <th>File</th>
-              <th>File ID</th>
               <th>Signed / Uploaded</th>
-              <th>Last activity</th>
               <th>Action</th>
             </tr>
           </thead>
@@ -537,18 +519,15 @@ function documentsTable(rows = documents) {
               const generatedFile = documentGeneratedFileFor(doc);
               return `
                 <tr class="${doc.id === state.selectedDocumentId ? "selected" : ""} ${documentIsOverdue(doc) ? "overdue" : ""}" data-doc-row="${escapeHtml(doc.id)}">
-                  <td class="mono">${escapeHtml(doc.id)}</td>
+                  <td class="mono">${escapeHtml(doc.jobId || doc.quotationId || doc.id)}</td>
                   <td>${escapeHtml(doc.type)}</td>
-                  <td class="mono">${escapeHtml(doc.jobId)}</td>
                   <td>${escapeHtml(doc.customer || "Not assigned")}</td>
-                  <td>${escapeHtml(doc.owner)}</td>
+                  <td><span class="role-tag">${escapeHtml(displayInitialsForRecord(doc))}</span></td>
                   <td>${statusChip(documentStatusForUi(doc))}</td>
                   <td>${dueCell(doc)}</td>
                   <td>${documentDeliveryCell(doc, generatedFile)}</td>
                   <td>${documentFileCell(doc, generatedFile)}</td>
-                  <td class="mono">${escapeHtml(documentFileIdCell(doc, generatedFile))}</td>
                   <td>${documentSignedUploadCell(doc)}</td>
-                  <td>${documentActivityCell(doc)}</td>
                   <td>
                     <div class="table-actions">
                       <button class="btn primary compact" type="button" data-doc-view="${escapeHtml(doc.id)}">View</button>
@@ -607,12 +586,6 @@ function documentFileCell(doc, generatedFile) {
   return items.length ? items.join("") : `<span class="muted">No file</span>`;
 }
 
-function documentFileIdCell(doc, generatedFile) {
-  const generatedId = generatedFile?.fileId || generatedFile?.id || "";
-  const signedId = doc.signedFile?.fileId || doc.signedFile?.id || "";
-  return [generatedId, signedId].filter(Boolean).join(" / ") || doc.uploadedFile?.fileId || doc.uploadedFile?.id || "-";
-}
-
 function documentSignedUploadCell(doc) {
   const items = [];
   if (documentIsDone(doc)) items.push(`DONE: ${doc.finishedAt.slice(0, 10)}`);
@@ -621,16 +594,6 @@ function documentSignedUploadCell(doc) {
   else if (doc.uploadedAt) items.push(`Uploaded: ${doc.uploadedAt.slice(0, 10)}`);
   if (doc.warrantySynced) items.push(`Warranty: ${doc.warrantyExpiryDate || "synced"}`);
   return items.length ? escapeHtml(items.join(" / ")) : `<span class="muted">-</span>`;
-}
-
-function documentActivityCell(doc) {
-  const latest = doc.deliveryAudit?.[0];
-  if (latest) {
-    const at = latest.at ? latest.at.slice(0, 16).replace("T", " ") : "";
-    return `<span class="doc-table-note">${escapeHtml([latest.action, at, latest.note || latest.fileName || ""].filter(Boolean).join(" / "))}</span>`;
-  }
-  if (doc.description) return `<span class="doc-table-note">${escapeHtml(doc.description)}</span>`;
-  return `<span class="muted">-</span>`;
 }
 
 function documentDownloadUrl(doc, generatedFile) {
@@ -692,40 +655,19 @@ function monitorCard(label, value, note, tone) {
 }
 
 function documentFilters() {
-  const owners = ["All", ...new Set(documents.map((doc) => doc.owner))];
   const types = ["All", ...new Set(documents.map((doc) => doc.type))];
-  const statuses = ["All", ...new Set(documents.map(documentStageForUi).filter(Boolean))];
   const customersList = ["All", ...new Set(documents.map((doc) => doc.customer))];
   return `
     <section class="panel slim">
-      <div class="doc-filter-row">
-        <div>
-          <div class="section-title">Document repository</div>
-          <div class="filter-note">Search, filter, upload, preview, and manage document files.</div>
-        </div>
-        <label class="filter-control" for="doc-owner-filter">
-          <span>Owner</span>
-          <select id="doc-owner-filter" data-doc-filter>
-            ${owners.map((owner) => `<option value="${escapeHtml(owner)}" ${state.documentFilter === owner ? "selected" : ""}>${escapeHtml(owner)}</option>`).join("")}
-          </select>
-        </label>
-        <button class="btn primary" type="button" data-doc-upload-open>Upload document</button>
-      </div>
       <div class="doc-search-row">
         <label class="filter-control doc-search-text" for="doc-search-query">
           <span>Search</span>
-          <input id="doc-search-query" value="${escapeHtml(state.documentSearchQuery)}" placeholder="Doc, job, customer, owner, description">
+          <input id="doc-search-query" value="${escapeHtml(state.documentSearchQuery)}" placeholder="Reference, customer, owner initials, description">
         </label>
         <label class="filter-control" for="doc-type-filter">
           <span>Type</span>
           <select id="doc-type-filter">
             ${types.map((type) => `<option value="${escapeHtml(type)}" ${state.documentTypeFilter === type ? "selected" : ""}>${escapeHtml(type)}</option>`).join("")}
-          </select>
-        </label>
-        <label class="filter-control" for="doc-status-filter">
-          <span>Status</span>
-          <select id="doc-status-filter">
-            ${statuses.map((status) => `<option value="${escapeHtml(status)}" ${state.documentStatusFilter === status ? "selected" : ""}>${escapeHtml(status)}</option>`).join("")}
           </select>
         </label>
         <label class="filter-control" for="doc-customer-filter">
@@ -734,17 +676,18 @@ function documentFilters() {
             ${customersList.map((customer) => `<option value="${escapeHtml(customer)}" ${state.documentCustomerFilter === customer ? "selected" : ""}>${escapeHtml(customer)}</option>`).join("")}
           </select>
         </label>
-        <label class="filter-control" for="doc-date-from">
+        <label class="filter-control doc-date-filter" for="doc-date-from">
           <span>From</span>
           <input id="doc-date-from" type="date" value="${escapeHtml(state.documentDateFrom)}">
         </label>
-        <label class="filter-control" for="doc-date-to">
+        <label class="filter-control doc-date-filter" for="doc-date-to">
           <span>To</span>
           <input id="doc-date-to" type="date" value="${escapeHtml(state.documentDateTo)}">
         </label>
         <div class="doc-search-actions">
           <button class="btn dark compact" type="button" data-doc-search-apply>Search</button>
           <button class="btn ghost compact" type="button" data-doc-search-clear>Cancel</button>
+          <button class="btn primary compact" type="button" data-doc-upload-open>Upload document</button>
         </div>
       </div>
     </section>
@@ -771,7 +714,8 @@ function documentDetailPanel(doc) {
         ${detailItem("Type", doc.type)}
         ${detailItem("Job", doc.jobId)}
         ${detailItem("Customer", doc.customer)}
-        ${detailItem("Owner", doc.owner)}
+        ${detailItem("Owner", displayInitialsForRecord(doc))}
+        ${doc.createdBy ? detailItem("Created by", doc.createdBy) : ""}
         ${detailItem("Due", `${doc.due}${documentIsOverdue(doc) ? " / Overdue" : documentIsDueToday(doc) ? " / Today" : ""}`)}
         ${detailItem("Delivery", doc.deliveryStatus || (generatedFile ? "Generated" : "Not generated"))}
         ${generatedFile ? detailItem("Generated file", generatedFileDisplayName(generatedFile)) : ""}
@@ -1278,7 +1222,7 @@ function docPreviewBody(templateId, doc, job, cust, eq, dateStr, workAct = null,
   const eqName   = workAct?.equipmentItems?.map((item) => item.name).join("; ") || job?.equipment || eq?.name || "—";
   const custName = doc?.customer || cust?.name   || "—";
   const custAddr = cust?.address || "—";
-  const owner    = doc?.owner    || "—";
+  const owner    = displayInitialsForRecord(doc);
   const jobId    = doc?.jobId    || "—";
 
   if (templateId === "tpl-service-act") {
@@ -1830,7 +1774,6 @@ function vendorReturnsTable(rows) {
 // ---------------------------------------------------------------------------
 function commandPage() {
   return `
-    ${pageHeader("command")}
     <div class="page-content">
       <div class="stat-grid">
         ${roleStats()}
@@ -1851,7 +1794,6 @@ function servicePage() {
   const selectedJob = selectedServiceJob(myJobList);
 
   return `
-    ${pageHeader("service")}
     <div class="page-content">
       <div class="tile-grid">
         ${moduleTile("NEW", "New requests",    isOwn ? `${myJobList.length} my jobs` : "4 unassigned jobs")}
@@ -2379,7 +2321,6 @@ function contractUploadPanel() {
 function contractsPage() {
   const ct = selectedContract();
   return `
-    ${pageHeader("contracts")}
     <div class="page-content">
       ${contractUploadPanel()}
       ${documentUploadPanel()}
@@ -2479,7 +2420,8 @@ function salesOfferTab(qte) {
       <div class="field"><div class="field-label">Equipment</div><div class="field-value">${escapeHtml(qte.equipment)}</div></div>
       <div class="field"><div class="field-label">Offer type</div><div class="field-value">${escapeHtml(qte.type)}</div></div>
       <div class="field"><div class="field-label">Amount</div><div class="field-value mono">${qte.amount.toLocaleString()} ${qte.currency}</div></div>
-      <div class="field"><div class="field-label">Owner</div><div class="field-value">${escapeHtml(qte.owner)}</div></div>
+      <div class="field"><div class="field-label">Owner</div><div class="field-value">${escapeHtml(displayInitialsForRecord(qte))}</div></div>
+      ${qte.createdBy ? `<div class="field"><div class="field-label">Created by</div><div class="field-value">${escapeHtml(qte.createdBy)}</div></div>` : ""}
       <div class="field"><div class="field-label">Created</div><div class="field-value mono">${escapeHtml(qte.created)}</div></div>
       <div class="field"><div class="field-label">Due</div><div class="field-value mono">${escapeHtml(qte.due)}</div></div>
       <div class="field full"><div class="field-label">Offer notes</div><div class="field-value">${escapeHtml(qte.notes)}</div></div>
@@ -2555,7 +2497,6 @@ function salesPage() {
   const qte          = selectedQuotation();
 
   return `
-    ${pageHeader("sales")}
     <div class="page-content">
       <section class="split-layout">
         <div class="panel split-left">
@@ -2624,6 +2565,8 @@ function financeDetailPanel(inv) {
       ${detailItem("Amount", `${inv.amount.toLocaleString()} ${inv.currency}`)}
       ${detailItem("Invoice status", inv.status)}
       ${detailItem("Payment", inv.paymentStatus)}
+      ${detailItem("Owner", displayInitialsForRecord(inv))}
+      ${inv.createdBy ? detailItem("Created by", inv.createdBy) : ""}
       ${detailItem("Due", inv.due)}
     </div>
     <div class="detail-block">
@@ -2666,7 +2609,6 @@ function financePage() {
   const inv = selectedInvoice();
 
   return `
-    ${pageHeader("finance")}
     <div class="page-content">
       <section class="split-layout finance-layout">
         <div class="panel split-left">
@@ -2689,16 +2631,10 @@ function financePage() {
   `;
 }
 
-// Returns the default document owner filter for the current role.
-function roleDefaultDocFilter() {
-  return { sales: "Sales", finance: "Finance", service: "Service", svcmgr: "Service" }[state.role] || "All";
-}
-
 function applyDocumentTableFilters(rows) {
   const query = state.documentSearchQuery.trim().toLowerCase();
   return rows.filter((doc) => {
     if (state.documentTypeFilter !== "All" && doc.type !== state.documentTypeFilter) return false;
-    if (state.documentStatusFilter !== "All" && documentStageForUi(doc) !== state.documentStatusFilter) return false;
     if (state.documentCustomerFilter !== "All" && doc.customer !== state.documentCustomerFilter) return false;
     if (state.documentDateFrom && doc.due < state.documentDateFrom) return false;
     if (state.documentDateTo && doc.due > state.documentDateTo) return false;
@@ -2709,6 +2645,9 @@ function applyDocumentTableFilters(rows) {
       doc.jobId,
       doc.customer,
       doc.owner,
+      doc.createdBy,
+      doc.createdByInitials,
+      displayInitialsForRecord(doc),
       documentStageForUi(doc),
       documentStatusForUi(doc),
       doc.signedBy,
@@ -2718,17 +2657,9 @@ function applyDocumentTableFilters(rows) {
 }
 
 function documentsPage() {
-  // If the user hasn't explicitly set a filter yet, use the role default.
-  const effectiveFilter = state.documentFilter === "All" && roleDefaultDocFilter() !== "All"
-    ? roleDefaultDocFilter()
-    : state.documentFilter;
-  const filteredDocs = effectiveFilter === "All"
-    ? documents
-    : documents.filter((doc) => doc.owner === effectiveFilter);
-  const visibleDocs = applyDocumentTableFilters(filteredDocs);
+  const visibleDocs = applyDocumentTableFilters(documents);
 
   return `
-    ${pageHeader("documents")}
     <div class="page-content">
       ${documentFilters()}
       ${documentUploadPanel()}
@@ -2743,7 +2674,6 @@ function templateGenerationPage() {
   const activeTab = state.templateGenTab || "work-acts";
 
   return `
-    ${pageHeader("templategen")}
     <div class="page-content">
       <section class="panel">
         ${templateGenerationTabs(activeTab)}
@@ -3822,7 +3752,6 @@ function outputTemplatesWorkspace(doc) {
 function customersPage() {
   const selected = customers.find((c) => c.id === state.selectedCustomerId) || customers[0];
   return `
-    ${pageHeader("customers")}
     <div class="page-content">
       <section class="split-layout">
         <div class="panel split-left">
@@ -3926,7 +3855,6 @@ function customerDetail(c) {
 function equipmentPage() {
   const selected = equipment.find((eq) => eq.id === state.selectedEquipmentId) || equipment[0];
   return `
-    ${pageHeader("equipment")}
     <div class="page-content">
       <section class="split-layout eq-layout">
         <div class="panel split-left">
@@ -4232,7 +4160,6 @@ function partsPage() {
   const statusCount = (s) => partsRequests.filter((pr) => pr.status === s).length;
   const openReturns = vendorReturns.filter((vr) => vr.status !== "Closed").length;
   return `
-    ${pageHeader("parts")}
     <div class="page-content">
       <section class="stat-grid">
         ${statCard("Pending approval", statusCount("Pending approval"), "Awaiting Service Manager", "warn")}
@@ -4439,7 +4366,6 @@ function reportsPage() {
   });
 
   return `
-    ${pageHeader("reports")}
     <div class="page-content">
       <div class="stat-grid">
         ${statCard("Open jobs",              openJobs,                  `${jobs.length} total in system`,   openJobs > 6 ? "warn" : "")}
@@ -4547,7 +4473,6 @@ function reportsPage() {
 function adminPage() {
   const selected = users.find((u) => u.id === state.adminEditUserId) || users[0];
   return `
-    ${pageHeader("admin")}
     <div class="page-content">
       <div class="tile-grid">
         ${moduleTile("USR", "Users",              `${users.length} configured`)}
@@ -4558,12 +4483,13 @@ function adminPage() {
       </div>
 
       ${state.role === "admin" ? adminBugReportsPanel() : ""}
+      ${state.role === "admin" ? adminLogsPanel() : ""}
 
       <section class="split-layout admin-layout">
         <div class="panel split-left">
           <div class="section-heading">
             <div class="section-title">Users (${users.length})</div>
-            <button class="btn primary compact" type="button">Add user</button>
+            <button class="btn primary compact" type="button" data-admin-user-new-open>Add user</button>
           </div>
           <div class="user-list">
             ${users.map((u) => `
@@ -4582,6 +4508,7 @@ function adminPage() {
         </div>
 
         <div class="panel split-right">
+          ${adminNewUserPanel()}
           ${selected ? permissionGrid(selected) : ""}
         </div>
       </section>
@@ -4589,6 +4516,112 @@ function adminPage() {
       ${devSpecPanel("admin")}
     </div>
   `;
+}
+
+function adminNewUserPanel() {
+  if (!state.adminNewUserOpen) return "";
+  return `
+    <div class="detail-block">
+      <div class="section-heading">
+        <div>
+          <div class="section-title">New user</div>
+          <div class="filter-note">Initials are generated from the full name and used as the visible owner marker on records.</div>
+        </div>
+        <span class="chip draft">Auto initials</span>
+      </div>
+      <div class="field-stack upload-form">
+        <div class="field">
+          <label for="admin-new-user-name">Full name</label>
+          <input id="admin-new-user-name" value="${escapeHtml(state.adminNewUserName || "")}" placeholder="Andrejus Lomovas">
+        </div>
+        <div class="field">
+          <label for="admin-new-user-role">Primary role</label>
+          <select id="admin-new-user-role">
+            ${roles.map((role) => `<option value="${escapeHtml(role.id)}" ${state.adminNewUserRole === role.id ? "selected" : ""}>${escapeHtml(role.label)}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label>Initials preview</label>
+          <div class="field-value mono">${escapeHtml(initialsFromName(state.adminNewUserName || "Andrejus Lomovas"))}</div>
+        </div>
+      </div>
+      ${state.adminNewUserError ? `<div class="form-error">${escapeHtml(state.adminNewUserError)}</div>` : ""}
+      <div class="sales-actions">
+        <button class="btn primary" type="button" data-admin-user-new-save>Create user</button>
+        <button class="btn ghost" type="button" data-admin-user-new-cancel>Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+function adminLogsPanel() {
+  const rows = adminAuditRows();
+  return `
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <div class="section-title">Admin logs</div>
+          <div class="filter-note">Initial audit log foundation. For now it collects document delivery, upload, rejection, and close events from demo state.</div>
+        </div>
+        <span class="chip ${rows.length ? "ready" : "draft"}">${rows.length} events</span>
+      </div>
+      ${rows.length ? `
+        <div class="delivery-audit-list">
+          ${rows.slice(0, 10).map((entry) => `
+            <div class="delivery-audit-row">
+              <span>${escapeHtml(entry.action)}</span>
+              <strong>${escapeHtml(entry.at ? entry.at.slice(0, 16).replace("T", " ") : "-")}</strong>
+              <em>${escapeHtml(`${entry.source} / ${entry.note}`)}</em>
+            </div>
+          `).join("")}
+        </div>
+      ` : `<div class="modal-placeholder">No audit events yet.</div>`}
+    </section>
+  `;
+}
+
+function adminAuditRows() {
+  const rows = [];
+
+  documents.forEach((doc) => {
+    (doc.deliveryAudit || []).forEach((entry) => {
+      rows.push({
+        action: entry.action || "Document audit",
+        at: entry.at || doc.updatedAt || doc.uploadedAt || doc.due || "",
+        source: `${doc.id} / ${doc.type}`,
+        note: entry.note || entry.fileName || doc.customer || ""
+      });
+    });
+
+    if (doc.uploadedAt) {
+      rows.push({
+        action: doc.signedUploadedAt ? "Signed upload" : "Document upload",
+        at: doc.signedUploadedAt || doc.uploadedAt,
+        source: `${doc.id} / ${doc.type}`,
+        note: doc.uploadedFile?.fileName || doc.description || doc.customer || ""
+      });
+    }
+
+    if (doc.finishedAt) {
+      rows.push({
+        action: "Document finished",
+        at: doc.finishedAt,
+        source: `${doc.id} / ${doc.type}`,
+        note: doc.customer || ""
+      });
+    }
+
+    (doc.rejections || []).forEach((entry) => {
+      rows.push({
+        action: "Document rejected",
+        at: entry.at || "",
+        source: `${doc.id} / ${doc.type}`,
+        note: entry.comment || doc.customer || ""
+      });
+    });
+  });
+
+  return rows.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
 }
 
 function adminBugReportsPanel() {
@@ -4847,7 +4880,6 @@ function calendarPage() {
   }).join("");
 
   return `
-    ${pageHeader("calendar")}
     <div class="page-content">
       <div class="cal-nav-bar">
         <button class="btn ghost compact" type="button" data-cal-prev>&#8592; Prev</button>

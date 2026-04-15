@@ -26,7 +26,8 @@ const templateMap = {
   "tpl-quotation": "commercial-offer.fodt",
   "tpl-defect-act": "defect-act.fodt",
   "tpl-acceptance": "generic-document.fodt",
-  "tpl-vendor-return": "generic-document.fodt"
+  "tpl-vendor-return": "generic-document.fodt",
+  "tpl-generic-document": "generic-document.fodt"
 };
 
 const allowedFormats = new Set(["odt", "docx", "pdf"]);

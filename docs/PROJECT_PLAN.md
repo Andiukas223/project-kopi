@@ -323,7 +323,7 @@ Current split:
 
 ### Paieška
 
-Filtrai + teksto laukas + Search / Cancel mygtukai. Paieška per: dokumento tipas / owner / statusas / klientas / datos intervalas / laisvas tekstas. Rezultatai suranda dokumentus pagal indeksuotus metadata laukus (ypač seni dokumentai).
+Filtrai + teksto laukas + Search / Cancel mygtukai. Aktyvi paieska per: dokumento tipas / klientas / datos intervalas / laisvas tekstas / creator initials. Queue ir status filtrai Documents UI pasalinti, kad sarasas butu maziau apkrautas. Rezultatai suranda dokumentus pagal indeksuotus metadata laukus, ypac seni dokumentai.
 
 ---
 
@@ -387,7 +387,8 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 | App shell — topbar, sidebar, navigacija | Dinamiški badges pagal rolę |
 | Command Center | 9 rolių filtruoti stat korteliai + focus panel |
 | Service puslapis | Jobs lentelė, PM submodule, svcmgr parts approval |
-| Sales puslapis | Quotation lentelė + 4-tab detalė (Offer/Contract/Approval/Handoff); New quotation forma; Contract management edit mode |
+| Sales puslapis | Quotation lentelė + 3-tab detalė (Offer/Approval/Handoff); New quotation forma; be kontraktu ir invoice atsakomybiu |
+| Contracts puslapis | Signed contract upload intake; contract register; type/status/value/period/PM visits/spec notes konfiguravimas |
 | Documents puslapis | Pipeline board, filtrai, overdue monitoring, document upload flow, document search; template generation perkeltas į Template Generation modulį |
 | Finance puslapis | Invoice sąrašas, susieti jobs/dokumentai, payment statusai ir mock Generate / Paid / Cancelled veiksmai |
 | Customers puslapis | Lentelė + detalės panel (kontaktai, mini-stat, equipment, contracts) |
@@ -429,7 +430,7 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 | # | Užduotis | Aprašas |
 |---|---|---|
 | ~~B-05~~ | ~~**Document upload flow**~~ | ✅ Implementuota — `Upload document` mygtukas atidaro metadata forma (tipas, job ref, klientas, kas pasirase, due date, aprasas) ir sukuria Draft dokumento irasa pipeline'e. |
-| ~~B-06~~ | ~~**Document search**~~ | ✅ Implementuota — laisvo teksto paieska + type/status/customer/date filtrai dokumentu lenteleje su `Search` / `Cancel` veiksmais. |
+| ~~B-06~~ | ~~**Document search**~~ | ✅ Implementuota — laisvo teksto paieska + type/customer/date filtrai dokumentu lenteleje su `Search` / `Cancel` veiksmais; queue/status filtrai veliau pasalinti del paprastesnio UX. |
 | ~~B-07~~ | ~~**PM date reschedule**~~ | ✅ Implementuota — PM submodulyje datos laukas leidzia perkelti vizita tik to paties menesio ribose ir atnaujina Calendar PM ivykius. |
 | ~~B-08~~ | ~~**Sales: New quotation**~~ | ~~„New quotation" mygtukas su mini forma (klientas, įrenginys, tipas, suma) → sukuria Draft QTE įrašą.~~ **Done:** `New quotation` atidaro mini formą ir sukuria pasirinktą Draft QTE įrašą atmintyje. |
 | ~~B-09~~ | ~~**Vendor return flow**~~ | ~~Iš Parts modulio: „Create vendor return" mygtukas → sukuria return case → Logistics mato jį eilėje.~~ **Done:** Parts detaleje sukuriamas vendor return case, kuris matomas Parts vendor return queue ir Logistics role queue / badge. |
@@ -438,7 +439,7 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 
 | # | Užduotis | Aprašas |
 |---|---|---|
-| ~~B-10~~ | ~~**Contract management**~~ | ~~Atskiras sutarties peržiūros/redagavimo vaizdas Sales modulyje. Dabar kontraktai tik rodomi.~~ **Done:** Sales modulyje pridetas kontraktu management vaizdas su edit mode, validacija ir auto `remaining = value - consumed` perskaiciavimu. |
+| ~~B-10~~ | ~~**Contract management**~~ | **Done:** kontraktu management perkeltas i atskira `Contracts` moduli su signed contract upload intake, edit mode, validacija ir auto `remaining = value - consumed` perskaiciavimu. |
 | ~~B-11~~ | ~~**Warranty/calendar sync**~~ | ~~Tipo C instaliacijos acceptance akto įkėlimas auto-sinchronizuoja warranty expiry datą į kalendorių.~~ **Done:** `Acceptance report` upload'as atnaujina susieto equipment acceptance/warranty laukus ir sukuria warranty expiry eventa kalendoriuje. |
 | ~~B-12~~ | ~~**Parts delivery address registry**~~ | ~~Autofill siūlymai įvedant pristatymo adresą, saugomi iš klientų registro.~~ **Done:** Parts delivery flow turi registry autofill forma su klientu adresu/kontaktu is Customers registro ir issaugo pasirinkta delivery adresa/kontakta i parts request. |
 | ~~B-13~~ | ~~**localStorage persistence**~~ | ~~Pasirinktinas — išsaugoti state tarp puslapio perkrovimų.~~ **Done:** UI state ir mutable demo kolekcijos saugomos `localStorage`, todel pakeitimai islieka po puslapio reload. |
@@ -479,7 +480,8 @@ Svarbiausios isvados:
 0. `docs/CURRENT_STATUS_AND_ROADMAP.md` yra dabartines busenos ir B-38+ roadmap source of truth.
 1. Atnaujinti `docs/CHANGELOG.md` — pridėti prie `[Unreleased]` sekcijos.
 2. Atnaujinti `docs/PROJECT_PLAN.md` § 18 — pažymėti įvykdytus backlog punktus ✅, pridėti naujus jei atsirado.
-3. `git commit` + `git push` — vienas commit per sesijos darbą.
+3. `git commit` + `git push` vykdyti tik tada, kai useris aiškiai paprašo. Iki tol pakeitimus palikti worktree.
+4. Kodo komentarai turi būti anglų kalba (EN), kad ateities chat'ai greitai suprastų implementaciją.
 
 ---
 
@@ -505,10 +507,10 @@ Kitas chat turetu:
 
 | Klausimas | Kur naudojama |
 |---|---|
-| App pavadinimas (`Viva Medical` / `Service IS` / kitas) | `src/index.html` topbar, `pageHeader()` titulai visuose moduliuose |
+| App pavadinimas (`Viva Medical` / `Service IS` / kitas) | `src/index.html` topbar; modulio pavadinimas rodomas sidebar'e, ne atskirame page header |
 | Brand spalva iš logo → `--brand` CSS kintamasis | `src/styles/base.css` `:root` (dabar mėlyna placeholder spalva) |
 | Logo eksportas → `assets/logo.svg` | `src/index.html` topbar (dabar tekstinis wordmark) |
-| UI kalba (lietuviškas / angliškas / mišrus tekstas) | Visas `render.js` — dabar angliškas |
+| UI kalba (LT / EN) | Yra `state.language` + `src/js/i18n.js` uzuomazga shell/sidebar/topbar tekstams; reikia tolimesnes modulio tekstu revizijos |
 
 ### Techniniai next steps (po atvirų klausimų)
 
@@ -530,7 +532,7 @@ Kitas chat turetu:
 | ~~B-37~~ | ~~**Production Work Act generation storage**~~ | **Done:** Work Act generavimas dabar sukuria `generated-document` file registry irasa su stabiliu `fileId`, `downloadUrl`, PDF `previewUrl`, Work Act source linku ir `version/versionLabel`. Source Work Act gauna generated file/version, preview/download/email audit irasai remiasi tuo paciu file/version, o Work Act panelis gali generuoti PDF tiesiai po document draft sukurimo. |
 | ~~B-38~~ | ~~**Defect Act / Commercial Offer generation parity**~~ | **Done:** Defect Acts ir Commercial Offers source paneliai dabar rodo generated file/version metadata, turi direct `Generate PDF file`, `Open preview` ir `Download` veiksmus po document draft sukurimo, o preview/download/print/export/email audit irasai susiejami su source recordu ir tuo paciu Documents file registry objektu. |
 | B-39 | **Document repository workflow polish** | Patobulinti Documents kaip paprasta work queue: row signalai `Needs signed upload` / `Signed uploaded` / `Ready to finish` / `DONE`, geresni empty states, file history row expansion, be archyvavimo kol nera retention dizaino. |
-| B-40 | **Sales invoice workflow integration** | Sales list turi `Generate invoice`, kuris kuria/linkina Finance invoice ir grazina invoice statusa i Sales dokumentu sarasa; veliau pridet paid/signed invoice flow. |
+| B-40 | **Finance invoice register polish** | Finance yra invoice ownership vieta: prideti paieska/filtrus kaip Documents, geresne upload metadata (amount, invoice no, due, terms), source quotation/job/document linkus ir paid/signed invoice flow jei reikia. |
 | B-41 | **Visual template editor V2** | Po papildomo Tomis crawl: table editing, merge fields, logo/image placeholders, autosave, dirty-state warning, revert, duplicate as personal template, version history. |
 | B-42 | **Backend data model and auth** | PostgreSQL + migracijos, users/roles/permissions, customers/equipment/jobs/documents/templates/files/feedback/audit modeliai, auth/session, route permission checks. |
 | B-43 | **Production file custody** | `files.json` perkelti i DB, file version chains, signed upload versions, object storage adapter, checksum/MIME/size validation, retention and backup policy. |
@@ -561,3 +563,7 @@ Dokumentu generavimui velesniame backend etape planuojama naudoti Carbone (`http
 2026-04-12 web valdymas perkeltas is web UI i sakninio folderio programele: `vm-web-control.ps1` ir `vm-web-control.cmd`. Ji valdo Docker veiksmus `on`, `off`, `restart`, `status`, `logs`, `open`, `quit`; web topbar `CMD` mygtukas ir command modalas pasalinti.
 
 2026-04-12 dokumentu pipeline papildytas status monitoring sluoksniu: Command Center overdue documents skaicius skaiciuojamas is demo dokumentu, Documents puslapis rodo overdue/due today/customer/signature monitoring korteles, o velyvuojantys dokumentai lenteleje turi raudona indikatoriu ir `Overdue` badge.
+
+2026-04-15 owner logic patikslinta: user-facing Owner yra zmogaus, kuris irasa sukure/pridejo, inicialai (pvz. Andrejus Lomovas -> AL). Admin kuriant useri inicialai generuojami is pilno vardo ir saugomi usage tikslais. Nauji dokumentai/source irasai turi `createdBy` + `createdByInitials`; vidinis dokumento `owner` gali likti modulio queue (`Service`, `Sales`, `Finance`) filtrams ir routingui.
+
+2026-04-15 naujai sukurti dokumentu draft'ai privalo auto-generuoti PDF per `document-service`, kad `View` ir `Download` veiksmai butu naudingi is karto. Jei dokumento tipas dar neturi dedikuoto output layout, naudoti `Generic document` fallback layout iki tol, kol bus sukurtas specialus layout.

@@ -1,7 +1,6 @@
 // ---------------------------------------------------------------------------
-// All system roles. The first three (service, sales, admin) are shown in the
-// header role-switcher for prototype convenience. The full list drives the
-// Admin permission grid.
+// All system roles. The full list drives the active workspace label,
+// role-aware demo filtering, and the Admin permission grid.
 // ---------------------------------------------------------------------------
 export const roles = [
   { id: "service",   label: "Service workspace",    description: "Service engineers: create cases, log diagnostics/repair, upload signed documents." },
@@ -101,8 +100,8 @@ export const users = [
   },
   {
     id: "u7",
-    name: "Admin Viva Medical",
-    initials: "AD",
+    name: "Andrejus Lomovas",
+    initials: "AL",
     roles: ["admin"],
     permissions: {
       createCase: true,  viewAllDocs: true,  approveParts: true, manageContracts: true,
@@ -145,7 +144,7 @@ export const companyProfiles = [
 // ---------------------------------------------------------------------------
 // Representative hospital sample registry for document layout/testing.
 // Names are taken from a Ministry of Health published hospital list, but
-// registry codes and PVM fields below are intentionally demo placeholders
+// registry codes and VAT fields below are intentionally demo placeholders
 // until each institution is verified against Rekvizitai.lt or official pages.
 // Source list:
 // https://sam.lrv.lt/en/cooperation/lithuanian-swiss-cooperation-programme-financial-support-for-the-health-sector/lithuanian-hospitals-participating-in-the-programme/
@@ -955,6 +954,8 @@ export const quotations = [
     created: "2026-04-08",
     due: "2026-04-18",
     owner: "V. Klimaite",
+    createdBy: "Vita Klimaite",
+    createdByInitials: "VK",
     notes: "Parts and labor for COR-KNOT calibration and seal replacement. Site visit included.",
     approvalDate: null,
     approvalContact: "Rima Vaitkiene",
@@ -978,6 +979,8 @@ export const quotations = [
     created: "2026-04-10",
     due: "2026-04-25",
     owner: "V. Klimaite",
+    createdBy: "Vita Klimaite",
+    createdByInitials: "VK",
     notes: "Annual PM contract renewal. 2 visits per year, parts not included above threshold.",
     approvalDate: null,
     approvalContact: "Jonas Kazlauskas",
@@ -1001,6 +1004,8 @@ export const quotations = [
     created: "2026-03-20",
     due: "2026-04-30",
     owner: "V. Klimaite",
+    createdBy: "Vita Klimaite",
+    createdByInitials: "VK",
     notes: "New unit installation including acceptance protocol and warranty registration.",
     approvalDate: "2026-04-02",
     approvalContact: "Marta Stonkiene",
@@ -1024,6 +1029,8 @@ export const quotations = [
     created: "2026-03-15",
     due: "2026-03-28",
     owner: "V. Klimaite",
+    createdBy: "Vita Klimaite",
+    createdByInitials: "VK",
     notes: "Valve assembly replacement. Parts under partial warranty coverage.",
     approvalDate: "2026-03-22",
     approvalContact: "Arturas Jonaitis",
@@ -1176,6 +1183,8 @@ export const documents = [
     jobId: "VM-SV-1024",
     customer: "Vilnius Clinical Hospital",
     owner: "Service",
+    createdBy: "Rokas Petrauskas",
+    createdByInitials: "RP",
     status: "Draft",
     due: "2026-04-15",
     pipelineStep: "Draft"
@@ -1186,6 +1195,8 @@ export const documents = [
     jobId: "VM-SV-1025",
     customer: "Baltic Cardio Center",
     owner: "Sales",
+    createdBy: "Vita Klimaite",
+    createdByInitials: "VK",
     status: "Review",
     due: "2026-04-11",
     pipelineStep: "Review"
@@ -1196,6 +1207,8 @@ export const documents = [
     jobId: "VM-SV-1026",
     customer: "Kaunas Diagnostics",
     owner: "Service",
+    createdBy: "Rokas Petrauskas",
+    createdByInitials: "RP",
     status: "Customer",
     due: "2026-04-10",
     pipelineStep: "Customer"
@@ -1206,6 +1219,8 @@ export const documents = [
     jobId: "VM-SV-1027",
     customer: "Northway Clinic",
     owner: "Admin",
+    createdBy: "Andrejus Lomovas",
+    createdByInitials: "AL",
     status: "Signature",
     due: "2026-04-19",
     pipelineStep: "Signature"
@@ -1222,6 +1237,8 @@ export const invoices = [
     documentId: null,
     customer: "Vilnius Clinical Hospital",
     owner: "V. Klimaite",
+    createdBy: "Vita Klimaite",
+    createdByInitials: "VK",
     amount: 1250,
     currency: "EUR",
     invoiceNo: null,
@@ -1237,6 +1254,8 @@ export const invoices = [
     documentId: "DOC-3110",
     customer: "Kaunas Diagnostics",
     owner: "V. Klimaite",
+    createdBy: "Vita Klimaite",
+    createdByInitials: "VK",
     amount: 1850,
     currency: "EUR",
     invoiceNo: "VM-2026-0410",
@@ -1252,6 +1271,8 @@ export const invoices = [
     documentId: "DOC-3111",
     customer: "Northway Clinic",
     owner: "V. Klimaite",
+    createdBy: "Vita Klimaite",
+    createdByInitials: "VK",
     amount: 32000,
     currency: "EUR",
     invoiceNo: "VM-2026-0328",
@@ -1267,6 +1288,8 @@ export const invoices = [
     documentId: null,
     customer: "Baltic Cardio Center",
     owner: "V. Klimaite",
+    createdBy: "Vita Klimaite",
+    createdByInitials: "VK",
     amount: 4200,
     currency: "EUR",
     invoiceNo: null,
@@ -1329,6 +1352,14 @@ export const templates = [
     owner: "Service",
     body: "Vendor return note for defective or incorrect parts. Include part number, description, job reference, reason for return, destination, and authorisation.",
     defaultBody: "Vendor return note for defective or incorrect parts. Include part number, description, job reference, reason for return, destination, and authorisation."
+  },
+  {
+    id: "tpl-generic-document",
+    name: "Generic document",
+    format: "ODT/DOCX/PDF",
+    owner: "Admin",
+    body: "General document layout for records that do not yet have a dedicated output layout. Include document type, reference, customer, owner, notes, and delivery state.",
+    defaultBody: "General document layout for records that do not yet have a dedicated output layout. Include document type, reference, customer, owner, notes, and delivery state."
   }
 ];
 

@@ -1,6 +1,7 @@
 import { calendarEvents, commercialOfferDrafts, companyProfiles, contracts, customers, defectActs, documentTemplateBlueprints, documents, equipment, invoices, jobs, partsRequests, quotations, templates, workActs } from "./data.js";
 import { saveDemoState } from "./persistence.js";
 import { state } from "./state.js";
+import { creatorMeta, currentUserName } from "./userIdentity.js";
 
 const statusByStage = {
   Draft: "Draft",
@@ -15,6 +16,7 @@ let renderAppCallback = null;
 
 export function bindDocumentPipeline(renderApp) {
   renderAppCallback = renderApp;
+  window.setTimeout(autoGenerateMissingDocumentFiles, 250);
 
   document.addEventListener("click", (event) => {
     const docViewButton = event.target.closest("[data-doc-view]");
@@ -250,12 +252,6 @@ export function bindDocumentPipeline(renderApp) {
   });
 
   document.addEventListener("change", (event) => {
-    if (event.target.matches("[data-doc-filter]")) {
-      state.documentFilter = event.target.value;
-      renderAppCallback();
-      return;
-    }
-
     if (event.target.matches("[data-template-select]")) {
       state.selectedTemplateId = event.target.value;
       state.generationStatus = "Ready";
@@ -406,7 +402,6 @@ function reviewNextDocument() {
   const nextDoc = documents.find((doc) => !["Approved", "Archived"].includes(doc.pipelineStep)) || documents[0];
   if (!nextDoc) return;
   state.selectedDocumentId = nextDoc.id;
-  state.documentFilter = "All";
   state.generationStatus = "Ready";
   state.generatedDocPreview = null;
   state.rejectingDocumentId = null;
@@ -475,6 +470,7 @@ async function uploadDocument() {
     jobId,
     customer,
     owner: ownerForDocumentType(type),
+    ...creatorMeta(),
     status: "Draft",
     due,
     pipelineStep: "Draft",
@@ -491,7 +487,8 @@ async function uploadDocument() {
       jobId,
       documentId: docId,
       customer,
-      owner: "Admin Viva Medical",
+      owner: currentUserName(),
+      ...creatorMeta(),
       amount: 0,
       currency: "EUR",
       invoiceNo: file.name.replace(/\.[^.]+$/, "") || null,
@@ -509,7 +506,6 @@ async function uploadDocument() {
   documents.unshift(doc);
 
   state.selectedDocumentId = docId;
-  state.documentFilter = "All";
   state.documentUploadOpen = false;
   state.documentUploadTargetId = null;
   state.documentUploadDefaultType = "";
@@ -669,7 +665,8 @@ function generateInvoiceFromDocument(id) {
       jobId: doc.jobId,
       documentId: doc.id,
       customer: doc.customer,
-      owner: "V. Klimaite",
+      owner: currentUserName(),
+      ...creatorMeta(),
       amount: 0,
       currency: "EUR",
       invoiceNo: null,
@@ -756,7 +753,6 @@ function formatLocalDate(date) {
 function applyDocumentSearch() {
   state.documentSearchQuery = getControlValue("doc-search-query");
   state.documentTypeFilter = getControlValue("doc-type-filter") || "All";
-  state.documentStatusFilter = getControlValue("doc-status-filter") || "All";
   state.documentCustomerFilter = getControlValue("doc-customer-filter") || "All";
   state.documentDateFrom = getControlValue("doc-date-from");
   state.documentDateTo = getControlValue("doc-date-to");
@@ -766,7 +762,6 @@ function applyDocumentSearch() {
 function clearDocumentSearch() {
   state.documentSearchQuery = "";
   state.documentTypeFilter = "All";
-  state.documentStatusFilter = "All";
   state.documentCustomerFilter = "All";
   state.documentDateFrom = "";
   state.documentDateTo = "";
@@ -1013,7 +1008,7 @@ function preferredTemplateIdForDocument(doc) {
   if (type.includes("diagnostic")) return "tpl-diagnostic";
   if (type.includes("acceptance")) return "tpl-acceptance";
   if (type.includes("vendor")) return "tpl-vendor-return";
-  return "";
+  return "tpl-generic-document";
 }
 
 function generationSourceForDoc(doc) {
@@ -1029,15 +1024,15 @@ function generationSourceForDoc(doc) {
   return { type: "document", id: doc?.id || "", workActId: "", defectActId: "", commercialOfferDraftId: "" };
 }
 
-function buildGeneratedFile(doc, template, result, generatedAt) {
+function buildGeneratedFile(doc, template, result, generatedAt, outputFormat = state.documentOutputFormat) {
   const fileRecord = result.fileRecord || null;
   const source = generationSourceForDoc(doc);
   const fileId = fileRecord?.id || result.fileId || "";
   return {
     id: fileId,
     fileId,
-    fileName: fileRecord?.fileName || result.fileName || `${doc.id}.${state.documentOutputFormat}`,
-    format: result.format || state.documentOutputFormat,
+    fileName: fileRecord?.fileName || result.fileName || `${doc.id}.${outputFormat}`,
+    format: result.format || outputFormat,
     generatedAt,
     templateId: template.id,
     downloadUrl: fileRecord?.downloadUrl || result.downloadUrl || "",
@@ -1090,22 +1085,60 @@ function documentFileAuditNote(file, fallback = "") {
   return [file.versionLabel, file.fileName].filter(Boolean).join(" / ");
 }
 
-async function generateServiceDocument(id) {
+export function queueAutoGenerateDocument(id, options = {}) {
+  const doc = documents.find((item) => item.id === id);
+  if (doc && !doc.generatedFile?.downloadUrl && !doc.uploadedFile?.downloadUrl) {
+    doc.deliveryStatus = "Auto generating";
+    doc.autoGenerationQueuedAt = new Date().toISOString();
+    saveDemoState();
+    if (renderAppCallback) renderAppCallback();
+  }
+
+  window.setTimeout(() => {
+    void generateServiceDocument(id, {
+      format: options.format || "pdf",
+      silent: true,
+      reason: options.reason || "Auto generated"
+    });
+  }, options.delayMs || 0);
+}
+
+function autoGenerateMissingDocumentFiles() {
+  documents
+    .filter(shouldAutoGenerateDocument)
+    .forEach((doc, index) => {
+      queueAutoGenerateDocument(doc.id, {
+        delayMs: 300 + index * 600,
+        reason: "Auto backfilled"
+      });
+    });
+}
+
+function shouldAutoGenerateDocument(doc) {
+  if (!doc) return false;
+  if (doc.generatedFile?.downloadUrl || doc.uploadedFile?.downloadUrl || doc.signedFile?.downloadUrl) return false;
+  if (doc.autoGenerationQueuedAt && doc.deliveryStatus === "Auto generating") return false;
+  if (doc.status === "Done" || doc.pipelineStep === "Rejected") return false;
+  return true;
+}
+
+async function generateServiceDocument(id, options = {}) {
   const doc = documents.find((item) => item.id === id);
   const template = generationTemplateForDocument(doc);
   if (!doc || !template) return;
 
+  const outputFormat = options.format || state.documentOutputFormat;
   state.selectedDocumentId = doc.id;
   state.selectedTemplateId = template.id;
-  state.generationStatus = "Document service working";
+  state.generationStatus = options.silent ? "Auto generating document" : "Document service working";
   state.generatedDocPreview = null;
-  renderAppCallback();
+  if (!options.silent) renderAppCallback();
 
   try {
     const response = await fetch("/api/documents/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(documentServicePayload(doc, template))
+      body: JSON.stringify(documentServicePayload(doc, template, outputFormat))
     });
     const result = await readJsonResponse(response, "Document generation failed");
     if (!response.ok || !result.ok) {
@@ -1113,12 +1146,12 @@ async function generateServiceDocument(id) {
     }
 
     const generatedAt = new Date().toISOString();
-    const generatedFile = buildGeneratedFile(doc, template, result, generatedAt);
-    state.generationStatus = `${state.documentOutputFormat.toUpperCase()} service file ready${generatedFile.versionLabel ? ` (${generatedFile.versionLabel})` : ""}`;
+    const generatedFile = buildGeneratedFile(doc, template, result, generatedAt, outputFormat);
+    state.generationStatus = `${outputFormat.toUpperCase()} service file ready${generatedFile.versionLabel ? ` (${generatedFile.versionLabel})` : ""}`;
     state.generatedDocPreview = {
       docId: doc.id,
       templateId: template.id,
-      format: state.documentOutputFormat,
+      format: outputFormat,
       generatedAt,
       serviceDownloadUrl: generatedFile.downloadUrl,
       servicePreviewUrl: generatedFile.previewUrl || "",
@@ -1134,13 +1167,13 @@ async function generateServiceDocument(id) {
     doc.status = "Signature";
     doc.deliveryStatus = "Needs signed upload";
     syncGeneratedFileToSource(doc, generatedFile);
-    addDocumentDeliveryAudit(doc, "Generated", `${state.documentOutputFormat.toUpperCase()} file generated: ${documentFileAuditNote(generatedFile, generatedFile.fileName)}`, generatedFile);
+    addDocumentDeliveryAudit(doc, options.reason || "Generated", `${outputFormat.toUpperCase()} file generated: ${documentFileAuditNote(generatedFile, generatedFile.fileName)}`, generatedFile);
   } catch (error) {
     state.generationStatus = "Document service unavailable";
     state.generatedDocPreview = {
       docId: doc.id,
       templateId: template.id,
-      format: state.documentOutputFormat,
+      format: outputFormat,
       generatedAt: new Date().toISOString(),
       serviceError: error.message || "Document service unavailable."
     };
@@ -1295,7 +1328,7 @@ function addDocumentDeliveryAudit(doc, action, note = "", fileContext = doc.gene
   }
 }
 
-function documentServicePayload(doc, template) {
+function documentServicePayload(doc, template, outputFormat = state.documentOutputFormat) {
   const job = jobs.find((item) => item.id === doc.jobId);
   const eq = equipment.find((item) => item.name === job?.equipment || item.id === job?.equipmentId || item.serial === job?.serial);
   const customer = customers.find((item) => item.name === doc.customer || item.id === job?.customerId);
@@ -1375,7 +1408,7 @@ function documentServicePayload(doc, template) {
     templateName: template.name,
     templateBody: template.body || "",
     templateSections: template.sections || [],
-    format: state.documentOutputFormat,
+    format: outputFormat,
     customer: doc.customer,
     sellerName: sellerProfile.name || sellerProfile.displayName || "",
     sellerDisplayName: sellerProfile.displayName || sellerProfile.name || "",
@@ -1402,7 +1435,7 @@ function documentServicePayload(doc, template) {
     reportOptions,
     equipment: workActEquipment || defectAct?.equipment || job?.equipment || eq?.name || "",
     serial: workAct?.equipmentItems?.map((item) => item.serial).filter(Boolean).join(", ") || defectAct?.serial || job?.serial || eq?.serial || "",
-    owner: doc.owner,
+    owner: doc.createdByInitials || doc.createdBy || doc.owner,
     notes: workAct?.workText || defectAct?.defectDescription || doc.description || quotation?.notes || "",
     fieldsText: [
       sellerRequisitesText ? `Seller requisites:\n${sellerRequisitesText}` : "",

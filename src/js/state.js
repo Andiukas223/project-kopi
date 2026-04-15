@@ -5,12 +5,11 @@ export const state = {
   page: "command",
   role: "admin",
   theme: "light",
+  language: "en",
 
   // Documents module
-  documentFilter: "All",
   documentSearchQuery: "",
   documentTypeFilter: "All",
-  documentStatusFilter: "All",
   documentCustomerFilter: "All",
   documentDateFrom: "",
   documentDateTo: "",
@@ -55,6 +54,10 @@ export const state = {
 
   // Admin module
   adminEditUserId: "u1",
+  adminNewUserOpen: false,
+  adminNewUserError: "",
+  adminNewUserName: "",
+  adminNewUserRole: "service",
   selectedBugReportId: null,
   feedbackOpen: false,
   feedbackSelecting: false,
@@ -131,4 +134,8 @@ export function setRole(role) {
 
 export function setTheme(theme) {
   state.theme = theme === "dark" ? "dark" : "light";
+}
+
+export function setLanguage(language) {
+  state.language = language === "lt" ? "lt" : "en";
 }

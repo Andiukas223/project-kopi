@@ -1,8 +1,9 @@
 import { qs, qsa } from "./dom.js";
 import { contracts, documents, invoices, jobs, partsRequests, roles, vendorReturns } from "./data.js";
+import { applyStaticTranslations, t } from "./i18n.js";
 import { saveDemoState } from "./persistence.js";
 import { renderPage, renderRemindersStrip } from "./render.js";
-import { setPage, setRole, setTheme, state } from "./state.js";
+import { setLanguage, setPage, setRole, setTheme, state } from "./state.js";
 
 export function renderApp() {
   const main = qs("#app-main");
@@ -12,6 +13,7 @@ export function renderApp() {
   updateRoleLabel();
   updateReminders();
   updateSidebarBadges();
+  applyStaticTranslations();
   saveDemoState();
 }
 
@@ -102,6 +104,13 @@ export function bindNavigation() {
       return;
     }
 
+    const languageButton = event.target.closest("[data-language-toggle]");
+    if (languageButton) {
+      setLanguage(state.language === "lt" ? "en" : "lt");
+      renderApp();
+      return;
+    }
+
     const roleButton = event.target.closest("[data-role]");
     if (!roleButton) return;
     setRole(roleButton.dataset.role);
@@ -117,7 +126,7 @@ function updateActiveNav() {
 
 function updateRoleLabel() {
   const role = roles.find((item) => item.id === state.role);
-  qs("#active-role-label").textContent = role ? role.label : "Workspace";
+  qs("#active-role-label").textContent = t(role ? `role.${role.id}` : "role.default");
 }
 
 function applyTheme() {
@@ -127,7 +136,7 @@ function applyTheme() {
   const toggle = qs("[data-theme-toggle]");
   if (toggle) {
     const dark = theme === "dark";
-    toggle.textContent = dark ? "Light mode" : "Dark mode";
+    toggle.textContent = dark ? t("theme.light") : t("theme.dark");
     toggle.setAttribute("aria-pressed", String(dark));
   }
 }
