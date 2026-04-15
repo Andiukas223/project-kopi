@@ -18,9 +18,12 @@ Pirmas etapas yra veikiantis desktop-first vidines sistemos prototipas pagal `do
 Visa dokumentacija yra `docs/` aplanke:
 
 - `docs/PROJECT_PLAN.md` - detalus kurimo planas, fazes, moduliai, techniniai sprendimai, pilnas backlog.
+- `docs/CURRENT_STATUS_AND_ROADMAP.md` - dabartine 2026-04-15 projekto busena, kas jau padaryta, kas dar truksta, ir kaip planuojami B-38+ darbai.
 - `docs/CHANGELOG.md` - visi reiksmingi pakeitimai, kad kita sesija galetu greitai perimti konteksta.
 - `docs/design_system.md` - UI/UX specifikacija.
 - `docs/WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md` - moduliarinio Docker web prototipo planas Viva Medical verslo valdymo sistemai.
+- `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md` - Tomis read-only radiniai ir dokumentu generavimo logikos palyginimas.
+- `docs/TOMIS_CRAWL_PLAYBOOK.md` - detalus saugaus ir efektyvaus Tomis crawl procesas: ka spausti, ko nespausti, ka fiksuoti, kaip versti radinius i backlog.
 - `docs/VM_WEB_CONTROL.md` - `vm-web-control.cmd` / `.ps1` valdymo įrankio dokumentacija: komandos, Docker konfigūracija, dažnos problemos.
 - `docs/VIVAMEDICAL_WEBSITE.md` - `vivamedical.lt` svetaines ziniu baze ir taisykle, kaip ja pildyti per Playwright, kai informacijos truksta.
 

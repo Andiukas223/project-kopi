@@ -1,6 +1,10 @@
 # Document Generation: Tomis Findings
 
-Date: 2026-04-12
+Date: 2026-04-15
+
+Current roadmap source: `docs/CURRENT_STATUS_AND_ROADMAP.md`.
+
+Effective crawl procedure: `docs/TOMIS_CRAWL_PLAYBOOK.md`.
 
 This note captures read-only observations from the existing Tradintek / Tomis application. It is intended to guide the Viva Medical web prototype document generation module, especially Work Act generation and template editing.
 
@@ -100,8 +104,8 @@ Recommended implementation order:
    - Keep `Documents` as repository/search/detail/upload/download.
 
 2. B-18 Documents repository
-   - Strengthen filters: type, status, customer, job, equipment, owner, date range, generated/uploaded/signed/archive.
-   - Add source/status model: Generated, Uploaded, Signed, Archived, Rejected.
+   - Strengthen filters: type, status, customer, job, equipment, owner, date range, generated/uploaded/signed/done.
+   - Add source/status model: Generated, Uploaded, Needs signed upload, Signed, Done, Rejected. Archive is deferred until retention/file-custody rules exist.
    - Add detail metadata and audit/history section.
 
 3. B-19 Work Act workspace
@@ -727,6 +731,26 @@ Recommended next implementation sequence:
 
 13. B-38 Defect Act / Commercial Offer generation parity
    - Next step: reuse the B-37 source-file UX in Defect Acts and Commercial Offers so those panels expose generated file/version, direct generate/open-preview buttons, and source-aware delivery audit.
+
+## 2026-04-15 Documentation And Workflow Update
+
+Implemented after the preview/file-storage crawl:
+
+- Documents no longer uses a generic `Advance` button.
+- Active document close flow is now generate/preview/download -> collect signature -> upload signed copy -> `Finish` -> green `DONE`.
+- Archive controls are removed from Documents for now. Archive/retention remains a later file-custody design topic.
+- Signed upload targets the existing document record instead of creating a confusing separate record.
+- `Finish` marks the document done and closes the linked case/ticket in demo state.
+- Sales document list now exposes `Generate invoice` as the next sales-side action.
+- Browser screen capture permission cannot be silently persisted in a normal web app, so native capture uses the browser prompt; DOM capture remains a fallback.
+- Runtime files/screenshots are not committed. `document-service/storage` is a Docker-mounted runtime folder with only `.gitkeep` tracked.
+
+Implication for future Tomis crawl:
+
+- Inspect exactly how Tomis treats signed upload, final close, archive, and invoice handoff.
+- Record whether Tomis closes the case immediately after upload, after admin review, or after a separate status action.
+- Record what is visible to daily users versus admin/manager roles.
+- Use `docs/TOMIS_CRAWL_PLAYBOOK.md` for all future crawl sessions.
 
 ## Open Questions
 

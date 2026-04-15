@@ -4,6 +4,14 @@ Visi reiksmingi sio projekto pakeitimai turi buti fiksuojami cia, kad kita sesij
 
 Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir trumpai.
 
+## [Unreleased]
+
+### Documentation
+
+- Pridetas `docs/CURRENT_STATUS_AND_ROADMAP.md` kaip 2026-04-15 projekto busenos, atliktu darbu, technines skolos ir B-38+ roadmap source of truth.
+- Pridetas `docs/TOMIS_CRAWL_PLAYBOOK.md` su saugaus read-only Tomis crawl procesu, efektyvaus letos app navigavimo taktika, screenshot naming taisyklemis, ekranu duomenu rinkimo sablonu ir prioritetinemis crawl sritimis.
+- Atnaujinti `README.md`, `docs/PROJECT_PLAN.md`, `docs/WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md` ir `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`, kad atspindetu nauja Documents workflow: be generic `Advance`, be aktyvaus archyvavimo, su `Upload signed` -> `Finish` -> `DONE` logika.
+
 ## [0.1.0] - 2026-04-13
 
 ### Added

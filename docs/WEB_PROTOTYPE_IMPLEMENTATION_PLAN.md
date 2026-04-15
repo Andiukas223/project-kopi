@@ -1,6 +1,10 @@
 # Web Prototype Implementation Plan
 
-Date: 2026-04-13
+Date: 2026-04-15
+
+Current status source of truth: `docs/CURRENT_STATUS_AND_ROADMAP.md`.
+
+Tomis reverse-engineering process: `docs/TOMIS_CRAWL_PLAYBOOK.md`.
 
 ## Goal
 
@@ -53,7 +57,7 @@ Planned use:
 - The system injects job, customer, equipment, parts, and approval data into templates using JSON data.
 - Users generate work acts, diagnostic reports, quotations, acceptance reports, contract annexes, warranty confirmations, parts requests, and vendor return notes.
 - Users can save generated documents as `.docx`, `.odt`, or `.pdf`.
-- Users can download the generated file and send it through the mail client they already use on their own PC.
+- Users can preview generated files inside the app, download/export PDF, and queue a controlled e-mail handoff/audit event. Real SMTP/API sending remains a later backend step.
 
 Carbone integration notes from the upstream project:
 
@@ -67,7 +71,8 @@ Future backend shape:
 - `document-service` container with Node.js, Carbone, LibreOffice, and a templates volume.
 - `templates/` volume for approved document templates.
 - `generated/` volume for output files.
-- API endpoints for preview, generate DOCX/ODT, generate PDF, and download.
+- `storage/` volume for uploaded documents, signed copies, feedback screenshots, and the prototype file registry.
+- API endpoints for preview, generate DOCX/ODT/PDF, download, template upload/download, file upload/download, and feedback report storage.
 - Audit trail fields for who generated, reviewed, approved, downloaded, or sent a document.
 
 Document module UI step:
@@ -239,7 +244,10 @@ Document statuses:
 - Waiting for signature
 - Approved
 - Rejected
-- Archived
+- Signed uploaded
+- Done
+
+`Archived` is intentionally deferred for the Documents module until a retention/file-custody design exists.
 
 ### Equipment
 
@@ -316,13 +324,13 @@ Purpose: document repository, search, status tracking, and file custody.
 
 Components:
 
-- Repository summary cards.
+- Table-first document repository. Avoid pipeline counters and side panels that repeat information already visible in the list.
 - Filters by document type, owner, status, due date, customer, job, equipment, generated/uploaded/signed state.
 - Table with document ID, job ID, customer, equipment, owner, status, source, signed state, and file action.
-- Detail panel for selected document.
+- Row actions: `View`, `Edit`, `Download`, `Reject`, `Upload signed`, `Finish`, `DONE` depending on document state.
 - Upload external document panel.
 - Download/open generated or uploaded document action.
-- Audit/history section for generated, uploaded, signed, archived, and rejected events.
+- Audit/history section for generated, uploaded, signed, finished, and rejected events.
 
 Documents must not become the main template editing workspace. Template generation can link back to Documents after a generated file is saved.
 
@@ -333,7 +341,12 @@ Pipeline stages:
 - Customer
 - Signature
 - Approved
-- Archived
+
+Active user-facing close state:
+
+- DONE
+
+The generic `Advance` button and active document archive action are removed for now. The practical flow is generate/preview/download -> collect signature -> upload signed copy -> Finish -> DONE.
 
 ### Template Generation
 
@@ -442,7 +455,7 @@ Prototype interactions:
 - Decision cards change wizard state inline.
 - Diagnostics and repair time are entered manually as duration fields after the user completes each procedure.
 - Submitting wizard adds a new demo job into in-memory state and returns to Service page.
-- Document action buttons move demo documents between pipeline statuses.
+- Document actions should express the real user task: preview/download, upload signed copy, finish, reject, back to draft. Do not reintroduce a generic `Advance` button.
 
 No real persistence is required in phase one. Optional phase two can add `localStorage`.
 
@@ -538,7 +551,7 @@ System AUTO generates PM case from contract
 
 Work Act / Diagnostic Report / Commercial Offer / Contract Annex / Warranty Confirmation / Parts Request / Vendor Return Note / Acceptance Report / Invoice
 
-Document pipeline: `Draft → Review → Customer → Signature → Approved → Archived`
+Document workflow: `Draft/generated -> preview/download -> upload signed copy -> Finish -> DONE`.
 
 Rejection path: `Rejected → Draft` (comment required). Permanent rejection: comment + Admin resolves.
 
@@ -644,7 +657,7 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 ### Phase 4: Document Pipeline ✅ DONE
 
 - Document workflow now focuses on generated file preview/download, signed-copy upload, `Finish`, and `DONE`; rejected documents can return through `Back to Draft`.
-- Document step-back — admin/svcmgr can move one stage backward.
+- Generic stage advance/step-back controls have been removed from the active Documents UI; rejected documents can return through `Back to Draft`.
 - Owner filter, `Review next`, overdue monitoring (due-today / customer / signature cards, red row indicator).
 - Template generation: select template, output format, edit template metadata/body, click Generate -> styled document preview with filled fields, signature lines, `.txt` download, or service-generated DOCX/ODT/PDF through `document-service`.
 - Five per-template renderers: Service act, Diagnostic report, Quotation, Acceptance report, Vendor return note.
@@ -730,6 +743,13 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 | ~~B-36-lite~~ | ~~**Unified document file storage foundation**~~ | **Started as file registry foundation:** generated documents, uploaded documents, output template uploads, and feedback screenshots are now registered through `files.json` with kind/owner/source links/checksum/size/download/preview metadata; binary files are stored under `document-service/storage` or `generated`. Full DB file model, signed-file versions, permission checks, and retention rules remain for backend phase. |
 | ~~B-37~~ | ~~**Production Work Act generation storage**~~ | **Done:** Work Act generation now creates a `generated-document` file registry record with stable `fileId`, `downloadUrl`, PDF `previewUrl`, source Work Act link, and per-document `version/versionLabel`. The source Work Act receives the generated file/version, preview/download/email audit entries reference the same file/version, and the Work Act panel can generate the PDF directly after a document draft exists. |
 | B-38 | **Defect Act / Commercial Offer generation parity** | Apply the same source-panel generated-file UX to Defect Acts and Commercial Offers: show generated file/version, add direct generate/open-preview buttons, and make their delivery/email audit trail fully source-aware. |
+| B-39 | **Document repository workflow polish** | Make Documents a simpler work queue: row signals for needs signed upload / signed uploaded / ready to finish / DONE, row-level file history, better empty states, and no archive controls until retention design. |
+| B-40 | **Sales invoice workflow integration** | Link Sales `Generate invoice` to Finance records, reflect invoice status back in Sales lists, and define Finance vs Sales ownership of final invoice PDF. |
+| B-41 | **Visual template editor V2** | After deeper Tomis editor crawl, add table editing, merge fields, logo/image placeholders, autosave, dirty-state warning, revert, personal duplicate, and version history. |
+| B-42 | **Backend data model and auth** | Move from demo/localStorage state to PostgreSQL, migrations, users/roles/permissions, documents/templates/files/feedback/audit models, sessions, and route permission checks. |
+| B-43 | **Production file custody** | Move `files.json` metadata into DB, add file version chains, signed-copy versions, object storage adapter, checksum/MIME/size validation, retention, backup, and access rules. |
+| B-44 | **Real email delivery** | Add SMTP/API sending, stored outbound email drafts, attachments from file registry, customer contact autofill, send audit, failure, and retry handling. |
+| B-45 | **Tomis deep crawl completion** | Follow `docs/TOMIS_CRAWL_PLAYBOOK.md` to finish Work Act, Defect Act, Commercial Offer, Work List Template, preview/export/email/upload, admin/permissions, and close-status crawl. |
 
 ---
 
@@ -764,7 +784,7 @@ All original criteria met and exceeded:
 - ✅ Shows Viva Medical internal business management shell with topbar, sidebar, 9-role switcher.
 - ✅ Service, Sales, Documents, Finance, Customers, Equipment, Parts, Admin, Calendar, Reports, Template Generation workflows all visible.
 - ✅ Working New Service Job wizard (8 steps, Pipeline type A/B/C/D routing).
-- ✅ Document pipeline monitoring: Draft → Review → Customer → Signature → Approved → Archived, plus rejection path and step-back.
+- ✅ Document workflow monitoring: generated preview/download, signed-copy upload, Finish/DONE close, plus rejection path and Back to Draft.
 - ✅ Code split into clear modules: `app.js`, `data.js`, `state.js`, `render.js`, `interactions.js`, `navigation.js`, `documentPipeline.js`, `persistence.js`.
 - ✅ All code comments in English.
 - ✅ `docs/CHANGELOG.md` and `docs/PROJECT_PLAN.md` document implemented changes after every session.

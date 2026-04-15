@@ -159,6 +159,24 @@ Dark mode is a first-class theme, not a separate layout. The same modules, spaci
 - Keep accent colours slightly brighter/desaturated in dark mode. This avoids neon effects while keeping status chips, badges and buttons visible.
 - Sources used for the rule of thumb: Material Design dark theme guidance (`https://design.google/library/material-design-dark-theme`) and Reddit web design discussion recommending Material guidance, layered grey surfaces and desaturated/brightened primary colours (`https://www.reddit.com/r/web_design/comments/g147fv/is_there_anything_like_refactoring_ui_for_dark/`).
 
+### Current Document Workflow UI Rules
+
+The Documents module is a repository and work queue, not a template editor.
+
+- Do not show large pipeline summary counters when the user is trying to search or act on documents.
+- Do not show a separate selected document side panel if the same information can be shown directly in the list.
+- Table rows should carry the key operational signals: generated file, signed file, delivery status, due date, last activity, and next action.
+- Primary row actions should be concrete verbs: `View`, `Edit`, `Download`, `Upload signed`, `Finish`, `DONE`, `Reject`.
+- Do not use a generic `Advance` button. It hides the real task and makes the workflow harder to understand.
+- Do not expose document archive controls until retention and file custody rules are designed.
+- Use status colours only for operational state:
+  - amber for needs signed upload / finish needed
+  - blue or teal for signed upload present
+  - green for DONE
+  - red for overdue/rejected/problem
+- Keep generated document preview surfaces white in both light and dark mode.
+- Feedback capture should stay visually separate from normal document work: screenshot and red-pencil annotation are admin-supporting evidence, not part of the document form itself.
+
 ---
 
 ## 5. Application Shell

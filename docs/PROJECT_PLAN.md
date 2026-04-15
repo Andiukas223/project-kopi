@@ -1,6 +1,6 @@
 # Projekto Kurimo Planas
 
-Data: 2026-04-11
+Data: 2026-04-15
 
 ## 1. Projekto tikslas
 
@@ -183,7 +183,6 @@ Remote dar neprijungtas. Reikia GitHub/GitLab/Bitbucket repo URL, jei norima `gi
 | Admin | admin | Useriu, roliu ir leidimu valdymas; pipeline/progreso overseer dashboard; exception queues; kontroliuojama sistemos konfiguracija |
 
 **Teisiu sistema:** Tik Admin role yra fiksuota. Visu kitu roliu teises Admin priskiria per checkbox grid prie kiekvieno user. Vienas user gali tureti kelias roles. Admin yra progreso/isimciu overseer, ne tik final approval role.
-
 ---
 
 ## 12. Pipeline tipai
@@ -278,7 +277,31 @@ Vendor return trigger: Work Act'e pažymima "repair exchange" → Logistics suku
 
 Atliktu darbu aktas / Diagnostikos ataskaita / Komercinis pasiūlymas / Sutarties priedas / Garantijos patvirtinimas / Parts request / Vendor return note / Priėmimo aktas / Invoice
 
-### Pipeline
+### Pipeline (updated 2026-04-15)
+
+Current active Documents flow:
+
+```text
+Draft / generated draft
+  -> preview/download generated file
+  -> collect signature outside the system
+  -> upload signed copy into the same document record
+  -> Finish
+  -> DONE / case-ticket closed
+```
+
+Reject path:
+
+```text
+Review / Customer / Signature
+  -> Reject with required comment
+  -> Rejected
+  -> Back to Draft
+```
+
+There is no generic `Advance` button in the current UI. Document archiving is deferred to a later retention/file-custody design.
+
+Older conceptual stage model kept for historical reference:
 
 ```
 Draft → Review → Customer → Signature → Approved → Archived
@@ -287,6 +310,12 @@ Permanentinis rejection: komentaras → Admin resolves
 ```
 
 ### Create vs Upload
+
+Current split:
+
+- Create/generate happens in `Template Generation`.
+- Repository search, preview, download, signed upload, and finish/close happen in `Documents`.
+- Uploaded and generated files go through `document-service` file registry where possible.
 
 **Create (generate from template):** Carbone mock šiame etape. Vėliau tikras backend. User generuoja doc iš template, parsisiunta, surenka parašą, re-uploadina.
 
@@ -349,7 +378,7 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 
 ---
 
-## 18. Dabartinė būsena (2026-04-13)
+## 18. Dabartine busena (2026-04-15)
 
 ### Implementuota ✅
 
@@ -371,6 +400,9 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 | New service job wizard | 8 žingsniai, Pipeline type routing (A/B/C/D), Contract balance info |
 | Role sistema | 9 rolės, role switcher, role-filtruoti vaizdai visuose moduliuose |
 | Document pipeline | Upload signed copy + Finish/DONE workflow, rejection path su privalomu komentaru, Back to Draft, generatedDocPreview |
+| Generated document preview | Tomis tipo print preview modalas: inline PDF, A4 mock fallback, zoom, print/quick print, export/download, email compose, delivery audit |
+| Feedback / bug reporting | Globalus Report issue: screen capture/snipping flow, red-pencil annotation, admin-only queue, backend storage/API foundation |
+| Unified file storage foundation | `document-service` registruoja generated/uploaded/signed/template/feedback failus per `files.json`; runtime storage ignoruojamas git |
 | localStorage persistence | Mutable kolekcijos (jobs, documents, equipment ir kt.) išsaugomos per puslapio reload |
 | Carbone document-service | Node.js + Carbone + LibreOffice Docker konteineris; `/health`, `/preview`, `/generate`, `/download` API; nginx proxy; `work-act.fodt`, `commercial-offer.fodt`, `defect-act.fodt`, `generic-document.fodt` šablonai |
 | **Template Generation modulis** | Atskiras sidebar modulis su 5 sub-tabs: Work Acts, Defect Acts, Commercial Offers, Work List Templates, Output Templates |
@@ -427,6 +459,10 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 
 Detalus read-only radiniu dokumentas: `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`.
 
+Dabartines busenos ir B-38+ roadmap source of truth: `docs/CURRENT_STATUS_AND_ROADMAP.md`.
+
+Saugaus Tomis crawl instrukcija: `docs/TOMIS_CRAWL_PLAYBOOK.md`.
+
 Svarbiausios isvados:
 - Work List Template = aparatu/proceduru checklist'as, kopijuojamas i konkretu Work Act.
 - Document Output Template = standartizuota spausdinama forma Carbone/LibreOffice generavimui.
@@ -440,17 +476,21 @@ Svarbiausios isvados:
 ### Dokumentavimo taisyklė
 
 **Po kiekvienos implementacijos sesijos privaloma:**
+0. `docs/CURRENT_STATUS_AND_ROADMAP.md` yra dabartines busenos ir B-38+ roadmap source of truth.
 1. Atnaujinti `docs/CHANGELOG.md` — pridėti prie `[Unreleased]` sekcijos.
 2. Atnaujinti `docs/PROJECT_PLAN.md` § 18 — pažymėti įvykdytus backlog punktus ✅, pridėti naujus jei atsirado.
 3. `git commit` + `git push` — vienas commit per sesijos darbą.
 
 ---
 
+Papildomai: jei buvo Tomis crawl, naudoti `docs/TOMIS_CRAWL_PLAYBOOK.md` ir radinius rasyti i `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`.
+
 ## 9. Kitos sesijos starto instrukcija
 
 Kitas chat turetu:
 
 1. Perskaityti visus failus `docs/` aplanke: `PROJECT_PLAN.md`, `CHANGELOG.md`, `WEB_PROTOTYPE_IMPLEMENTATION_PLAN.md`, `DOCUMENT_GENERATION_TOMIS_FINDINGS.md`.
+   Pirmas skaitomas dokumentas nuo 2026-04-15: `docs/CURRENT_STATUS_AND_ROADMAP.md`; Tomis crawl darbams naudoti `docs/TOMIS_CRAWL_PLAYBOOK.md`.
 2. Patikrinti `git status` ir `git log --oneline -5`.
 3. Phase A prototipas yra pilnai implementuotas (B-01–B-23). Visi backlog punktai pažymėti Done.
 4. Sekantys žingsniai apibrėžti § 19 "Atviri klausimai ir sekantys žingsniai".
@@ -489,6 +529,13 @@ Kitas chat turetu:
 | ~~B-36-lite~~ | ~~**Unified document file storage foundation**~~ | **Started as file registry foundation:** generated documents, uploaded documents, output template uploads ir feedback screenshots dabar registruojami per `files.json` su kind/owner/source links/checksum/dydziu/download/preview metadata; binary failai saugomi `document-service/storage` arba `generated`. Pilnas DB file modelis, signed-file versijos, permission checks ir retention taisykles lieka backend fazei. |
 | ~~B-37~~ | ~~**Production Work Act generation storage**~~ | **Done:** Work Act generavimas dabar sukuria `generated-document` file registry irasa su stabiliu `fileId`, `downloadUrl`, PDF `previewUrl`, Work Act source linku ir `version/versionLabel`. Source Work Act gauna generated file/version, preview/download/email audit irasai remiasi tuo paciu file/version, o Work Act panelis gali generuoti PDF tiesiai po document draft sukurimo. |
 | B-38 | **Defect Act / Commercial Offer generation parity** | Ta pati source-panel generated-file logika Defect Acts ir Commercial Offers: rodyti generated file/version, prideti direct generate/open-preview veiksmus ir delivery/email audit trail susieti su source recordu. |
+| B-39 | **Document repository workflow polish** | Patobulinti Documents kaip paprasta work queue: row signalai `Needs signed upload` / `Signed uploaded` / `Ready to finish` / `DONE`, geresni empty states, file history row expansion, be archyvavimo kol nera retention dizaino. |
+| B-40 | **Sales invoice workflow integration** | Sales list turi `Generate invoice`, kuris kuria/linkina Finance invoice ir grazina invoice statusa i Sales dokumentu sarasa; veliau pridet paid/signed invoice flow. |
+| B-41 | **Visual template editor V2** | Po papildomo Tomis crawl: table editing, merge fields, logo/image placeholders, autosave, dirty-state warning, revert, duplicate as personal template, version history. |
+| B-42 | **Backend data model and auth** | PostgreSQL + migracijos, users/roles/permissions, customers/equipment/jobs/documents/templates/files/feedback/audit modeliai, auth/session, route permission checks. |
+| B-43 | **Production file custody** | `files.json` perkelti i DB, file version chains, signed upload versions, object storage adapter, checksum/MIME/size validation, retention and backup policy. |
+| B-44 | **Real email delivery** | SMTP/API provider, outbound email drafts/sent audit, attachments from file registry, customer contact autofill, send failure/retry flow. |
+| B-45 | **Tomis deep crawl completion** | Naudoti `docs/TOMIS_CRAWL_PLAYBOOK.md`: Work Acts, Defect Acts, Commercial Offers, Work List Templates, preview/export/email/upload, admin/permissions, status and close behavior. |
 
 ### Phase B planavimas (backend)
 
