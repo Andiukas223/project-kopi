@@ -1035,12 +1035,7 @@ function upsertGeneratedFileVersion(existingVersions, generatedFile) {
 
 function syncGeneratedFileToSource(doc, generatedFile) {
   const source = generationSourceForDoc(doc);
-  const sourceCollections = {
-    "work-act": workActs,
-    "defect-act": defectActs,
-    "commercial-offer": commercialOfferDrafts
-  };
-  const sourceRecord = sourceCollections[source.type]?.find((item) => item.id === source.id);
+  const sourceRecord = sourceRecordForDocument(doc);
   if (!sourceRecord) return;
 
   sourceRecord.generatedDocumentId = doc.id;
@@ -1051,6 +1046,16 @@ function syncGeneratedFileToSource(doc, generatedFile) {
   sourceRecord.generatedAt = generatedFile.generatedAt;
   sourceRecord.status = "Generated";
   sourceRecord.updatedAt = new Date().toISOString();
+}
+
+function sourceRecordForDocument(doc) {
+  const source = generationSourceForDoc(doc);
+  const sourceCollections = {
+    "work-act": workActs,
+    "defect-act": defectActs,
+    "commercial-offer": commercialOfferDrafts
+  };
+  return sourceCollections[source.type]?.find((item) => item.id === source.id) || null;
 }
 
 function documentFileAuditNote(file, fallback = "") {
@@ -1252,6 +1257,15 @@ function addDocumentDeliveryAudit(doc, action, note = "", fileContext = doc.gene
   }
   doc.deliveryAudit.unshift(auditEntry);
   doc.deliveryAudit = doc.deliveryAudit.slice(0, 8);
+
+  const sourceRecord = sourceRecordForDocument(doc);
+  if (sourceRecord) {
+    sourceRecord.deliveryAudit = sourceRecord.deliveryAudit || [];
+    sourceRecord.deliveryAudit.unshift({ ...auditEntry, documentId: doc.id });
+    sourceRecord.deliveryAudit = sourceRecord.deliveryAudit.slice(0, 8);
+    sourceRecord.deliveryStatus = doc.deliveryStatus || action;
+    sourceRecord.updatedAt = new Date().toISOString();
+  }
 }
 
 function documentServicePayload(doc, template) {

@@ -6,6 +6,10 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 
 ## [Unreleased]
 
+### Added
+
+- Implementuotas B-38 Defect Act / Commercial Offer generation parity: Defect Acts ir Commercial Offers source paneliai dabar rodo generated file/version metadata, turi direct `Generate PDF file`, `Open preview` ir `Download` veiksmus po document draft sukurimo, o preview/download/print/export/email audit irasai mirror'inami i source recorda. Sugeneruoti dokumentai ir source irasai naudoja ta pati `document-service` file registry objekta.
+
 ### Documentation
 
 - Pridetas `docs/CURRENT_STATUS_AND_ROADMAP.md` kaip 2026-04-15 projekto busenos, atliktu darbu, technines skolos ir B-38+ roadmap source of truth.

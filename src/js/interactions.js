@@ -1217,6 +1217,7 @@ function createDefectActDraft(jobId) {
   state.selectedDefectActId = defectId;
   state.templateGenDefectActJobId = jobId;
   state.defectActError = "";
+  saveDemoState();
   renderAppCallback();
 }
 
@@ -1337,8 +1338,10 @@ function createDefectActDocumentDraft(actId) {
   act.updatedAt = new Date().toISOString();
   state.selectedDocumentId = act.generatedDocumentId;
   state.selectedTemplateId = "tpl-defect-act";
+  state.documentOutputFormat = "pdf";
   state.selectedDefectActId = act.id;
   state.defectActError = "";
+  saveDemoState();
   renderAppCallback();
 }
 
@@ -1530,6 +1533,7 @@ function createCommercialOfferDocumentDraft(draftId) {
   draft.updatedAt = new Date().toISOString();
   state.selectedDocumentId = draft.generatedDocumentId;
   state.selectedTemplateId = "tpl-quotation";
+  state.documentOutputFormat = "pdf";
   state.selectedCommercialOfferDraftId = draft.id;
   state.commercialOfferError = "";
   saveDemoState();

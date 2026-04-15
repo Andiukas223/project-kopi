@@ -143,6 +143,9 @@ Defect Acts implemented:
 - Defect description, engineer findings, recommended correction, risk, customer acknowledgement.
 - Actual Visits grid with DA/WA, planned start, work hours, travel hours, completed, comments.
 - Document draft creation.
+- Direct `Generate PDF file` after document draft creation.
+- Generated file version metadata (`fileId`, `version`, `versionLabel`, `downloadUrl`, `previewUrl`).
+- Source-aware preview/download/email audit.
 - Output template conditional rendering.
 
 Commercial Offers implemented:
@@ -154,6 +157,9 @@ Commercial Offers implemented:
 - Line items, pricing, validity, payment terms, notes.
 - Active/archived/price missing style filters.
 - Document draft creation.
+- Direct `Generate PDF file` after document draft creation.
+- Generated file version metadata (`fileId`, `version`, `versionLabel`, `downloadUrl`, `previewUrl`).
+- Source-aware preview/download/email audit.
 - Output template conditional rendering.
 
 Work List Templates implemented:
@@ -259,23 +265,19 @@ Not implemented yet:
 - Browser screen capture must ask permission every time in normal web security model.
 - Output template logo is still text/placeholder in `.fodt`; proper embedded logo asset pipeline is needed.
 - Email delivery is audit-only.
-- Defect Act and Commercial Offer do not yet have full source-panel generated file parity with Work Acts.
 - Existing demo data contains placeholder hospital requisites that must be verified before real use.
 
 ## Roadmap
 
-### B-38 - Defect Act / Commercial Offer Generation Parity
+### B-38 - Defect Act / Commercial Offer Generation Parity - Done
 
-Goal: Defect Acts and Commercial Offers should work like Work Acts after B-37.
+Completed 2026-04-15.
 
-Plan:
-
-1. Add direct `Generate PDF file` actions in Defect Act and Commercial Offer source panels.
-2. Store generated file/version metadata back onto the source record.
-3. Show generated file/version, `Open preview`, `Download`, and delivery audit on the source panel.
-4. Ensure generated document records in Documents use the same file object.
-5. Reuse the same preview/export/email audit functions.
-6. Verify through Docker + Playwright for PDF generation, inline preview, and console errors.
+- Defect Act and Commercial Offer source panels now expose generated file/version metadata.
+- Both panels show direct `Generate PDF file`, `Open preview`, and `Download` actions once a document draft exists.
+- Delivery audit entries from preview/download/print/export/email are mirrored back onto the source record.
+- Generated Documents records and source records share the same file registry object.
+- Verified with Docker build, container-based JS syntax checks, document-service health check, web HTTP 200, and direct Defect Act / Commercial Offer PDF generation smoke tests.
 
 ### B-39 - Document Repository Workflow Polish
 

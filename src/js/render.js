@@ -822,6 +822,51 @@ function documentDeliveryAuditBlock(doc) {
   `;
 }
 
+function sourceGeneratedFilePanel(sourceRecord) {
+  if (!sourceRecord?.generatedDocumentId && !sourceRecord?.generatedFile) return "";
+  const doc = documents.find((item) => item.id === sourceRecord.generatedDocumentId);
+  const generatedFile = sourceRecord.generatedFile || (doc ? documentGeneratedFileFor(doc) : null);
+  const versions = sourceRecord.generatedFileVersions || doc?.generatedFileVersions || [];
+  return `
+    <div class="detail-block">
+      <div class="detail-group-title">Generated file</div>
+      <div class="doc-detail-grid compact">
+        ${generatedFile ? detailItem("File", generatedFileDisplayName(generatedFile)) : detailItem("File", "Not generated")}
+        ${generatedFile?.fileId ? detailItem("File id", generatedFile.fileId) : ""}
+        ${generatedFile?.versionLabel ? detailItem("Version", generatedFile.versionLabel) : ""}
+        ${generatedFile?.generatedAt ? detailItem("Generated", generatedFile.generatedAt.slice(0, 16).replace("T", " ")) : ""}
+        ${sourceRecord.deliveryStatus ? detailItem("Delivery", sourceRecord.deliveryStatus) : ""}
+        ${versions.length ? detailItem("Versions", String(versions.length)) : ""}
+      </div>
+      <div class="tg-action-cluster left" style="margin-top:10px">
+        ${sourceRecord.generatedDocumentId ? `<button class="btn dark compact" type="button" data-generate-service-document="${escapeHtml(sourceRecord.generatedDocumentId)}">Generate PDF file</button>` : ""}
+        ${sourceRecord.generatedDocumentId ? `<button class="btn ghost compact" type="button" data-doc-preview-open="${escapeHtml(sourceRecord.generatedDocumentId)}">Open preview</button>` : ""}
+        ${generatedFile?.downloadUrl ? `<a class="btn ghost compact" href="${escapeHtml(generatedFile.downloadUrl)}" target="_blank" rel="noopener">Download</a>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+function sourceDeliveryAuditBlock(sourceRecord) {
+  const doc = documents.find((item) => item.id === sourceRecord?.generatedDocumentId);
+  const audit = sourceRecord?.deliveryAudit || doc?.deliveryAudit || [];
+  if (!audit.length) return "";
+  return `
+    <div class="detail-block">
+      <div class="detail-group-title">Delivery audit</div>
+      <div class="delivery-audit-list">
+        ${audit.slice(0, 4).map((entry) => `
+          <div class="delivery-audit-row">
+            <span>${escapeHtml(entry.action)}</span>
+            <strong>${escapeHtml(entry.at ? entry.at.slice(0, 16).replace("T", " ") : "")}</strong>
+            <em>${escapeHtml(entry.note || entry.fileName || "")}</em>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function uploadedMetadataBlock(doc) {
   return `
     <div class="detail-block">
@@ -3035,6 +3080,8 @@ function defectActDraftPanel(job, act) {
     `;
   }
 
+  const generatedFile = act.generatedFile || null;
+
   return `
     <div class="work-act-builder">
       <div class="doc-detail-grid compact">
@@ -3042,6 +3089,8 @@ function defectActDraftPanel(job, act) {
         ${detailItem("Status", act.status)}
         ${detailItem("Source", act.source || "Manual")}
         ${detailItem("Document", act.generatedDocumentId || "Not generated")}
+        ${generatedFile ? detailItem("Generated file", generatedFileDisplayName(generatedFile)) : ""}
+        ${generatedFile?.fileId ? detailItem("File id", generatedFile.fileId) : ""}
       </div>
       ${state.defectActError && state.selectedDefectActId === act.id ? `<div class="form-error">${escapeHtml(state.defectActError)}</div>` : ""}
       <div class="doc-detail-grid compact">
@@ -3061,8 +3110,12 @@ function defectActDraftPanel(job, act) {
           <button class="btn ghost compact" type="button" data-defect-act-add-visit="${escapeHtml(act.id)}">Add visit</button>
           <button class="btn ghost compact" type="button" data-defect-act-create-offer="${escapeHtml(act.id)}">Part offer</button>
           <button class="btn primary compact" type="button" data-defect-act-generate="${escapeHtml(act.id)}">Create draft</button>
+          ${act.generatedDocumentId ? `<button class="btn dark compact" type="button" data-generate-service-document="${escapeHtml(act.generatedDocumentId)}">Generate PDF</button>` : ""}
+          ${act.generatedDocumentId ? `<button class="btn ghost compact" type="button" data-doc-preview-open="${escapeHtml(act.generatedDocumentId)}">Preview</button>` : ""}
         </div>
       </div>
+      ${sourceGeneratedFilePanel(act)}
+      ${sourceDeliveryAuditBlock(act)}
       ${defectActVisitsTable(act)}
       ${defectActTextarea(act, "defectDescription", "Defect description", "Customer-reported defect or observed problem")}
       ${defectActTextarea(act, "engineerFindings", "Engineer findings", "Inspection findings, root cause, measurements")}
@@ -3231,6 +3284,7 @@ function commercialOfferDraftPanel(qte, draft) {
 
   const errorHtml = state.commercialOfferError && state.selectedCommercialOfferDraftId === draft.id
     ? `<div class="form-error">${escapeHtml(state.commercialOfferError)}</div>` : "";
+  const generatedFile = draft.generatedFile || null;
 
   const lineItemsHtml = (draft.lineItems || []).map((item, index) => `
     <tr>
@@ -3256,6 +3310,8 @@ function commercialOfferDraftPanel(qte, draft) {
         ${detailItem("Status", draft.status)}
         ${detailItem("Date", draft.date)}
         ${detailItem("Document", draft.generatedDocumentId || "Not generated")}
+        ${generatedFile ? detailItem("Generated file", generatedFileDisplayName(generatedFile)) : ""}
+        ${generatedFile?.fileId ? detailItem("File id", generatedFile.fileId) : ""}
       </div>
       ${errorHtml}
       <div class="doc-detail-grid compact">
@@ -3318,7 +3374,11 @@ function commercialOfferDraftPanel(qte, draft) {
         <button class="btn ghost compact" type="button" data-commercial-offer-add-row="${escapeHtml(draft.id)}">Add part</button>
         <button class="btn ghost compact" type="button" data-commercial-offer-placeholder="Send to Hospital is planned for the send/email workflow.">Send to hospital</button>
         <button class="btn primary compact" type="button" data-commercial-offer-generate="${escapeHtml(draft.id)}">Create draft</button>
+        ${draft.generatedDocumentId ? `<button class="btn dark compact" type="button" data-generate-service-document="${escapeHtml(draft.generatedDocumentId)}">Generate PDF</button>` : ""}
+        ${draft.generatedDocumentId ? `<button class="btn ghost compact" type="button" data-doc-preview-open="${escapeHtml(draft.generatedDocumentId)}">Preview</button>` : ""}
       </div>
+      ${sourceGeneratedFilePanel(draft)}
+      ${sourceDeliveryAuditBlock(draft)}
     </div>
   `;
 }
