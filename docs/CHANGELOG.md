@@ -16,6 +16,7 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 - `Issue sent to admin.` patvirtinimas po report issue issiuntimo dabar pats pranyksta su fade animacija po 2 sekundziu.
 - Is Command Center admin view isimtas perteklinis `Document pipeline` blokas; pipeline lieka Documents ir Reports kontekstuose.
 - Is Sales view isimtas perteklinis quotation stat card blokas, kad puslapis prasidetu nuo quotation darbo lenteles ir detales.
+- Pasalintas globalus module header/action strip is visu moduliu: aktyvus modulis jau matomas sidebar'e, `Export view` buvo be funkcijos, o `New service job` perkeltas tik i Service modulio jobs paneli.
 
 ### Documentation
 

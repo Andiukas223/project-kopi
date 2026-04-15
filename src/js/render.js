@@ -368,23 +368,7 @@ function chipClass(status) {
 }
 
 function pageHeader(page) {
-  const [title, sub] = pageMeta[page] || pageMeta.command;
-  const newJobBtn = canCreateServiceJob()
-    ? `<button class="btn primary" type="button" data-action="new-service-job">New service job</button>`
-    : "";
-  return `
-    <div class="page-header">
-      <div>
-        <h1 class="ph-title">${title}</h1>
-        <div class="ph-sub">${sub}</div>
-      </div>
-      <div class="action-row">
-        ${roleSwitcher()}
-        <button class="btn ghost" type="button">Export view</button>
-        ${newJobBtn}
-      </div>
-    </div>
-  `;
+  return "";
 }
 
 function roleSwitcher() {
@@ -1892,7 +1876,10 @@ function servicePage() {
         <div class="panel split-left">
           <div class="section-heading">
             <div class="section-title">${isOwn ? `My jobs (${myJobList.length})` : `Service jobs (${myJobList.length})`}</div>
-            ${isOwn ? `<span class="role-tag service">service</span>` : ""}
+            <div class="action-row">
+              ${isOwn ? `<span class="role-tag service">service</span>` : ""}
+              ${canCreateServiceJob() ? `<button class="btn primary compact" type="button" data-action="new-service-job">New service job</button>` : ""}
+            </div>
           </div>
           ${jobsTableRows(myJobList, { selectable: true })}
         </div>
