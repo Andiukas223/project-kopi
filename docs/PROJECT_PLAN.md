@@ -40,7 +40,7 @@ Sistema turi atrodyti lengva, moderni ir neperkrauta, net kai duomenu ir workflo
 - Stabilus layout: lenteles, toolbars, tabsai ir detail paneliai turi tureti stabilias dimensijas, kad statusai, hover busenos ar ilgesni tekstai nejudintu viso ekrano.
 - Role-aware tankis: service, sales, finance ir admin mato skirtingus akcentus; nereikia viename ekrane rodyti visu komandu veiksmu, jei roliui jie nera aktualus.
 - Lengvas skenavimas: top area = summary/filters, middle = list/workspace, right/bottom = selected item detail. Vengti viename skydelyje maisyti registry, generation, archive ir settings logika.
-- Terminai turi buti produkto terminai, ne UI paaiskinimai: `Work Act`, `Work List Template`, `Output Template`, `Generated document`, `Uploaded document`, `Signed document`.
+- Terminai turi buti produkto terminai, ne UI paaiskinimai: `Work Act`, `Template`, `Output Layout`, `Generated document`, `Uploaded document`, `Signed document`.
 - Kai workflow sudetingas, naudoti sub-tabs arba stepper, o ne ilga viena forma.
 
 ### Logo failai
@@ -405,12 +405,12 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 | Unified file storage foundation | `document-service` registruoja generated/uploaded/signed/template/feedback failus per `files.json`; runtime storage ignoruojamas git |
 | localStorage persistence | Mutable kolekcijos (jobs, documents, equipment ir kt.) išsaugomos per puslapio reload |
 | Carbone document-service | Node.js + Carbone + LibreOffice Docker konteineris; `/health`, `/preview`, `/generate`, `/download` API; nginx proxy; `work-act.fodt`, `commercial-offer.fodt`, `defect-act.fodt`, `generic-document.fodt` šablonai |
-| **Template Generation modulis** | Atskiras sidebar modulis su 5 sub-tabs: Work Acts, Defect Acts, Commercial Offers, Work List Templates, Output Templates |
-| Work Acts workspace | Job selector, draft create, equipment search/add/remove, Work List Template picker, Work Description + Work Rows editor, Service act document draft → Documents |
+| **Template Generation modulis** | Atskiras sidebar modulis su 5 sub-tabs: Work Acts, Defect Acts, Commercial Offers, Templates, Output Layouts |
+| Work Acts workspace | Job selector, draft create, equipment search/add/remove, Template picker, Work Description + Work Rows editor, Service act document draft → Documents |
 | Defect Acts workspace | Job selector, draft create, defect description/findings/correction/risk/acknowledgement editor, Defect act document draft → Documents |
 | Commercial Offers workspace | Source quotation selector, draft create, scope/line items/validity/payment terms/notes editor, `Create document draft` → Documents; `commercialOfferDrafts` kolekcija su localStorage |
-| Work List Templates CRUD | `+ New template` forma, detail/edit panel, `Duplicate`, `Archive/Restore`; inline work row add/remove/text-edit; `isActive` flag — ne destruktyvus archyvavimas |
-| Output Templates editor | Sekcijų redaktorius su merge fields, reset/save logika, localStorage; sekcijų turinys perduodamas į document-service payload |
+| Templates CRUD | `+ New template` forma, detail/edit panel, `Duplicate`, `Archive/Restore`; inline work row add/remove/text-edit; `isActive` flag — ne destruktyvus archyvavimas |
+| Output Layouts editor | Advanced/admin sekcijų redaktorius su merge fields, reset/save logika, localStorage; sekcijų turinys perduodamas į document-service payload |
 | Warranty/calendar sync | Acceptance report upload atnaujina equipment acceptance/warranty laukus ir sukuria warranty expiry event |
 
 ### Laukiantis darbas (backlog) — eilės tvarka
@@ -451,7 +451,7 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 | ~~B-20~~ | ~~**Defect Acts workspace in Template Generation**~~ | **Done:** Defect Acts tab'e pridetas source service job selector, Defect Act draft create flow, defect description / engineer findings / recommended correction / risk / customer acknowledgement editorius ir Defect act dokumento draft kurimas i `Documents`. |
 | ~~B-21~~ | ~~**Work Act builder UX labels and equipment search**~~ | **Done:** `Work List Template` pervadintas i `Work List Template Name`, Work Text terminas pakeistas i `Work Description`, o equipment selection pakeistas i search/dropdown su `Add equipment` ir pasirinktu equipment juosta su `X` pasalinimu. |
 | ~~B-22~~ | ~~**Commercial Offers workspace**~~ | **Done:** `Template Generation / Commercial Offers` tab turi pilna kūrimo/redagavimo flow: source quotation selector, draft create, scope/line items/validity/payment terms/notes editor, `Create document draft` veiksmas. `commercialOfferDrafts` kolekcija su `localStorage` persistencija. |
-| ~~B-23~~ | ~~**Work List Templates CRUD**~~ | **Done:** `Template Generation / Work List Templates` tab turi `+ New template` forma, selected template detail/edit panel, `Duplicate` ir `Archive/Restore` mygtukus, inline work row add/remove/text-edit edit mode'e. `isActive` flag valdo archyvavima be trynimo. |
+| ~~B-23~~ | ~~**Templates CRUD**~~ | **Done:** `Template Generation / Templates` tab turi `+ New template` forma, selected template detail/edit panel, `Duplicate` ir `Archive/Restore` mygtukus, inline work row add/remove/text-edit edit mode'e. `isActive` flag valdo archyvavima be trynimo. |
 
 ---
 
@@ -464,12 +464,12 @@ Dabartines busenos ir B-38+ roadmap source of truth: `docs/CURRENT_STATUS_AND_RO
 Saugaus Tomis crawl instrukcija: `docs/TOMIS_CRAWL_PLAYBOOK.md`.
 
 Svarbiausios isvados:
-- Work List Template = aparatu/proceduru checklist'as, kopijuojamas i konkretu Work Act.
-- Document Output Template = standartizuota spausdinama forma Carbone/LibreOffice generavimui.
-- Work Act flow igyvendintas: Draft record -> auto-prefill equipment is case/equipment arba manual equipment search/add/remove -> apply Work List Template -> edit isolated work rows/work description -> generate Work Act document draft.
+- Template = aparatu/proceduru checklist'as, kopijuojamas i konkretu Work Act. Tomis radiniuose tas pats konceptas vadinamas Work List Template.
+- Output Layout = standartizuota spausdinama forma Carbone/LibreOffice generavimui. Tai advanced/admin sritis, ne kasdienis template pasirinkimas.
+- Work Act flow igyvendintas: Draft record -> auto-prefill equipment is case/equipment arba manual equipment search/add/remove -> apply Template -> edit isolated work rows/work description -> generate Work Act document draft.
 - `Documents` turi buti dokumentu talpykla ir paieskos vieta, o dokumentu generavimas turi persikelti i atskira `Template Generation` moduli.
-- Dabartinis generic template editor yra laikinas ir turi virsti `Template Generation / Output Templates` dalimi.
-- Kasdienis user neturi kiekviena karta maketuoti dokumento nuo nulio: normalus flow yra strukturuotas darbo irasas -> parinktas Work List Template / Output Template -> sugeneruotas dokumentas.
+- Dabartinis generic template editor yra laikinas ir turi virsti advanced `Template Generation / Output Layouts` arba Admin/settings dalimi.
+- Kasdienis user neturi kiekviena karta maketuoti dokumento nuo nulio: normalus flow yra strukturuotas darbo irasas -> parinktas Template -> standartinis Output Layout -> sugeneruotas dokumentas.
 - Kasdienis user vis tiek turi tureti prieiga prie visual/rich editoriaus micro editams, bugui uzfiksuoti arba savo darbo sablonui susikurti, panasiai kaip Tomis. Tam reikia atskiro nuodugnaus Tomis crawl su vartotojo pagalba.
 - Admin role kryptis: useriu, roliu ir leidimu valdymas bei pipeline/progreso overseer dashboard. Admin neturi buti vien tik patvirtintojo role.
 
@@ -514,15 +514,15 @@ Kitas chat turetu:
 
 | # | Užduotis | Aprašas |
 |---|---|---|
-| ~~B-24~~ | ~~**fodt template upload/export**~~ | **Done:** Output Templates tab'e pridėtas "Export sections as .fodt" ir "Upload .fodt template" veiksmai, `document-service` turi `POST /template/upload` ir `GET /template/download/:fileName`, o sekcijų editoriaus turinys gali tapti realiu `.fodt` šablonu Carbone generavimui. |
+| ~~B-24~~ | ~~**fodt template upload/export**~~ | **Done:** Output Layouts tab'e pridėtas "Export sections as .fodt" ir "Upload .fodt template" veiksmai, `document-service` turi `POST /template/upload` ir `GET /template/download/:fileName`, o sekcijų editoriaus turinys gali tapti realiu `.fodt` šablonu Carbone generavimui. |
 | ~~B-25~~ | ~~**Tomis comparison pass**~~ | **Done:** Tomis read-only peržiūrėti Work List Templates, Work Acts, Commercial Offers ir Defect Acts ekranai. Radiniai ir kitas backlog'as dokumentuoti `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`. |
 | ~~B-26~~ | ~~**Work Act Tomis-aligned list and options**~~ | **Done:** Work Acts tab'e pridetas Tomis tipo sarasas su grupavimu/filtrais ir Work Act `Options` / print settings panelis; `reportOptions` persistinami ir perduodami i document-service payload. |
-| ~~B-27~~ | ~~**Work List Template applicability rules**~~ | **Done:** Work List Templates registry turi Search/Find/Clear, statuso ir entry person filtrus, linked service types/equipment/hospitals/work equipment laukus, entry person/date metadata, o Work Act template pickeris rodo applicability atitinkancius sablonus. |
+| ~~B-27~~ | ~~**Template applicability rules**~~ | **Done:** Templates registry turi Search/Find/Clear, statuso ir entry person filtrus, linked service types/equipment/hospitals/work equipment laukus, entry person/date metadata, o Work Act template pickeris rodo applicability atitinkancius sablonus. |
 | ~~B-28~~ | ~~**Commercial Offer Tomis-aligned detail**~~ | **Done:** Commercial Offers prideti active/price missing/archived/entry person filtrai, Tomis tipo saraso stulpeliai, profile/group/hospital-system/side/contract/recipient/fax/invoice/currency metadata, Offer Text Header/Footer sekcijos, archive veiksmas ir payload laukai document-service generavimui. |
 | ~~B-29~~ | ~~**Defect Act Tomis-aligned visits**~~ | **Done:** Defect Acts pridetas Actual Visits grid su DA/WA, planned start, work/travel hours, completed, comments, add/remove eilutemis, document-service payload laukais, preview renderinimu ir `Create Part Request Offer` placeholder. |
 | ~~B-30~~ | ~~**Output template conditional rendering**~~ | **Done:** `.fodt` output sablonuose prideti Carbone conditional blokai Work Act report options/signature zonai, Commercial Offer header/scope/footer/line items laukams ir Defect Act visits/findings/correction/risk laukams. |
 | ~~B-31~~ | ~~**Tomis visual editor crawl**~~ | **Done:** read-only perziuretas Tomis `Work List Template (Aespire TB)` detail, embedded rich/table editorius, service/equipment/hospital/work-equipment applicability tab'ai, dual-list assignment controls ir `Template - Advanced Editor` Word-like ribbon. Radiniai dokumentuoti `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`. |
-| ~~B-32~~ | ~~**User-accessible visual template editor**~~ | **Done as MVP:** `Template Generation / Work List Templates` turi document-like visual preview, contenteditable rich editoriu, basic formatting/list toolbar, checklist-row insertion, visual HTML persistence ir bug/workaround note lauka, bet strukturuotos work rows ir applicability metadata lieka default generavimo source. |
+| ~~B-32~~ | ~~**User-accessible visual template editor**~~ | **Done as MVP:** `Template Generation / Templates` turi document-like visual preview, contenteditable rich editoriu, basic formatting/list toolbar, checklist-row insertion, visual HTML persistence ir bug/workaround note lauka, bet strukturuotos work rows ir applicability metadata lieka default generavimo source. |
 | ~~B-33~~ | ~~**Generated document preview and delivery**~~ | **Done as MVP:** source record'uose, generated output preview, Work Act linkuose ir `Documents` eilutese pridetas `Open preview`; Tomis tipo modalas turi print/quick print, zoom, export/download, email compose, inline service PDF preview, delivery statusa ir audit history. `document-service` grazina atskira inline `previewUrl`, todel PDF preview nebeatidaro download dialogo. |
 | ~~B-34~~ | ~~**Bug/feedback capture for production**~~ | **Done as MVP:** visi useriai turi `Report issue`, kuris ijungia Windows snipping tipo click-drag pasirinkimo rezima, padaro tik pasirinktos zonos screenshot, prisega ji kaip admin-only papildoma informacija, prireikus atidaro red-pencil anotavimo canvas, reikalauja trumpo komentaro, issaugo context/page/role/selected records ir ikelia reporta i demo state. Report queue, screenshot, komentaras, statusas ir history matomi tik aktyviai `admin` role. |
 | ~~B-35-lite~~ | ~~**Production feedback backend foundation**~~ | **Done as storage/API foundation:** bug reports perkelti is browser `localStorage` i `document-service` backend storage: persistent `storage` volume, screenshot attachment failai, `feedback-reports.json`, `files.json`, `POST/GET/PATCH /feedback/reports`, admin status/assignee filtrai ir workflow. Pilna auth/permissions ir DB migracija lieka backend fazei. |
@@ -535,7 +535,7 @@ Kitas chat turetu:
 | B-42 | **Backend data model and auth** | PostgreSQL + migracijos, users/roles/permissions, customers/equipment/jobs/documents/templates/files/feedback/audit modeliai, auth/session, route permission checks. |
 | B-43 | **Production file custody** | `files.json` perkelti i DB, file version chains, signed upload versions, object storage adapter, checksum/MIME/size validation, retention and backup policy. |
 | B-44 | **Real email delivery** | SMTP/API provider, outbound email drafts/sent audit, attachments from file registry, customer contact autofill, send failure/retry flow. |
-| B-45 | **Tomis deep crawl completion** | Naudoti `docs/TOMIS_CRAWL_PLAYBOOK.md`: Work Acts, Defect Acts, Commercial Offers, Work List Templates, preview/export/email/upload, admin/permissions, status and close behavior. |
+| B-45 | **Tomis deep crawl completion** | Naudoti `docs/TOMIS_CRAWL_PLAYBOOK.md`: Work Acts, Defect Acts, Commercial Offers, Templates, Output Layouts, preview/export/email/upload, admin/permissions, status and close behavior. |
 
 ### Phase B planavimas (backend)
 

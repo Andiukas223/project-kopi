@@ -93,7 +93,7 @@ export const state = {
   commercialOfferStatusFilter: "active",
   commercialOfferEntryPersonFilter: "all",
 
-  // Work List Templates CRUD
+  // Templates CRUD
   selectedWltId: null,
   wltEditMode: false,
   wltNewOpen: false,

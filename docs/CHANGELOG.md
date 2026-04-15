@@ -9,6 +9,7 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 ### Added
 
 - Implementuotas B-38 Defect Act / Commercial Offer generation parity: Defect Acts ir Commercial Offers source paneliai dabar rodo generated file/version metadata, turi direct `Generate PDF file`, `Open preview` ir `Download` veiksmus po document draft sukurimo, o preview/download/print/export/email audit irasai mirror'inami i source recorda. Sugeneruoti dokumentai ir source irasai naudoja ta pati `document-service` file registry objekta.
+- Patikslinta Template Generation terminija: user-facing `Work List Templates` pervadinti i `Templates`, o `Output Templates` UI pervadinti i `Output Layouts`, kad kasdieniam useriui template reikstu pasirenkama darbo/proceduros sablona, o Carbone/LibreOffice spausdinami layout'ai liktu advanced/admin sritis.
 
 ### Documentation
 

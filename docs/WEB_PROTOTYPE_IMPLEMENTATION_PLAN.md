@@ -354,11 +354,11 @@ Purpose: document creation workspace separated from the document repository.
 
 Components:
 
-- Work Acts workspace: draft list, create from job/equipment/manual, equipment search/add/remove, Work List Template Name picker, Work Description and Work Rows editor, generate output.
+- Work Acts workspace: draft list, create from job/equipment/manual, equipment search/add/remove, Template picker, Work Description and Work Rows editor, generate output.
 - Defect Acts workspace: create from job/equipment/manual, defect description, findings, recommended correction, generate output.
 - Commercial Offers workspace: sales scope, pricing, validity, approval text, generate output.
-- Work List Templates registry: equipment/procedure-specific checklist templates used as isolated copies inside Work Acts.
-- Output Templates editor: standardized printable forms for Work Act, Commercial Offer, Defect Act, and future documents.
+- Templates registry: equipment/procedure-specific checklist templates used as isolated copies inside Work Acts.
+- Output Layouts editor: advanced/admin standardized printable forms for Work Act, Commercial Offer, Defect Act, and future documents.
 - Preview and generate panel for `pdf`, `docx`, and `odt`.
 
 Primary actions:
@@ -676,12 +676,12 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 ### Phase 5: Template Generation Workspaces ✅ DONE
 
 - `Template Generation` sidebar module and page added; `Documents` page no longer mixes template creation with repository/search.
-- Sub-tabs: Work Acts, Defect Acts, Commercial Offers, Work List Templates, Output Templates.
-- Work Acts workspace (B-19): source job selector, draft create, equipment search/add/remove, Work List Template picker, Work Description + Work Rows editor, generate Service act document draft into Documents.
+- Sub-tabs: Work Acts, Defect Acts, Commercial Offers, Templates, Output Layouts.
+- Work Acts workspace (B-19): source job selector, draft create, equipment search/add/remove, Template picker, Work Description + Work Rows editor, generate Service act document draft into Documents.
 - Defect Acts workspace (B-20): source job selector, draft create, defect description / findings / correction / risk / acknowledgement editor, generate Defect act document draft into Documents.
 - Commercial Offers workspace (B-22): source quotation selector, draft create, scope text, line items table (add/remove, description, amount), validity date, payment terms, notes, `Create document draft` → Documents; `commercialOfferDrafts` collection persisted via `localStorage`.
-- Work List Templates CRUD (B-23): `+ New template` form with name/category/serviceType/language/bodyText/workRows; table with per-row Duplicate and Archive/Restore; selected template detail and edit panel with inline work row add/remove/text edit; `isActive` flag — non-destructive archiving.
-- Output Templates editor: structured section editors with merge fields, reset/save logic, `localStorage` persistence; section content passed through to `document-service` Carbone payload.
+- Templates CRUD (B-23): `+ New template` form with name/category/serviceType/language/bodyText/workRows; table with per-row Duplicate and Archive/Restore; selected template detail and edit panel with inline work row add/remove/text edit; `isActive` flag — non-destructive archiving.
+- Output Layouts editor: structured section editors with merge fields, reset/save logic, `localStorage` persistence; section content passed through to `document-service` Carbone payload.
 
 ---
 
@@ -722,21 +722,21 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 | ~~B-20~~ | ~~**Defect Acts workspace in Template Generation**~~ | **Done:** Defect Acts tab now has a source service job selector, Defect Act draft create flow, defect description / engineer findings / recommended correction / risk / acknowledgement editing, and Defect act document draft creation back into Documents. |
 | ~~B-21~~ | ~~**Work Act builder UX labels and equipment search**~~ | **Done:** renamed Work List Template to Work List Template Name, replaced the Work Text term with Work Description, and replaced equipment checkboxes with search/dropdown, Add equipment, selected-equipment strip, and X remove controls. |
 | ~~B-22~~ | ~~**Commercial Offers workspace**~~ | **Done:** `Template Generation / Commercial Offers` tab has full create/edit flow: source quotation selector, draft create, scope/line items/validity/payment terms/notes editor, `Create document draft` action. `commercialOfferDrafts` collection with `localStorage` persistence. |
-| ~~B-23~~ | ~~**Work List Templates CRUD**~~ | **Done:** `Template Generation / Work List Templates` tab has `+ New template` form, selected template detail/edit panel, `Duplicate` and `Archive/Restore` buttons, inline work row add/remove/text-edit in edit mode. `isActive` flag controls archiving without deletion. |
+| ~~B-23~~ | ~~**Templates CRUD**~~ | **Done:** `Template Generation / Templates` tab has `+ New template` form, selected template detail/edit panel, `Duplicate` and `Archive/Restore` buttons, inline work row add/remove/text-edit in edit mode. `isActive` flag controls archiving without deletion. |
 
 ### Open — Next steps
 
 | ID | Task | Description |
 |---|---|---|
-| ~~B-24~~ | ~~**fodt template upload/export**~~ | **Done:** Output Templates tab has `Export sections as .fodt` and `Upload .fodt template` actions. `document-service` exposes `POST /template/upload` and `GET /template/download/:fileName`, and the edited section content can be written as an actual `.fodt` template used by Carbone. |
+| ~~B-24~~ | ~~**fodt template upload/export**~~ | **Done:** Output Layouts tab has `Export sections as .fodt` and `Upload .fodt template` actions. `document-service` exposes `POST /template/upload` and `GET /template/download/:fileName`, and the edited section content can be written as an actual `.fodt` template used by Carbone. |
 | ~~B-25~~ | ~~**Tomis comparison pass**~~ | **Done:** re-examined Tomis read-only after B-17–B-24 across Work List Templates, Work Acts, Commercial Offers, and Defect Acts. Detailed deltas and post-B-25 backlog are documented in `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`. |
 | ~~B-26~~ | ~~**Work Act Tomis-aligned list and options**~~ | **Done:** `Template Generation / Work Acts` upgraded from basic drafts to a grouped/searchable table with Work Act `Options` / print settings. `reportOptions` are persisted and sent into the document-service payload. |
-| ~~B-27~~ | ~~**Work List Template applicability rules**~~ | **Done:** Work List Templates registry has Search/Find/Clear, status and entry person filters, linked service types/equipment/hospitals/work equipment, entry person/date metadata, and the Work Act template picker uses applicability rules. |
+| ~~B-27~~ | ~~**Template applicability rules**~~ | **Done:** Templates registry has Search/Find/Clear, status and entry person filters, linked service types/equipment/hospitals/work equipment, entry person/date metadata, and the Work Act template picker uses applicability rules. |
 | ~~B-28~~ | ~~**Commercial Offer Tomis-aligned detail**~~ | **Done:** Commercial Offers now has active/price missing/archived/entry person filters, Tomis-style list columns, profile/group/hospital-system/side/contract/recipient/fax/invoice/currency metadata, Offer Text Header/Footer sections, archive action, and commercial offer payload fields for document-service generation. |
 | ~~B-29~~ | ~~**Defect Act Tomis-aligned visits**~~ | **Done:** Defect Acts now include an Actual Visits grid with DA/WA, planned start, work/travel hours, completed, comments, add/remove rows, document-service payload fields, preview rendering, and a `Create Part Request Offer` placeholder. |
 | ~~B-30~~ | ~~**Output template conditional rendering**~~ | **Done:** `.fodt` output templates now use Carbone conditional blocks for Work Act report options/signature area, Commercial Offer header/scope/footer/line items, and Defect Act visits/findings/correction/risk fields. |
 | ~~B-31~~ | ~~**Tomis visual editor crawl**~~ | **Done:** read-only inspected Tomis `Work List Template (Aespire TB)` detail, embedded rich/table editor, service/equipment/hospital/work-equipment applicability tabs, dual-list assignment controls, and `Template - Advanced Editor` Word-like ribbon. Findings documented in `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`. |
-| ~~B-32~~ | ~~**User-accessible visual template editor**~~ | **Done as MVP:** `Template Generation / Work List Templates` now has a document-like visual preview, contenteditable rich editor, basic formatting/list toolbar, checklist-row insertion, visual HTML persistence, and bug/workaround note field while keeping structured work rows and applicability metadata as the default generation source. |
+| ~~B-32~~ | ~~**User-accessible visual template editor**~~ | **Done as MVP:** `Template Generation / Templates` now has a document-like visual preview, contenteditable rich editor, basic formatting/list toolbar, checklist-row insertion, visual HTML persistence, and bug/workaround note field while keeping structured work rows and applicability metadata as the default generation source. |
 | ~~B-33~~ | ~~**Generated document preview and delivery**~~ | **Done as MVP:** source records, generated output preview, Work Act links, and `Documents` rows now expose `Open preview`; the Tomis-style modal includes print/quick print, zoom, export/download, email compose, inline service PDF preview, delivery status, and audit history. `document-service` now returns a separate inline `previewUrl` so PDF preview does not trigger a download dialog. |
 | ~~B-34~~ | ~~**Bug/feedback capture for production**~~ | **Done as MVP:** every user has `Report issue`, which enters a Windows-snipping-style click-drag selection mode, captures only the selected area, attaches that screenshot as admin-only supporting info, optionally opens a red-pencil annotation canvas, requires a short comment, saves context/page/role/selected records, and stores the report in the demo state. The report queue, screenshot, comment, status, and history are visible only when the active role is `admin`. |
 | ~~B-35-lite~~ | ~~**Production feedback backend foundation**~~ | **Done as storage/API foundation:** bug reports moved from browser-only `localStorage` into `document-service` backend storage: persistent `storage` volume, screenshot attachment files, `feedback-reports.json`, `files.json`, `POST/GET/PATCH /feedback/reports`, admin status/assignee filters, and status/assignee workflow. Full auth/permissions and database migration remain for backend phase. |
@@ -749,7 +749,7 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 | B-42 | **Backend data model and auth** | Move from demo/localStorage state to PostgreSQL, migrations, users/roles/permissions, documents/templates/files/feedback/audit models, sessions, and route permission checks. |
 | B-43 | **Production file custody** | Move `files.json` metadata into DB, add file version chains, signed-copy versions, object storage adapter, checksum/MIME/size validation, retention, backup, and access rules. |
 | B-44 | **Real email delivery** | Add SMTP/API sending, stored outbound email drafts, attachments from file registry, customer contact autofill, send audit, failure, and retry handling. |
-| B-45 | **Tomis deep crawl completion** | Follow `docs/TOMIS_CRAWL_PLAYBOOK.md` to finish Work Act, Defect Act, Commercial Offer, Work List Template, preview/export/email/upload, admin/permissions, and close-status crawl. |
+| B-45 | **Tomis deep crawl completion** | Follow `docs/TOMIS_CRAWL_PLAYBOOK.md` to finish Work Act, Defect Act, Commercial Offer, Templates, Output Layouts, preview/export/email/upload, admin/permissions, and close-status crawl. |
 
 ---
 
@@ -758,11 +758,11 @@ Sidebar strip (list type). Each entry: `place / case open date / status` with co
 Detailed read-only findings are documented in `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`.
 
 Core decision:
-- Work List Template = equipment/procedure checklist copied into a concrete Work Act.
-- Document Output Template = standardized printable form rendered by Carbone/LibreOffice.
-- Work Act generation flow implemented: Draft record -> auto-prefill equipment from case/equipment or manual equipment search/add/remove -> apply Work List Template -> edit isolated work rows/work description -> generate output document draft.
+- Template = equipment/procedure checklist copied into a concrete Work Act. Tomis findings may still call this a Work List Template.
+- Output Layout = standardized printable form rendered by Carbone/LibreOffice; this is advanced/admin-facing and should not dominate daily document creation.
+- Work Act generation flow implemented: Draft record -> auto-prefill equipment from case/equipment or manual equipment search/add/remove -> apply Template -> edit isolated work rows/work description -> generate output document draft.
 - The current generic template editor is temporary and should be superseded by the Work Act-specific workflow.
-- Daily users should not lay out a document from scratch each time. The normal flow is structured work record -> selected Work List Template / Output Template -> generated document.
+- Daily users should not lay out a document from scratch each time. The normal flow is structured work record -> selected Template -> standard Output Layout -> generated document.
 - Daily users still need access to a visual/rich editor for micro edits, bug/workaround capture, or user-specific templates, similar to Tomis. This requires a focused Tomis crawl with the user before implementation.
 - Generated documents need a Tomis-style delivery step: integrated print preview, PDF preview, print/quick print, export/download local copy, email PDF attachment, and keep delivery status linked to the source record and Documents repository. The crawl also confirmed page-level settings to model: A4 portrait, margins, header/footer, page size, orientation, page color/watermark, footer document/page numbering, and signature blocks.
 - Admin should be treated as an overseer role for users, roles, permissions, and pipeline/progress dashboards, not only as an approver.
@@ -790,7 +790,7 @@ All original criteria met and exceeded:
 - ✅ `docs/CHANGELOG.md` and `docs/PROJECT_PLAN.md` document implemented changes after every session.
 - ✅ `localStorage` persistence across page reloads.
 - ✅ Real Carbone document generation via `document-service` container with `.fodt` templates.
-- ✅ Template Generation module with Work Acts, Defect Acts, Commercial Offers, Work List Templates, and Output Templates workspaces.
+- ✅ Template Generation module with Work Acts, Defect Acts, Commercial Offers, Templates, and Output Layouts workspaces.
 
 ### Remaining open questions (user decision)
 

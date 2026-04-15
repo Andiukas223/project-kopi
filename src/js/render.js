@@ -11,7 +11,7 @@ const pageMeta = {
   service:   ["Service", "Medical equipment service jobs from intake to final work act."],
   sales:     ["Sales", "Quotation and customer approval pipeline before service handoff."],
   documents: ["Documents", "Document repository, search, status tracking, and file custody."],
-  templategen: ["Template Generation", "Work Act, Defect Act, Commercial Offer, Work List Template, and output template workspace."],
+  templategen: ["Template Generation", "Work Act, Defect Act, Commercial Offer, Templates, and advanced output layout workspace."],
   finance:   ["Finance", "Invoice generation, payment status, and job-linked billing queue."],
   customers: ["Customers", "Hospitals, clinics, and customer activity overview."],
   equipment: ["Equipment", "Customer equipment registry and service status."],
@@ -92,12 +92,12 @@ const moduleSpecs = {
     planned: "Global search with indexed metadata (location / contract / date / executor / who signed / description) · Search UI: filter chips + text field + Search / Cancel buttons · Carbone backend integration for real document generation · Rejection comment thread · Re-upload signed version flow"
   },
   templategen: {
-    purpose: "Dedicated document creation workspace separated from the Documents repository. This is where Work Acts, Defect Acts, Commercial Offers, Work List Templates, and Output Templates are prepared and generated.",
-    roles: "Service owns Work Acts, Defect Acts, and Work List Templates. Sales owns Commercial Offers. Admin manages Output Templates. Manager can review as read-only.",
-    submodules: "Work Acts · Defect Acts · Commercial Offers · Work List Templates · Output Templates · Preview/generate panel",
-    pipeline: "Create draft -> choose source job/equipment/customer -> apply Work List Template when needed -> edit content/sections -> generate PDF/DOCX/ODT -> save generated file into Documents",
+    purpose: "Dedicated document creation workspace separated from the Documents repository. This is where Work Acts, Defect Acts, Commercial Offers, and reusable Templates are prepared and generated.",
+    roles: "Service owns Work Acts, Defect Acts, and Templates. Sales owns Commercial Offers. Admin manages advanced output layouts. Manager can review as read-only.",
+    submodules: "Work Acts · Defect Acts · Commercial Offers · Templates · Advanced output layouts · Preview/generate panel",
+    pipeline: "Create draft -> choose source job/equipment/customer -> apply Template when needed -> edit content/sections -> generate PDF/DOCX/ODT -> save generated file into Documents",
     actions: "Create draft · Apply work list template · Edit output template · Generate document · Save generated file into Documents",
-    planned: "Move Work Act draft list here from Service detail · Dedicated Work List Template registry CRUD · Output Template versioning and template file upload"
+    planned: "Move Work Act draft list here from Service detail · Dedicated Templates registry CRUD · advanced output layout versioning and file upload"
   },
   customers: {
     purpose: "Registry of hospitals, clinics, and private medical institutions. Central reference for jobs, documents, equipment, and parts delivery addresses. Office Manager is primary manager; all roles use it read-only for autofill in forms.",
@@ -1965,7 +1965,7 @@ function workActDraftPanelLegacy(job, act) {
   if (!act) {
     return `
       <div class="work-act-empty">
-        <p>Draft record first, then equipment selection and Work List Template apply.</p>
+        <p>Draft record first, then equipment selection and Template apply.</p>
         <button class="btn primary" type="button" data-work-act-create="${escapeHtml(job.id)}">Create Work Act draft</button>
       </div>
     `;
@@ -2008,7 +2008,7 @@ function workActDraftPanelLegacy(job, act) {
       </div>
       <div class="work-act-section work-act-template-row">
         <label class="filter-control">
-          <span>Work List Template Name</span>
+          <span>Template</span>
           <select data-work-act-template="${escapeHtml(act.id)}">
             <option value="">Not selected</option>
             ${workListTemplateOptionsForAct(act).map((tpl) => `<option value="${escapeHtml(tpl.id)}" ${tpl.id === act.workTemplateId ? "selected" : ""}>${escapeHtml(tpl.name)}</option>`).join("")}
@@ -2036,7 +2036,7 @@ function workActDraftPanel(job, act) {
   if (!act) {
     return `
       <div class="work-act-empty">
-        <p>Draft record first, then equipment selection and Work List Template Name apply.</p>
+        <p>Draft record first, then equipment selection and Template apply.</p>
         <button class="btn primary" type="button" data-work-act-create="${escapeHtml(job.id)}">Create Work Act draft</button>
       </div>
     `;
@@ -2088,7 +2088,7 @@ function workActDraftPanel(job, act) {
       </div>
       <div class="tg-command-bar compact">
         <label class="filter-control">
-          <span>Work List Template Name</span>
+          <span>Template</span>
           <select data-work-act-template="${escapeHtml(act.id)}">
             <option value="">Not selected</option>
             ${workListTemplateOptionsForAct(act).map((tpl) => `<option value="${escapeHtml(tpl.id)}" ${tpl.id === act.workTemplateId ? "selected" : ""}>${escapeHtml(tpl.name)}</option>`).join("")}
@@ -2807,8 +2807,8 @@ function templateGenerationTabs(activeTab) {
     ["work-acts", "Work Acts"],
     ["defect-acts", "Defect Acts"],
     ["commercial-offers", "Commercial Offers"],
-    ["work-list-templates", "Work List Templates"],
-    ["output-templates", "Output Templates"]
+    ["work-list-templates", "Templates"],
+    ["output-templates", "Output Layouts"]
   ];
   return `
     <div class="eq-tab-bar">
@@ -2845,7 +2845,7 @@ function workActsWorkspace() {
       <div class="section-heading">
         <div>
           <div class="section-title">Work Acts</div>
-          <div class="filter-note">Drafts are generated from service jobs or created manually. Work List Templates are copied into a concrete Work Act as isolated rows.</div>
+          <div class="filter-note">Drafts are generated from service jobs or created manually. Templates are copied into a concrete Work Act as isolated rows.</div>
         </div>
         <div class="tg-heading-actions">
           <button class="btn ghost compact" type="button" data-output-template-route="tpl-service-act">Open output template</button>
@@ -3427,7 +3427,7 @@ function workListTemplatesWorkspace() {
     <section class="panel">
       <div class="section-heading">
         <div>
-          <div class="section-title">Work List Templates</div>
+          <div class="section-title">Templates</div>
           <div class="filter-note">Equipment/procedure-specific checklists. Select a template to edit, duplicate, or archive it.</div>
         </div>
         <div class="tg-heading-actions">
@@ -3515,7 +3515,7 @@ function wltNewForm() {
   const defaultPerson = users.find((user) => user.roles?.some((role) => ["service", "svcmgr"].includes(role)))?.name || "";
   return `
     <div class="detail-block" style="margin-bottom:12px">
-      <div class="detail-group-title">New Work List Template</div>
+      <div class="detail-group-title">New Template</div>
       ${state.wltNewError ? `<div class="form-error">${escapeHtml(state.wltNewError)}</div>` : ""}
       <div class="tg-form-grid">
         <label class="filter-control">
@@ -3716,7 +3716,7 @@ function defaultWltVisualHtml(tpl) {
     </tr>
   `).join("");
   return `
-    <h3>${escapeHtml(tpl.name || "Work List Template")}</h3>
+    <h3>${escapeHtml(tpl.name || "Template")}</h3>
     ${tpl.bodyText ? `<p>${escapeHtml(tpl.bodyText)}</p>` : ""}
     <table>
       <thead>

@@ -83,7 +83,7 @@ function handleClick(event) {
     return;
   }
 
-  // Work List Templates CRUD
+  // Templates CRUD
   const wltNewOpen = event.target.closest("[data-wlt-new-open]");
   if (wltNewOpen) {
     state.wltNewOpen = true;
@@ -1009,7 +1009,7 @@ function applyWorkListTemplate(actId) {
   const template = workListTemplates.find((item) => item.id === act.workTemplateId);
   if (!template) {
     state.selectedWorkActId = act.id;
-    state.workActError = "Select a Work List Template first.";
+    state.workActError = "Select a Template first.";
     renderAppCallback();
     return;
   }
@@ -1545,7 +1545,7 @@ function commercialOfferTotal(draft) {
 }
 
 // ---------------------------------------------------------------------------
-// Work List Template CRUD helpers
+// Template CRUD helpers
 // ---------------------------------------------------------------------------
 function saveNewWlt() {
   const name = document.getElementById("wlt-new-name")?.value.trim() || "";
@@ -1723,7 +1723,7 @@ function defaultWltRichHtml(name, bodyText, rows) {
     </tr>
   `).join("");
   return `
-    <h3>${escapeHtmlForRich(name || "Work List Template")}</h3>
+    <h3>${escapeHtmlForRich(name || "Template")}</h3>
     ${bodyText ? `<p>${escapeHtmlForRich(bodyText)}</p>` : ""}
     <table>
       <thead><tr><th>No.</th><th>Work description</th><th>Expected / measured value</th><th>Notes</th></tr></thead>

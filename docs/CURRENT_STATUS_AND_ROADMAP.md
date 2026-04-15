@@ -119,8 +119,8 @@ Implemented tabs:
 - `Work Acts`
 - `Defect Acts`
 - `Commercial Offers`
-- `Work List Templates`
-- `Output Templates`
+- `Templates`
+- `Output Layouts`
 
 Work Acts implemented:
 
@@ -128,7 +128,7 @@ Work Acts implemented:
 - Source service job selector.
 - Work Act draft creation.
 - Equipment auto-prefill from job and manual equipment search/dropdown add/remove.
-- Work List Template Name picker.
+- Template picker.
 - Work Description field.
 - Work rows/checklist editing.
 - Report options/print settings, including equipment working, ready for use, hygiene, signature, working hours, travel hours, started/completed time, system identity/name.
@@ -162,7 +162,7 @@ Commercial Offers implemented:
 - Source-aware preview/download/email audit.
 - Output template conditional rendering.
 
-Work List Templates implemented:
+Templates implemented:
 
 - Registry list with search/filter concepts.
 - Template name, company, entry person/date metadata.
@@ -177,13 +177,14 @@ Work List Templates implemented:
   - bug/workaround note field
 - Structured work rows and applicability metadata remain the default generation source. The visual editor is for controlled micro edits and future template authoring, not for forcing daily users to lay out documents from scratch.
 
-Output Templates implemented:
+Output Layouts implemented:
 
 - Structured section editor with merge field hints.
 - `Export sections as .fodt`.
 - `Upload .fodt template`.
 - Carbone template map for Work Act, Commercial Offer, Defect Act, and generic documents.
 - Conditional `.fodt` rendering for Work Act report options, Commercial Offer sections, and Defect Act visits/findings/correction/risk.
+- This is an advanced/admin-oriented printable layout workspace, not the normal daily template picker.
 
 ### Generated Document Preview And Delivery
 
@@ -246,6 +247,8 @@ Not implemented yet:
 
 - `Documents` is a repository/search/file-custody module.
 - `Template Generation` is the creation/editor/generation module.
+- User-facing equipment/procedure checklists are called `Templates` in the web UI. Internal notes may still refer to Tomis `Work List Templates` when describing the old system.
+- `Output Layouts` are advanced/admin printable form layouts for Carbone/LibreOffice generation; they should not dominate the daily document creation flow and may later move under Admin/settings.
 - Daily users should normally generate documents from structured records and prepared templates, not design each document from scratch.
 - Daily users still need access to a controlled visual/rich editor for micro edits, user-specific templates, and production bug/workaround capture.
 - Admin is an overseer for users, roles, permissions, pipeline progress, and exception queues, not just a final approver.
@@ -376,7 +379,7 @@ Goal: finish reverse-engineering enough of Tomis to avoid guessing.
 Plan:
 
 1. Follow `docs/TOMIS_CRAWL_PLAYBOOK.md`.
-2. Crawl Work Acts, Defect Acts, Commercial Offers, Work List Templates, Output Templates, document upload, preview, email/export, signatures, permissions, and admin/user behavior.
+2. Crawl Work Acts, Defect Acts, Commercial Offers, Templates, Output Layouts, document upload, preview, email/export, signatures, permissions, and admin/user behavior.
 3. Record field names, list columns, tabs, hidden options, status changes, generated output, and error/loading behavior.
 4. Update `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md` after every crawl session.
 5. Convert findings into backlog items only when they improve our product direction.

@@ -1429,7 +1429,7 @@ export const documentTemplateBlueprints = {
 };
 
 // ---------------------------------------------------------------------------
-// Work List Templates copied into concrete Work Act drafts.
+// Templates copied into concrete Work Act drafts.
 // These are equipment/procedure checklists, not final Carbone document layouts.
 // ---------------------------------------------------------------------------
 export const workListTemplates = [
