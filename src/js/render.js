@@ -5240,9 +5240,9 @@ function feedbackLauncher() {
   return `
     <div class="feedback-launcher-wrap" data-feedback-ignore>
       ${state.feedbackSavedNotice ? `<div class="feedback-toast">${escapeHtml(state.feedbackSavedNotice)}</div>` : ""}
-      <button class="feedback-launcher" type="button" data-feedback-open>
-        <span class="feedback-pencil-dot"></span>
-        <span>Report issue</span>
+      <button class="feedback-launcher" type="button" data-feedback-open aria-label="Report issue" title="Report issue">
+        <span class="feedback-alert-mark" aria-hidden="true">!</span>
+        <span class="sr-only">Report issue</span>
       </button>
     </div>
   `;

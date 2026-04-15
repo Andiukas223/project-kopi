@@ -66,7 +66,7 @@
   color: var(--text);
   display: block;
   font-family: "JetBrains Mono", monospace;
-  font-size: 24px;
+  font-size: 22px;
   margin-top: 3px;
 }
 
@@ -450,20 +450,28 @@
   background: var(--wb);
   border: 1px solid var(--wb-dark);
   border-radius: var(--r);
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  grid-template-columns: minmax(220px, 1fr) minmax(110px, 150px) auto auto auto;
-  justify-content: stretch;
+  justify-content: flex-start;
   margin-bottom: 12px;
   padding: 10px;
 }
 
 .template-controls .filter-control {
+  flex: 1 1 190px;
   min-width: 0;
 }
 
+.template-controls .filter-control:has(#output-format) {
+  flex: 0 1 140px;
+}
+
 .template-controls .btn {
-  justify-self: start;
+  flex: 1 1 150px;
+  max-width: 230px;
+  min-width: 0;
+  white-space: normal;
 }
 
 .sr-only {
@@ -2148,20 +2156,32 @@
   align-items: center;
   background: var(--issue-red);
   border: 1px solid var(--issue-red-dk);
-  border-radius: 8px;
+  border-radius: 50%;
   box-shadow: 0 12px 30px rgba(10, 12, 10, .24);
-  color: var(--on-accent);
+  color: #ffffff;
   cursor: pointer;
   display: inline-flex;
+  font-family: var(--mono);
+  font-size: 24px;
   font-weight: 800;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0 14px;
+  height: 38px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  width: 38px;
+}
+
+.feedback-launcher:hover {
+  background: var(--issue-red-dk);
 }
 
 .feedback-launcher:disabled {
   cursor: wait;
   opacity: .72;
+}
+
+.feedback-alert-mark {
+  transform: translateY(-1px);
 }
 
 .feedback-pencil-dot {
