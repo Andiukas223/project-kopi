@@ -1704,13 +1704,7 @@ function roleFocusPanel() {
     `;
   }
 
-  // admin — document pipeline + jobs
-  return `
-    <section class="panel">
-      <div class="section-heading"><div class="section-title">Document pipeline</div></div>
-      ${pipelineBoard()}
-    </section>
-  `;
+  return "";
 }
 
 // Inline jobs table body (reuses columns from jobsTable but without the outer card wrapper).
