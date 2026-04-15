@@ -1,5 +1,5 @@
 import { qs, qsa } from "./dom.js";
-import { documents, invoices, jobs, partsRequests, roles, vendorReturns } from "./data.js";
+import { contracts, documents, invoices, jobs, partsRequests, roles, vendorReturns } from "./data.js";
 import { saveDemoState } from "./persistence.js";
 import { renderPage, renderRemindersStrip } from "./render.js";
 import { setPage, setRole, setTheme, state } from "./state.js";
@@ -42,7 +42,7 @@ function updateSidebarBadges() {
       : 0;
 
   // Documents badge — overdue docs relevant to this role
-  const docsOwnerLabel = { sales: "Sales", finance: "Finance", service: "Service", svcmgr: "Service" }[r];
+  const docsOwnerLabel = { sales: "Sales", finance: "Finance", service: "Service", svcmgr: "Service", admin: null }[r];
   const docsCount = docsOwnerLabel
     ? documents.filter((d) => d.owner === docsOwnerLabel && !["Approved", "Archived"].includes(d.pipelineStep)).length
     : overdueCount;
@@ -54,6 +54,7 @@ function updateSidebarBadges() {
   setBadge("sb-documents", docsCount,     "warn");
   setBadge("sb-templategen", 0, "warn");
   setBadge("sb-finance",   financeCount,  "warn");
+  setBadge("sb-contracts", contracts.filter((ct) => ct.status === "Edit mode" || ct.status === "Expired").length, "warn");
 }
 
 function ownerForRole(role) {

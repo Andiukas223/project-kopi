@@ -6,8 +6,8 @@
 export const roles = [
   { id: "service",   label: "Service workspace",    description: "Service engineers: create cases, log diagnostics/repair, upload signed documents." },
   { id: "svcmgr",   label: "Service Mgr workspace", description: "Service Manager: approves parts requests, assigns and controls engineers." },
-  { id: "sales",     label: "Sales workspace",       description: "Sales: commercial offers, contracts, customer approval, invoice upload." },
-  { id: "finance",   label: "Finance workspace",     description: "Finance: generates/uploads invoices, manages payment status (paid/pending/canceled)." },
+  { id: "sales",     label: "Sales workspace",       description: "Sales: commercial offers, customer approval, and service handoff." },
+  { id: "finance",   label: "Finance workspace",     description: "Finance: invoice register, uploaded invoice files, and payment status." },
   { id: "office",    label: "Office Mgr workspace",  description: "Office Manager: customer registry, contacts, calendar, case creation, reminders." },
   { id: "logistics", label: "Logistics workspace",   description: "Logistics Manager: parts delivery, vendor returns, logistics issue resolution." },
   { id: "warehouse", label: "Warehouse workspace",   description: "Warehouse: stock confirmation, parts arrival, inventory management." },

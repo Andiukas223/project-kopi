@@ -47,6 +47,7 @@ export function loadPersistedDemoState() {
       state.feedbackBackendStatus = "";
       state.documentUploadOpen = false;
       state.documentUploadTargetId = null;
+      state.documentUploadDefaultType = "";
       state.documentUploadError = "";
     }
 

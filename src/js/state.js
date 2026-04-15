@@ -29,6 +29,7 @@ export const state = {
   documentRejectError: "",
   documentUploadOpen: false,
   documentUploadTargetId: null,
+  documentUploadDefaultType: "",
   documentUploadError: "",
   printPreviewOpen: false,
   printPreviewDocumentId: null,
@@ -105,9 +106,11 @@ export const state = {
 
   // Sales module
   selectedQuotationId: "QTE-501",
-  salesTab: "offer",     // offer | contract | approval | handoff
+  salesTab: "offer",     // offer | approval | handoff
   newQuotationOpen: false,
   newQuotationError: "",
+
+  // Contracts module
   selectedContractId: "CTR-101",
   contractEditMode: false,
   contractEditError: "",

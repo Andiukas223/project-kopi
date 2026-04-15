@@ -9,7 +9,8 @@ import { state } from "./state.js";
 const pageMeta = {
   command:   ["Command Center", "Live overview for service work, documents, approvals, and overdue items."],
   service:   ["Service", "Medical equipment service jobs from intake to final work act."],
-  sales:     ["Sales", "Quotation and customer approval pipeline before service handoff."],
+  sales:     ["Sales", "Commercial offers, customer approval, and service handoff."],
+  contracts: ["Contracts", "Signed customer contracts, PM/install/service specifications, and validity tracking."],
   documents: ["Documents", "Document repository, search, status tracking, and file custody."],
   templategen: ["Template Generation", "Work Act, Defect Act, Commercial Offer, Templates, and advanced output layout workspace."],
   finance:   ["Finance", "Invoice generation, payment status, and job-linked billing queue."],
@@ -68,15 +69,23 @@ const moduleSpecs = {
     planned: "Full wizard with all 4 pipeline branches · Contract balance deduction + warning display · PM submodule with auto-scheduling algorithm · Vendor return trigger from Work Act notation · Parts request approval flow"
   },
   sales: {
-    purpose: "Quotation pipeline and customer approval management before service handoff. Sales handles commercial offer creation, contract upload and indexing (new installations), and invoice upload. Finance manages payment status.",
-    roles: "Sales / Sales Manager (same role) — creates offers, manages contracts, uploads invoice. Finance — generates/uploads invoice PDF, marks payment status (paid / pending / canceled). History entry preserved on status change.",
-    submodules: "Quotations · Customer approvals · Service handoff · Contract management",
-    pipeline: "Commercial Offer draft → Sent to customer → Customer approved → Handoff to Service  |OR|  Rejected\nContract flow: Sales uploads contract → Admin takes ownership after handoff. Sales cannot edit after submission. Admin can restore archived contract to edit mode (Sales then modifies).",
-    actions: "Create commercial offer · Mark customer approved · Send to service · Upload contract · Generate / upload invoice · Mark invoice paid / pending / canceled",
-    planned: "Commercial offer template generation (Carbone) · Customer approval tracking with due dates · Invoice payment status history · Contract indexing form with warranty fields for new installations · Autofill from installed system Device ID"
+    purpose: "Commercial offer and customer approval workspace before work is handed to Service. Signed contract specifications and invoice payment status live in their own modules.",
+    roles: "Sales creates offers, tracks customer approval, and hands approved work to Service. Admin can review all offer states.",
+    submodules: "Quotations · Customer approvals · Service handoff",
+    pipeline: "Commercial Offer draft → Sent to customer → Customer approved → Handoff to Service  |OR|  Rejected",
+    actions: "Create commercial offer · Mark customer approved · Send to service",
+    planned: "Commercial offer template generation (Carbone) · Customer approval tracking with due dates · cleaner handoff audit"
+  },
+  contracts: {
+    purpose: "Signed customer contract workspace. This is where PM, installation, and service agreements are uploaded, indexed, and configured for scheduling, warranty, and service entitlement.",
+    roles: "Admin owns contract configuration. Sales/Office can supply signed contract files. Service and Calendar consume PM frequency, validity period, equipment link, warranty scope, and remaining balance.",
+    submodules: "Signed contract upload · Contract register · PM/install/service specifications · Validity and balance tracking",
+    pipeline: "Signed contract received -> Upload contract document -> Configure customer/equipment/type/period/value/PM frequency/spec notes -> Active contract -> Calendar PM schedule and Service entitlement use the specs",
+    actions: "Upload signed contract · Edit contract specs · Track consumed / remaining value · Set PM visits per year · Archive or mark expired",
+    planned: "Contract file versioning, warranty start from accepted installation upload, PM schedule lock rules, contract-specific service coverage checks"
   },
   finance: {
-    purpose: "Finance billing workspace for service-linked invoices. Finance generates invoice records, tracks payment status, and keeps invoices tied back to jobs and documents.",
+    purpose: "Invoice register for created and uploaded invoices. Finance generates invoice records, tracks payment status, and keeps invoices tied back to jobs and documents.",
     roles: "Finance owns invoice generation and payment status. Admin can review all billing records. Manager can use this as a read-only operating view.",
     submodules: "Invoice queue · Job-linked invoice detail · Payment status controls · Generated document reference",
     pipeline: "Draft invoice -> Generate invoice -> Pending payment -> Paid / Cancelled",
@@ -873,6 +882,7 @@ const documentTypeOptions = [
   "Diagnostic report",
   "Commercial offer",
   "Defect act",
+  "Contract",
   "Contract annex",
   "Warranty confirmation",
   "Parts request",
@@ -885,6 +895,7 @@ function documentUploadPanel() {
   if (!state.documentUploadOpen) return "";
   const targetDoc = documents.find((doc) => doc.id === state.documentUploadTargetId);
   const defaultJob = targetDoc ? jobs.find((job) => job.id === targetDoc.jobId) : jobs[0];
+  const defaultType = state.documentUploadDefaultType || documentTypeOptions[0];
   return `
     <section class="panel">
       <div class="section-heading">
@@ -908,7 +919,7 @@ function documentUploadPanel() {
           <div class="field">
             <label for="doc-upload-type">Document type</label>
             <select id="doc-upload-type">
-              ${documentTypeOptions.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`).join("")}
+              ${documentTypeOptions.map((type) => `<option value="${escapeHtml(type)}" ${type === defaultType ? "selected" : ""}>${escapeHtml(type)}</option>`).join("")}
             </select>
           </div>
           <div class="field">
@@ -1623,7 +1634,7 @@ function roleFocusPanel() {
           <span class="role-tag ${r}">${r}</span>
         </div>
         ${ownerDocs.length
-          ? documentsTableRows(ownerDocs, { salesActions: true })
+          ? documentsTableRows(ownerDocs)
           : `<div class="modal-placeholder">No ${ownerLabel.toLowerCase()} documents in pipeline.</div>`}
       </section>
     `;
@@ -1722,14 +1733,13 @@ function jobsTableRows(rows, options = {}) {
 }
 
 // Inline documents table body for focus panels.
-function documentsTableRows(rows, options = {}) {
+function documentsTableRows(rows) {
   if (!rows.length) return `<div class="modal-placeholder">No documents to display.</div>`;
-  const showSalesActions = Boolean(options.salesActions);
   return `
     <table class="data-table">
       <thead>
         <tr>
-          <th>Doc ID</th><th>Type</th><th>Customer</th><th>Stage</th><th>Due</th>${showSalesActions ? "<th>Action</th>" : ""}
+          <th>Doc ID</th><th>Type</th><th>Customer</th><th>Stage</th><th>Due</th>
         </tr>
       </thead>
       <tbody>
@@ -1740,28 +1750,11 @@ function documentsTableRows(rows, options = {}) {
             <td>${escapeHtml(doc.customer)}</td>
             <td>${statusChip(documentStageForUi(doc))}</td>
             <td>${dueCell(doc)}</td>
-            ${showSalesActions ? `
-              <td>
-                <div class="table-actions">
-                  <button class="btn ghost compact" type="button" data-doc-view="${escapeHtml(doc.id)}">View</button>
-                  <button class="btn ghost compact" type="button" data-doc-edit="${escapeHtml(doc.id)}">Edit</button>
-                  ${salesInvoiceAction(doc)}
-                </div>
-              </td>
-            ` : ""}
           </tr>
         `).join("")}
       </tbody>
     </table>
   `;
-}
-
-function salesInvoiceAction(doc) {
-  const invoice = invoices.find((item) => item.documentId === doc.id || item.jobId === doc.jobId || item.customer === doc.customer);
-  if (invoice?.status === "Generated") {
-    return `<button class="btn done compact" type="button" disabled>${escapeHtml(invoice.invoiceNo || "Invoice generated")}</button>`;
-  }
-  return `<button class="btn warn compact" type="button" data-doc-generate-invoice="${escapeHtml(doc.id)}">Generate invoice</button>`;
 }
 
 // Compact parts table for svcmgr approval queue and logistics focus panels.
@@ -2249,7 +2242,7 @@ function salesQuotationsTable() {
   `;
 }
 
-function salesContractsTable() {
+function contractsTable() {
   return `
     <table class="data-table">
       <thead>
@@ -2257,6 +2250,7 @@ function salesContractsTable() {
           <th>Contract</th>
           <th>Customer</th>
           <th>Type</th>
+          <th>Equipment</th>
           <th class="num">Remaining</th>
           <th>Status</th>
           <th>End</th>
@@ -2269,6 +2263,7 @@ function salesContractsTable() {
             <td class="mono">${escapeHtml(ct.id)}</td>
             <td>${escapeHtml(ct.customer)}</td>
             <td>${escapeHtml(ct.type)}</td>
+            <td>${escapeHtml(ct.equipment)}</td>
             <td class="num">${ct.remaining.toLocaleString()} ${ct.currency}</td>
             <td>${statusChip(ct.status)}</td>
             <td class="mono">${escapeHtml(ct.end)}</td>
@@ -2364,21 +2359,47 @@ function contractManagementPanel(ct) {
   `;
 }
 
-function salesContractManagement() {
-  const ct = selectedContract();
+function contractUploadPanel() {
   return `
-    <section class="split-layout">
-      <div class="panel split-left">
-        <div class="section-heading">
-          <div class="section-title">Contract management (${contracts.length})</div>
-          <span class="role-tag sales">sales</span>
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <div class="section-title">Signed contract intake</div>
+          <div class="filter-note">Upload the signed PM, installation, or service agreement first, then configure the contract specs below.</div>
         </div>
-        ${salesContractsTable()}
+        <button class="btn primary compact" type="button" data-doc-upload-open data-doc-upload-type="Contract">Upload signed contract</button>
       </div>
-      <div class="panel split-right" data-contract-detail>
-        ${contractManagementPanel(ct)}
+      <div class="info-box">
+        <div class="info-body">Contracts are the source for PM frequency, warranty/service entitlement, validity dates, and remaining service balance. Service and Calendar should read those specs instead of duplicating them in Sales or Finance.</div>
       </div>
     </section>
+  `;
+}
+
+function contractsPage() {
+  const ct = selectedContract();
+  return `
+    ${pageHeader("contracts")}
+    <div class="page-content">
+      ${contractUploadPanel()}
+      ${documentUploadPanel()}
+      <section class="split-layout">
+        <div class="panel split-left">
+          <div class="section-heading">
+            <div>
+              <div class="section-title">Contracts (${contracts.length})</div>
+              <div class="filter-note">Signed agreements and configured PM/install/service specifications.</div>
+            </div>
+            <span class="role-tag admin">admin</span>
+          </div>
+          ${contractsTable()}
+        </div>
+        <div class="panel split-right" data-contract-detail>
+          ${contractManagementPanel(ct)}
+        </div>
+      </section>
+      ${devSpecPanel("contracts")}
+    </div>
   `;
 }
 
@@ -2428,8 +2449,8 @@ function newQuotationPanel() {
 }
 
 function salesDetailPanel(qte) {
-  const tabs       = ["offer", "contract", "approval", "handoff"];
-  const tabLabels  = { offer: "Offer", contract: "Contract / Warranty", approval: "Approval", handoff: "Handoff" };
+  const tabs       = ["offer", "approval", "handoff"];
+  const tabLabels  = { offer: "Offer", approval: "Approval", handoff: "Handoff" };
   const activeTab  = state.salesTab || "offer";
 
   const tabBar = tabs.map((t) => `
@@ -2438,7 +2459,6 @@ function salesDetailPanel(qte) {
   `).join("");
 
   const content = activeTab === "offer"    ? salesOfferTab(qte)
-                : activeTab === "contract" ? salesContractTab(qte)
                 : activeTab === "approval" ? salesApprovalTab(qte)
                 :                            salesHandoffTab(qte);
 
@@ -2462,7 +2482,7 @@ function salesOfferTab(qte) {
       <div class="field"><div class="field-label">Owner</div><div class="field-value">${escapeHtml(qte.owner)}</div></div>
       <div class="field"><div class="field-label">Created</div><div class="field-value mono">${escapeHtml(qte.created)}</div></div>
       <div class="field"><div class="field-label">Due</div><div class="field-value mono">${escapeHtml(qte.due)}</div></div>
-      <div class="field full"><div class="field-label">Notes</div><div class="field-value">${escapeHtml(qte.notes)}</div></div>
+      <div class="field full"><div class="field-label">Offer notes</div><div class="field-value">${escapeHtml(qte.notes)}</div></div>
     </div>
     ${qte.status === "Draft" ? `
       <div class="eq-footer">
@@ -2471,25 +2491,6 @@ function salesOfferTab(qte) {
         </button>
       </div>
     ` : ""}
-  `;
-}
-
-function salesContractTab(qte) {
-  if (!["PM Contract", "Installation"].includes(qte.type)) {
-    return `<div class="modal-placeholder">Contract indexing applies to PM Contract and Installation offer types only.</div>`;
-  }
-  return `
-    <div class="field-stack">
-      <div class="field"><div class="field-label">Linked contract</div><div class="field-value mono">${escapeHtml(qte.contractId || "Not yet indexed")}</div></div>
-      <div class="field"><div class="field-label">Warranty start</div><div class="field-value mono">${escapeHtml(qte.warrantyStart || "—")}</div></div>
-      <div class="field"><div class="field-label">Warranty end</div><div class="field-value mono">${escapeHtml(qte.warrantyEnd || "—")}</div></div>
-      <div class="field"><div class="field-label">PM visits / year</div><div class="field-value mono">${qte.pmPerYear || "—"}</div></div>
-      <div class="field full"><div class="field-label">Contract scope</div><div class="field-value">${escapeHtml(qte.contractScope || "—")}</div></div>
-    </div>
-    <div class="info-box" style="margin-top:12px">
-      <div class="info-title">Contract ownership</div>
-      <div class="info-body">After handoff to Service, contract ownership transfers to Admin. Sales cannot edit the contract after submission. Admin can restore it to edit mode from the Admin module.</div>
-    </div>
   `;
 }
 
@@ -2527,7 +2528,7 @@ function salesHandoffTab(qte) {
     return `
       <div class="info-box" style="margin-top:8px">
         <div class="info-title">Handed off to Service</div>
-        <div class="info-body">Resulting job: <span class="mono">${escapeHtml(qte.handedOffJobId || "—")}</span>. The Service team now owns this case. Contract ownership has transferred to Admin.</div>
+        <div class="info-body">Resulting job: <span class="mono">${escapeHtml(qte.handedOffJobId || "—")}</span>. The Service team now owns this case.</div>
       </div>
     `;
   }
@@ -2545,14 +2546,13 @@ function salesHandoffTab(qte) {
     </div>
     <div class="info-box" style="margin-top:12px">
       <div class="info-title">What happens on handoff</div>
-      <div class="info-body">A new service job is created automatically. The offer status changes to "Handed off". Contract ownership transfers to Admin. This action cannot be undone.</div>
+      <div class="info-body">A new service job is created automatically. The offer status changes to "Handed off". Signed contract upload and PM/service specifications are handled in Contracts.</div>
     </div>
   `;
 }
 
 function salesPage() {
   const qte          = selectedQuotation();
-  const salesDocs = documents.filter((doc) => doc.owner === "Sales");
 
   return `
     ${pageHeader("sales")}
@@ -2569,18 +2569,7 @@ function salesPage() {
           ${qte ? salesDetailPanel(qte) : `<div class="modal-placeholder">Select a quotation to view details.</div>`}
         </div>
       </section>
-      <section class="panel">
-        <div class="section-heading">
-          <div>
-            <div class="section-title">Sales document list</div>
-            <div class="filter-note">Use the same document return flow, with invoice generation available for sales-owned records.</div>
-          </div>
-          <span class="role-tag sales">sales</span>
-        </div>
-        ${documentsTableRows(salesDocs, { salesActions: true })}
-      </section>
       ${newQuotationPanel()}
-      ${salesContractManagement()}
 
       ${devSpecPanel("sales")}
     </div>
@@ -2600,7 +2589,7 @@ function financeInvoicesTable() {
       <thead>
         <tr>
           <th>Invoice</th><th>Job</th><th>Customer</th>
-          <th class="num">Amount</th><th>Status</th><th>Payment</th><th>Due</th>
+          <th class="num">Amount</th><th>File</th><th>Payment</th><th>Due</th>
         </tr>
       </thead>
       <tbody>
@@ -2611,7 +2600,7 @@ function financeInvoicesTable() {
             <td class="mono">${escapeHtml(inv.jobId)}</td>
             <td>${escapeHtml(inv.customer)}</td>
             <td class="num">${inv.amount.toLocaleString()} ${inv.currency}</td>
-            <td>${statusChip(inv.status)}</td>
+            <td>${inv.documentId ? statusChip("Uploaded") : statusChip(inv.status)}</td>
             <td>${statusChip(inv.paymentStatus)}</td>
             <td class="mono">${escapeHtml(inv.due)}</td>
           </tr>
@@ -2650,7 +2639,7 @@ function financeDetailPanel(inv) {
       ` : `<div class="modal-placeholder">No linked job found.</div>`}
     </div>
     <div class="detail-block">
-      <div class="detail-group-title">Generated document</div>
+      <div class="detail-group-title">Invoice file</div>
       ${doc ? `
         <div class="linked-list">
           <div class="linked-row">
@@ -2659,7 +2648,7 @@ function financeDetailPanel(inv) {
             ${statusChip(documentStageForUi(doc))}
           </div>
         </div>
-      ` : `<div class="modal-placeholder">Generate invoice to create a Finance document record.</div>`}
+      ` : `<div class="modal-placeholder">Generate or upload an invoice file to create a linked document record.</div>`}
     </div>
     <div class="detail-block">
       <div class="detail-group-title">Notes</div>
@@ -2675,27 +2664,18 @@ function financeDetailPanel(inv) {
 
 function financePage() {
   const inv = selectedInvoice();
-  const pendingCount = invoices.filter((item) => item.paymentStatus === "Pending").length;
-  const paidCount = invoices.filter((item) => item.paymentStatus === "Paid").length;
-  const cancelledCount = invoices.filter((item) => item.paymentStatus === "Cancelled").length;
-  const pendingValue = invoices
-    .filter((item) => item.paymentStatus === "Pending")
-    .reduce((sum, item) => sum + item.amount, 0);
 
   return `
     ${pageHeader("finance")}
     <div class="page-content">
-      <div class="stat-grid">
-        ${statCard("Pending invoices", pendingCount, "Awaiting payment", pendingCount > 0 ? "warn" : "ok")}
-        ${statCard("Pending value", `${pendingValue.toLocaleString()} EUR`, "Open amount", "info")}
-        ${statCard("Paid", paidCount, "Completed payments", paidCount > 0 ? "ok" : "")}
-        ${statCard("Cancelled", cancelledCount, "Stopped or revised", cancelledCount > 0 ? "danger" : "")}
-      </div>
       <section class="split-layout finance-layout">
         <div class="panel split-left">
           <div class="section-heading">
-            <div class="section-title">Invoices (${invoices.length})</div>
-            <span class="role-tag finance">finance</span>
+            <div>
+              <div class="section-title">Invoice register (${invoices.length})</div>
+              <div class="filter-note">Created and uploaded invoices with payment status.</div>
+            </div>
+            <button class="btn primary compact" type="button" data-doc-upload-open data-doc-upload-type="Invoice">Upload invoice</button>
           </div>
           ${financeInvoicesTable()}
         </div>
@@ -2703,6 +2683,7 @@ function financePage() {
           ${inv ? financeDetailPanel(inv) : `<div class="modal-placeholder">Select an invoice to view details.</div>`}
         </div>
       </section>
+      ${documentUploadPanel()}
       ${devSpecPanel("finance")}
     </div>
   `;
@@ -5309,6 +5290,7 @@ export function renderPage() {
   switch (state.page) {
     case "service":   pageHtml = servicePage(); break;
     case "sales":     pageHtml = salesPage(); break;
+    case "contracts": pageHtml = contractsPage(); break;
     case "documents": pageHtml = documentsPage(); break;
     case "templategen": pageHtml = templateGenerationPage(); break;
     case "finance":   pageHtml = financePage(); break;

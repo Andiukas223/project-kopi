@@ -17,6 +17,9 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 - Is Command Center admin view isimtas perteklinis `Document pipeline` blokas; pipeline lieka Documents ir Reports kontekstuose.
 - Is Sales view isimtas perteklinis quotation stat card blokas, kad puslapis prasidetu nuo quotation darbo lenteles ir detales.
 - Pasalintas globalus module header/action strip is visu moduliu: aktyvus modulis jau matomas sidebar'e, `Export view` buvo be funkcijos, o `New service job` perkeltas tik i Service modulio jobs paneli.
+- Pridetas atskiras `Contracts` modulis sidebar'e: signed PM/install/service kontraktu upload intake, contract register ir specifikaciju konfigas (periodas, verte, consumed/remaining, PM visits/year, notes) perkeltas is Sales konteksto.
+- Sales supaprastintas iki commercial offer/customer approval/handoff flow: isimtas contract/warranty tab'as, contract management blokas ir sales dokumentu invoice action'ai, kad kontraktu ir invoice atsakomybes nesidubliuotu.
+- Finance patikslintas kaip invoice register: puslapis prasideda nuo sukurtu/ikeltu invoice saraso su payment statusu, file busena ir upload invoice veiksmu, be pertekliniu dashboard korteliu.
 
 ### Documentation
 

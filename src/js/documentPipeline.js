@@ -75,6 +75,7 @@ export function bindDocumentPipeline(renderApp) {
     if (uploadOpenButton) {
       state.documentUploadOpen = true;
       state.documentUploadTargetId = null;
+      state.documentUploadDefaultType = uploadOpenButton.dataset.docUploadType || "";
       state.documentUploadError = "";
       renderAppCallback();
       return;
@@ -84,6 +85,7 @@ export function bindDocumentPipeline(renderApp) {
     if (uploadCancelButton) {
       state.documentUploadOpen = false;
       state.documentUploadTargetId = null;
+      state.documentUploadDefaultType = "";
       state.documentUploadError = "";
       renderAppCallback();
       return;
@@ -419,6 +421,7 @@ function openSignedDocumentUpload(id) {
   state.selectedDocumentId = doc.id;
   state.documentUploadOpen = true;
   state.documentUploadTargetId = doc.id;
+  state.documentUploadDefaultType = "";
   state.documentUploadError = "";
   renderAppCallback();
 }
@@ -482,6 +485,26 @@ async function uploadDocument() {
     description: description || "Uploaded external document"
   };
 
+  if (type === "Invoice") {
+    const invoice = {
+      id: `INV-${9001 + invoices.length}`,
+      jobId,
+      documentId: docId,
+      customer,
+      owner: "Admin Viva Medical",
+      amount: 0,
+      currency: "EUR",
+      invoiceNo: file.name.replace(/\.[^.]+$/, "") || null,
+      status: "Uploaded",
+      paymentStatus: "Pending",
+      due,
+      generatedAt: new Date().toISOString().slice(0, 10),
+      notes: description || "Uploaded invoice file."
+    };
+    invoices.unshift(invoice);
+    state.selectedInvoiceId = invoice.id;
+  }
+
   syncWarrantyFromAcceptanceUpload(doc, job);
   documents.unshift(doc);
 
@@ -489,6 +512,7 @@ async function uploadDocument() {
   state.documentFilter = "All";
   state.documentUploadOpen = false;
   state.documentUploadTargetId = null;
+  state.documentUploadDefaultType = "";
   state.documentUploadError = "";
   state.generationStatus = "Ready";
   state.generatedDocPreview = null;
@@ -539,6 +563,7 @@ async function uploadSignedDocument(docId) {
     state.selectedDocumentId = doc.id;
     state.documentUploadOpen = false;
     state.documentUploadTargetId = null;
+    state.documentUploadDefaultType = "";
     state.documentUploadError = "";
     state.generationStatus = "Signed copy uploaded. Finish the document to close the case/ticket.";
     state.generatedDocPreview = null;
@@ -626,6 +651,7 @@ function finishDocument(id) {
   state.selectedDocumentId = doc.id;
   state.documentUploadOpen = false;
   state.documentUploadTargetId = null;
+  state.documentUploadDefaultType = "";
   state.documentUploadError = "";
   state.generationStatus = "DONE. Signed document uploaded and case/ticket closed.";
   saveDemoState();
@@ -756,7 +782,8 @@ function dateAfterDays(days) {
 }
 
 function ownerForDocumentType(type) {
-  if (["Quotation", "Contract annex"].includes(type)) return "Sales";
+  if (type === "Quotation") return "Sales";
+  if (["Contract", "Contract annex"].includes(type)) return "Contracts";
   if (type === "Invoice") return "Finance";
   if (["Acceptance report", "Warranty confirmation"].includes(type)) return "Admin";
   return "Service";
