@@ -1,8 +1,10 @@
 import { roles } from "./data.js";
 
+const retiredPages = new Set(["command", "sales", "finance", "parts", "reports"]);
+
 export const state = {
   // Navigation
-  page: "command",
+  page: "service",
   role: "admin",
   theme: "light",
   language: "en",
@@ -31,6 +33,7 @@ export const state = {
   documentUploadTargetId: null,
   documentUploadDefaultType: "",
   documentUploadError: "",
+  jobCompletionConfirmDocId: null,
   printPreviewOpen: false,
   printPreviewDocumentId: null,
   printPreviewPage: 1,
@@ -38,6 +41,11 @@ export const state = {
   printPreviewExportOpen: false,
   printPreviewEmailOpen: false,
   printPreviewEmailStatus: "",
+  documentViewOpen: false,
+  documentViewDocumentId: null,
+  documentViewCollaboraSession: null,
+  documentViewStatus: "",
+  documentViewError: "",
 
   // Equipment module
   selectedEquipmentId: "EQ-501",
@@ -83,6 +91,10 @@ export const state = {
 
   // Service module
   selectedServiceJobId: "VM-SV-1024",
+  serviceJobSearchQuery: "",
+  serviceJobStatusFilter: "All",
+  serviceJobCustomerFilter: "All",
+  serviceJobDateQuery: "",
   selectedWorkActId: null,
   templateGenWorkActJobId: "VM-SV-1024",
   workActSearchQuery: "",
@@ -90,6 +102,10 @@ export const state = {
   selectedDefectActId: null,
   templateGenDefectActJobId: "VM-SV-1024",
   workActError: "",
+  workActCollaboraSession: null,
+  workActCollaboraStatus: "",
+  workActCollaboraError: "",
+  workActEditorDocumentId: null,
   defectActError: "",
   selectedCommercialOfferDraftId: null,
   templateGenCommercialOfferQuotationId: "QTE-501",
@@ -128,7 +144,8 @@ export const state = {
 };
 
 export function setPage(page) {
-  state.page = page === "templategen" ? "templates" : page;
+  const normalizedPage = page === "templategen" ? "templates" : page;
+  state.page = retiredPages.has(normalizedPage) ? "service" : normalizedPage;
 }
 
 export function setRole(role) {

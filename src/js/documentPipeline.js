@@ -2,6 +2,7 @@ import { calendarEvents, commercialOfferDrafts, companyProfiles, contracts, cust
 import { saveDemoState } from "./persistence.js";
 import { state } from "./state.js";
 import { creatorMeta, currentUserName } from "./userIdentity.js";
+import { openWorkActAdvancedEditorForAct } from "./workActAdvancedEditor.js";
 
 const statusByStage = {
   Draft: "Draft",
@@ -28,13 +29,13 @@ export function bindDocumentPipeline(renderApp) {
   document.addEventListener("click", (event) => {
     const docViewButton = event.target.closest("[data-doc-view]");
     if (docViewButton) {
-      openDocumentPrintPreview(docViewButton.dataset.docView);
+      void openDocumentCollaboraView(docViewButton.dataset.docView);
       return;
     }
 
     const docEditButton = event.target.closest("[data-doc-edit]");
     if (docEditButton) {
-      routeDocumentEdit(docEditButton.dataset.docEdit);
+      void routeDocumentEdit(docEditButton.dataset.docEdit);
       return;
     }
 
@@ -103,6 +104,18 @@ export function bindDocumentPipeline(renderApp) {
     const uploadSubmitButton = event.target.closest("[data-doc-upload-submit]");
     if (uploadSubmitButton) {
       void uploadDocument();
+      return;
+    }
+
+    const confirmJobDoneButton = event.target.closest("[data-doc-confirm-job-done]");
+    if (confirmJobDoneButton) {
+      confirmSignedWorkActCompletion(confirmJobDoneButton.dataset.docConfirmJobDone, true);
+      return;
+    }
+
+    const keepJobOpenButton = event.target.closest("[data-doc-confirm-job-keep]");
+    if (keepJobOpenButton) {
+      confirmSignedWorkActCompletion(keepJobOpenButton.dataset.docConfirmJobKeep, false);
       return;
     }
 
@@ -205,6 +218,12 @@ export function bindDocumentPipeline(renderApp) {
     const previewCloseButton = event.target.closest("[data-doc-preview-close]");
     if (previewCloseButton) {
       closeDocumentPrintPreview();
+      return;
+    }
+
+    const collaboraViewCloseButton = event.target.closest("[data-doc-collabora-close]");
+    if (collaboraViewCloseButton) {
+      closeDocumentCollaboraView();
       return;
     }
 
@@ -359,7 +378,7 @@ function selectDocument(id) {
   renderAppCallback();
 }
 
-function routeDocumentEdit(id) {
+async function routeDocumentEdit(id) {
   const doc = documents.find((item) => item.id === id);
   if (!doc) return;
 
@@ -372,21 +391,32 @@ function routeDocumentEdit(id) {
 
   const type = String(doc.type || "").toLowerCase();
 
+  let workActToOpen = null;
   if (type.includes("defect")) {
-    routeToDefectAct(doc);
+    keepDocumentInRepository(doc);
   } else if (type.includes("quotation") || type.includes("commercial offer")) {
-    routeToCommercialOffer(doc);
+    keepDocumentInRepository(doc);
   } else if (type.includes("invoice")) {
-    routeToInvoice(doc);
+    keepDocumentInRepository(doc);
   } else if (type.includes("parts") || type.includes("vendor return")) {
-    routeToParts(doc);
+    keepDocumentInRepository(doc);
   } else if (type.includes("acceptance")) {
     routeToServiceJob(doc);
   } else {
-    routeToWorkAct(doc);
+    workActToOpen = routeToWorkAct(doc);
   }
 
   renderAppCallback();
+
+  if (workActToOpen?.id) {
+    await openWorkActAdvancedEditorForAct(workActToOpen.id, renderAppCallback, { documentId: doc.id });
+  }
+}
+
+function keepDocumentInRepository(doc) {
+  state.page = "documents";
+  state.selectedDocumentId = doc.id;
+  state.documentViewStatus = "This document type does not have an active source editor yet.";
 }
 
 function routeToWorkAct(doc) {
@@ -394,13 +424,100 @@ function routeToWorkAct(doc) {
     item.id === doc.workActId ||
     item.generatedDocumentId === doc.id ||
     item.jobId === doc.jobId
-  );
+  ) || createWorkActDraftForDocument(doc);
   state.page = "workacts";
   state.templateGenTab = "work-acts";
   state.selectedTemplateId = "tpl-service-act";
   state.selectedWorkActId = act?.id || null;
   state.templateGenWorkActJobId = act?.jobId || doc.jobId || state.templateGenWorkActJobId;
   state.selectedServiceJobId = doc.jobId || state.selectedServiceJobId;
+  state.workActEditorDocumentId = doc.id;
+  state.workActCollaboraStatus = "";
+  state.workActCollaboraError = "";
+  state.workActCollaboraSession = null;
+  return act || null;
+}
+
+function createWorkActDraftForDocument(doc) {
+  const job = jobs.find((item) => item.id === doc.jobId || item.customer === doc.customer) || null;
+  const jobEquipment = equipment.find((item) =>
+    item.id === job?.equipmentId ||
+    item.name === job?.equipment ||
+    item.serial === job?.serial
+  );
+  const createdAt = new Date().toISOString();
+  const actId = `WA-${260412 + workActs.length}`;
+  const workDescription = job?.problemDescription || job?.sourceDescription || doc.description || "Service work";
+  const act = {
+    id: actId,
+    number: `VM-WA-${String(workActs.length + 1).padStart(4, "0")}`,
+    date: doc.created || createdAt.slice(0, 10),
+    jobId: doc.jobId || job?.id || "",
+    company: "Viva Medical",
+    companyProfile: "Default",
+    customer: doc.customer || job?.customer || "",
+    type: serviceTypeFromDocumentJob(job, doc),
+    status: "Document draft",
+    source: `Document ${doc.id}`,
+    workDescription,
+    equipmentItems: jobEquipment ? [documentEquipmentSnapshot(jobEquipment)] : [],
+    workTemplateId: "",
+    workText: workDescription,
+    workRows: [
+      {
+        id: `${actId}-WR-1`,
+        number: 1,
+        description: workDescription,
+        completed: true,
+        comments: ""
+      }
+    ],
+    reportOptions: {
+      entryPerson: currentUserName(),
+      includePersonName: true,
+      includeSignature: true,
+      includeWorkingHours: true,
+      includeSystemIdentity: true,
+      includeSystemName: true,
+      equipmentWorking: true,
+      readyForUse: false,
+      oldPartReturned: false,
+      hygieneStandard: false,
+      showTravelHours: false,
+      showStartedCompletedTime: false,
+      useThreeSideTemplate: false
+    },
+    generatedDocumentId: doc.id,
+    ...creatorMeta(),
+    updatedAt: createdAt
+  };
+
+  workActs.unshift(act);
+  doc.workActId = act.id;
+  doc.status = doc.status || "Draft";
+  doc.pipelineStep = doc.pipelineStep || doc.status;
+  saveDemoState();
+  return act;
+}
+
+function serviceTypeFromDocumentJob(job, doc = {}) {
+  const stage = String(job?.stage || doc.type || "").toLowerCase();
+  if (stage.includes("pm") || stage.includes("maintenance")) return "PM";
+  if (stage.includes("install")) return "Installation";
+  if (stage.includes("diagnostic")) return "Diagnostic";
+  if (stage.includes("repair")) return "Repair";
+  return job?.type || doc.type || "Service";
+}
+
+function documentEquipmentSnapshot(eq) {
+  return {
+    equipmentId: eq.id,
+    name: eq.name,
+    serial: eq.serial,
+    category: eq.category,
+    location: eq.location,
+    customer: eq.customer
+  };
 }
 
 function routeToDefectAct(doc) {
@@ -636,7 +753,12 @@ async function uploadSignedDocument(docId) {
     state.documentUploadTargetId = null;
     state.documentUploadDefaultType = "";
     state.documentUploadError = "";
-    state.generationStatus = "Signed copy uploaded. Finish the document to close the case/ticket.";
+    const needsWorkActCompletion = isWorkActCompletionDocument(doc);
+    state.jobCompletionConfirmDocId = needsWorkActCompletion ? doc.id : null;
+    if (needsWorkActCompletion) markLinkedJobWaitingSignature(doc);
+    state.generationStatus = needsWorkActCompletion
+      ? "Signed Work Act uploaded. Confirm whether the linked job is done."
+      : "Signed copy uploaded.";
     state.generatedDocPreview = null;
     saveDemoState();
     renderAppCallback();
@@ -645,6 +767,60 @@ async function uploadSignedDocument(docId) {
     state.documentUploadOpen = true;
     renderAppCallback();
   }
+}
+
+function isWorkActCompletionDocument(doc) {
+  const type = String(doc?.type || "").toLowerCase();
+  return Boolean(doc?.workActId || type.includes("work act") || type.includes("service act"));
+}
+
+function markLinkedJobWaitingSignature(doc) {
+  const job = jobs.find((item) => item.id === doc?.jobId);
+  if (!job || ["Done", "Cancelled"].includes(job.status)) return;
+  job.status = "Waiting signature";
+  job.stage = "Waiting signature";
+  job.documentStatus = "Waiting signature";
+}
+
+function confirmSignedWorkActCompletion(docId, markDone) {
+  const doc = documents.find((item) => item.id === docId);
+  if (!doc) {
+    state.jobCompletionConfirmDocId = null;
+    renderAppCallback();
+    return;
+  }
+
+  if (markDone) {
+    markSignedWorkActJobDone(doc);
+    state.generationStatus = "Job marked Done from signed Work Act upload.";
+  } else {
+    markLinkedJobWaitingSignature(doc);
+    state.generationStatus = "Signed Work Act uploaded. Job left Waiting signature.";
+  }
+
+  state.selectedDocumentId = doc.id;
+  state.jobCompletionConfirmDocId = null;
+  saveDemoState();
+  renderAppCallback();
+}
+
+function markSignedWorkActJobDone(doc) {
+  const finishedAt = new Date().toISOString();
+  doc.pipelineStep = "Approved";
+  doc.status = "Done";
+  doc.finishedAt = finishedAt;
+  doc.caseClosed = true;
+  doc.deliveryStatus = "Signed Work Act uploaded";
+  addDocumentDeliveryAudit(doc, "Job marked Done", "Signed Work Act uploaded and confirmed as final job proof.", doc.signedFile || doc.uploadedFile || doc.generatedFile);
+
+  const job = jobs.find((item) => item.id === doc.jobId);
+  if (!job) return;
+  job.status = "Done";
+  job.stage = "Done";
+  job.documentStatus = "Done";
+  job.finishedAt = finishedAt;
+  job.closedAt = finishedAt;
+  job.closedByDocumentId = doc.id;
 }
 
 async function uploadDocumentFile({ docId, type, jobId, customer, file, contentBase64, kind = "uploaded-document" }) {
@@ -712,9 +888,9 @@ function finishDocument(id) {
 
   const job = jobs.find((item) => item.id === doc.jobId);
   if (job) {
-    job.status = "Closed";
-    job.stage = "Finished";
-    job.documentStatus = "Approved";
+    job.status = "Done";
+    job.stage = "Done";
+    job.documentStatus = "Done";
     job.closedAt = finishedAt;
     job.closedByDocumentId = doc.id;
   }
@@ -1152,9 +1328,24 @@ function syncGeneratedFileToSource(doc, generatedFile, options = {}) {
   changed = assignIfChanged(sourceRecord, "generatedFileVersion", generatedFile.version || null) || changed;
   changed = assignIfChanged(sourceRecord, "generatedAt", generatedFile.generatedAt) || changed;
   changed = assignIfChanged(sourceRecord, "status", "Generated") || changed;
+  if (source.type === "work-act") {
+    changed = markWorkActJobWaitingSignature(sourceRecord, doc) || changed;
+  }
   if (changed && options.touch !== false) {
     sourceRecord.updatedAt = new Date().toISOString();
   }
+  return changed;
+}
+
+function markWorkActJobWaitingSignature(workAct, doc) {
+  const job = jobs.find((item) => item.id === (workAct?.jobId || doc?.jobId));
+  if (!job || ["Done", "Cancelled"].includes(job.status)) return false;
+
+  let changed = false;
+  changed = assignIfChanged(job, "status", "Waiting signature") || changed;
+  changed = assignIfChanged(job, "stage", "Waiting signature") || changed;
+  changed = assignIfChanged(job, "documentStatus", "Waiting signature") || changed;
+  changed = assignIfChanged(job, "generatedWorkActDocumentId", doc.id) || changed;
   return changed;
 }
 
@@ -1419,6 +1610,117 @@ function openDocumentPrintPreview(id) {
   doc.deliveryStatus = generatedFile ? "Preview opened" : (doc.deliveryStatus || "Preview draft");
   addDocumentDeliveryAudit(doc, "Preview opened", documentFileAuditNote(generatedFile, "Preview opened before service file generation"), generatedFile);
   saveDemoState();
+  renderAppCallback();
+}
+
+async function openDocumentCollaboraView(id) {
+  const doc = documents.find((item) => item.id === id);
+  if (!doc) return;
+
+  state.selectedDocumentId = doc.id;
+  state.documentViewOpen = true;
+  state.documentViewDocumentId = doc.id;
+  state.documentViewCollaboraSession = null;
+  state.documentViewStatus = "Preparing generated document preview...";
+  state.documentViewError = "";
+  state.printPreviewOpen = false;
+  suppressCollaboraWelcomeDialog();
+  renderAppCallback();
+
+  let generatedFile = documentHasGeneratedFile(doc) ? doc.generatedFile : null;
+  if (!generatedFile) {
+    state.documentViewStatus = "Generating document before Collabora view...";
+    renderAppCallback();
+    await generateServiceDocument(doc.id, {
+      format: "pdf",
+      silent: true,
+      reason: "Generated for Collabora view"
+    });
+    generatedFile = documentHasGeneratedFile(doc) ? doc.generatedFile : null;
+  }
+
+  if (!generatedFile) {
+    state.documentViewStatus = "";
+    state.documentViewError = "Generated file is not ready yet. Try View again after generation finishes.";
+    renderAppCallback();
+    return;
+  }
+
+  const payload = buildDocumentCollaboraViewPayload(doc, generatedFile);
+  state.documentViewStatus = "Opening Collabora view mode...";
+  renderAppCallback();
+
+  try {
+    const response = await fetch("/api/documents/collabora/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const result = await readJsonResponse(response, "Could not open Collabora view.");
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || "Could not open Collabora view.");
+    }
+
+    state.documentViewCollaboraSession = result.session || null;
+    state.documentViewStatus = result.session?.fileName
+      ? `Collabora view ready: ${result.session.fileName}`
+      : "Collabora view ready.";
+    doc.deliveryStatus = "Preview opened";
+    addDocumentDeliveryAudit(doc, "Collabora view opened", documentFileAuditNote(generatedFile, "Generated document opened in view mode"), generatedFile);
+    saveDemoState();
+  } catch (error) {
+    state.documentViewCollaboraSession = null;
+    state.documentViewStatus = "";
+    state.documentViewError = error.message || "Could not open Collabora view.";
+  }
+
+  renderAppCallback();
+}
+
+function buildDocumentCollaboraViewPayload(doc, generatedFile) {
+  const fileId = generatedFile.fileId || generatedFile.id || generatedFile.fileRecord?.id || "";
+  return {
+    sourceType: "document-generated-preview",
+    sourceId: doc.id,
+    ownerId: doc.id,
+    documentId: doc.id,
+    fileId,
+    generatedFileName: generatedFile.fileName || "",
+    mode: "view",
+    permission: "view",
+    readOnly: true,
+    disableExport: true,
+    userId: "local-owner",
+    userName: currentUserName(),
+    title: `${doc.jobId || doc.quotationId || doc.id} ${doc.type || "Document"}`.trim(),
+    meta: {
+      documentId: doc.id,
+      documentType: doc.type || "",
+      jobId: doc.jobId || "",
+      quotationId: doc.quotationId || "",
+      customer: doc.customer || "",
+      generatedFileName: generatedFile.fileName || "",
+      generatedFileVersion: generatedFile.versionLabel || generatedFile.version || ""
+    }
+  };
+}
+
+function suppressCollaboraWelcomeDialog() {
+  try {
+    const today = new Date().toDateString().replaceAll(" ", "-");
+    window.localStorage.setItem("WSDWelcomeDisabled", "true");
+    window.localStorage.setItem("WSDWelcomeDisabledDate", today);
+  } catch {
+    // Collabora still opens if browser storage is unavailable.
+  }
+}
+
+function closeDocumentCollaboraView() {
+  state.documentViewOpen = false;
+  state.documentViewDocumentId = null;
+  state.documentViewCollaboraSession = null;
+  state.documentViewStatus = "";
+  state.documentViewError = "";
   renderAppCallback();
 }
 

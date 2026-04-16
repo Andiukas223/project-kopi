@@ -52,6 +52,7 @@ export function loadPersistedDemoState() {
       state.documentUploadTargetId = null;
       state.documentUploadDefaultType = "";
       state.documentUploadError = "";
+      state.jobCompletionConfirmDocId = null;
     }
 
     if (snapshot?.collections && typeof snapshot.collections === "object") {
@@ -61,6 +62,7 @@ export function loadPersistedDemoState() {
         }
       });
     }
+    normalizeRetiredModuleDemoLabels();
   } catch (error) {
     console.warn("Could not load persisted demo state.", error);
   }
@@ -94,6 +96,21 @@ function mergeCollection(defaultItems, savedItems) {
   const mergedDefaults = defaultItems.map((item) => savedById.has(item.id) ? { ...item, ...savedById.get(item.id) } : item);
   const savedOnly = savedItems.filter((item) => !defaultIds.has(item.id));
   return [...mergedDefaults, ...savedOnly];
+}
+
+function normalizeRetiredModuleDemoLabels() {
+  jobs.forEach((job) => {
+    if (job.stage === "Waiting for quotation") job.stage = "Customer confirmation";
+    if (job.stage === "Parts pending") job.stage = "Repair blocked";
+  });
+  documents.forEach((doc) => {
+    if (doc.type === "Service act") doc.type = "Work Act";
+  });
+  templates.forEach((template) => {
+    if (template.id === "tpl-service-act" && template.name === "Service act") {
+      template.name = "Work Act";
+    }
+  });
 }
 
 function safeStorage() {

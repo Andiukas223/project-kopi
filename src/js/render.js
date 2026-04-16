@@ -9,11 +9,11 @@ import { displayInitialsForRecord, initialsFromName } from "./userIdentity.js";
 
 const pageMeta = {
   command:   ["Command Center", "Live overview for service work, documents, approvals, and overdue items."],
-  service:   ["Service", "Medical equipment service jobs from intake to final work act."],
+  service:   ["Service", "Simple service job tracker."],
   sales:     ["Sales", "Commercial offers, customer approval, and service handoff."],
   contracts: ["Contracts", "Signed customer contracts, PM/install/service specifications, and validity tracking."],
   documents: ["Documents", "Document repository, search, status tracking, and file custody."],
-  workacts: ["Work Acts", "Work act drafts, source service context, template selection, generated PDF, and signed return handoff."],
+  workacts: ["Work Acts", "One Work Act per service job: configure, preview, generate PDF, and hand signed custody to Documents."],
   templates: ["Templates", "Reusable procedure/checklist template configuration and advanced output layout workspace."],
   templategen: ["Templates", "Reusable procedure/checklist template configuration and advanced output layout workspace."],
   finance:   ["Finance", "Invoice generation, payment status, and job-linked billing queue."],
@@ -39,37 +39,21 @@ const moduleSpecs = {
     roles: "All roles (filtered by permissions). Admin — full data + exceptions. Service Engineer — jobs/repair focus. Sales — quotes/approvals. Logistics — parts queue. Finance — invoice queue. Manager — read-only overview.",
     submodules: "Stat cards · Pipeline board · Needs attention table · Quick actions · Role focus panel · Reminders strip (sidebar)",
     pipeline: "Read-only aggregation from Service, Documents, Sales, and Parts pipelines. No write actions from this page except quick-action launchers.",
-    actions: "New service job · New quotation · Create service act",
+    actions: "New service job · New quotation · Create Work Act",
     planned: "Role-filtered stat cards per active workspace · Reminders sidebar strip (place / case open date / status colour: red/yellow/green/gray) · Per-role overdue counts · Assignments view from calendar"
   },
   service: {
-    purpose: "Medical equipment service from first contact to signed work act. Supports four pipeline types: A (repair, no contract), B (repair, with service contract balance deduction), C (new system installation), D (PM periodic maintenance). One job = one installed system (serial number).",
-    roles: "Service Engineer — creates cases, logs diagnostics/repair, uploads signed docs. Service Manager — approves parts requests, controls/assigns engineers. Office Manager — creates cases, assigns work from calendar.",
-    submodules: "New Requests · Diagnostics · Parts Pending · Repairs · Vendor Returns · Final Documents · PM submodule (periodic maintenance auto-scheduling)",
+    purpose: "Simple service job tracker. Service creates and tracks job records only; Work Act content and document configuration live in Work Acts.",
+    roles: "Service Engineer creates jobs and tracks status. Service Manager/Admin can review all jobs. Documents signed upload is the proof that the job can be closed.",
+    submodules: "Service job list, search/filter bar, selected job details, new service job form",
     pipeline: [
-      "PIPELINE A (repair, no contract):",
-      "  Technical Case → Diagnostics (duration entry) → Parts check → Commercial Offer → Customer approval",
-      "  → Repair (duration entry) → Work Act generation → Signature collected → Upload signed doc",
-      "  → INVOICE NEEDED → Finance uploads invoice PDF → Invoice signature → Upload → Admin review",
-      "  → Approval Required (system working) → Admin Approves → ARCHIVED",
-      "",
-      "PIPELINE B (repair, service contract):",
-      "  Technical Case → Diagnostics → Parts check → Repair (deducts from contract balance; warns if insufficient)",
-      "  → Work Act → Signature → Upload → Admin review → ARCHIVED",
-      "",
-      "PIPELINE C (new installation):",
-      "  Commercial Offer (Sales) → Contract indexing (fields + warranty dates + comments section)",
-      "  → Installation (engineer) → Acceptance Act → Signature → Upload",
-      "  → WARRANTY STARTS from upload date (not from admin approval) → Admin verification → ARCHIVED",
-      "  → Calendar syncs warranty expiry date",
-      "",
-      "PIPELINE D (PM periodic maintenance):",
-      "  Auto-generated PM case from contract → PM submodule: status [Scheduled / Unscheduled / Problem]",
-      "  → Dates distributed evenly over contract period (e.g. 4×/year = one per quarter; no stacking allowed)",
-      "  → User can move date within same month → Main calendar auto-updates → Service work → Work Act → Admin review → ARCHIVED"
+      "Service job is created with customer, system, contact, problem, planned visit date, and responsible engineer.",
+      "Work Acts creates/configures the one linked Work Act when document content is needed.",
+      "Generated Work Act moves the job to Waiting signature.",
+      "Documents signed upload confirmation moves the job to Done."
     ].join("\n"),
-    actions: "New service job wizard · Parts request · Work Act generation · Upload signed document · Log diagnostics duration · Log repair duration · Assign engineer (Service Manager)",
-    planned: "Full wizard with all 4 pipeline branches · Contract balance deduction + warning display · PM submodule with auto-scheduling algorithm · Vendor return trigger from Work Act notation · Parts request approval flow"
+    actions: "New service job · Search/filter jobs · Select job",
+    planned: "Keep PM, parts delivery, approvals, and finance flows out of the active Service page until those modules are redesigned."
   },
   sales: {
     purpose: "Commercial offer and customer approval workspace before work is handed to Service. Signed contract specifications and invoice payment status live in their own modules.",
@@ -107,8 +91,8 @@ const moduleSpecs = {
     purpose: "Own Work Act source drafts before they become generated/signed documents. Work Acts copy reusable Templates into concrete job-specific rows, link service job/equipment context, generate PDF drafts, and hand signed-file custody to Documents.",
     roles: "Service Engineer creates and edits own Work Acts. Service Manager reviews service-side completeness. Admin can oversee all drafts and exceptions. Manager can review read-only.",
     submodules: "Work Act list - source service job selector - selected draft builder - equipment picker - Template picker - work rows - report options - generated document metadata",
-    pipeline: "Service job context -> Work Act draft -> choose equipment -> choose Template -> copy rows into Work Act -> fill work description/options -> Create document draft -> Generate PDF -> collect signature outside app -> Documents handles signed upload/download",
-    actions: "Create Work Act draft - Select draft - Apply Template - Add/remove/edit work rows - Generate document draft/PDF - Open preview/download generated PDF",
+    pipeline: "Service job context -> Work Act -> choose equipment -> choose Template -> fill work description/options -> Generate PDF -> collect signature outside app -> Documents handles signed upload/download",
+    actions: "Create/Open Work Act - Apply Template - Add/remove/edit work rows - Generate PDF - Preview/download generated PDF",
     planned: "Move remaining Work Act-specific code out of legacy template-generation naming, add permissions, add backend persistence, add version history, add explicit close/revision states, and add Playwright smoke tests"
   },
   templates: {
@@ -372,7 +356,9 @@ function getReminders() {
     items.push({ tone: "green", text: `PM ${pm.date} · ${pm.customer}` });
   });
 
-  return items.slice(0, 7);
+  return items
+    .filter((item) => !/Parts|Vendor return|Arrived/.test(item.text))
+    .slice(0, 7);
 }
 
 export function renderRemindersStrip() {
@@ -490,6 +476,44 @@ function documentNeedsSignedUpload(doc, generatedFile = null) {
   return Boolean(doc && !documentIsDone(doc) && !documentHasSignedUpload(doc) && generatedFile?.downloadUrl);
 }
 
+function documentTypeLabel(type) {
+  return String(type || "").toLowerCase() === "service act" ? "Work Act" : String(type || "");
+}
+
+function isWorkActDocument(doc) {
+  const type = String(doc?.type || "").toLowerCase();
+  return Boolean(doc?.workActId || type.includes("work act") || type.includes("service act"));
+}
+
+function workActDocumentForJob(job) {
+  if (!job) return null;
+  const act = workActs.find((item) => item.jobId === job.id);
+  return documents.find((doc) =>
+    (act?.generatedDocumentId && doc.id === act.generatedDocumentId) ||
+    (act?.id && doc.workActId === act.id) ||
+    (doc.jobId === job.id && isWorkActDocument(doc))
+  ) || null;
+}
+
+function jobStatusForUi(job) {
+  if (!job) return "-";
+  if (job.status === "Cancelled") return "Cancelled";
+  if (job.status === "Done" || job.finishedAt || job.closedAt) return "Done";
+
+  const workActDoc = workActDocumentForJob(job);
+  if (workActDoc && documentIsDone(workActDoc)) return "Done";
+  if (workActDoc?.generatedFile?.downloadUrl || workActDoc?.pipelineStep === "Signature" || job.status === "Waiting signature") {
+    return "Waiting signature";
+  }
+
+  return "Open";
+}
+
+function jobStatusForDocument(doc) {
+  const job = jobs.find((item) => item.id === doc?.jobId);
+  return job ? jobStatusForUi(job) : "-";
+}
+
 function jobsTable(rows = jobs) {
   return `
     <section class="table-card">
@@ -501,11 +525,11 @@ function jobsTable(rows = jobs) {
         <thead>
           <tr>
             <th>Job ID</th>
-            <th>Customer</th>
-            <th>Equipment</th>
-            <th>Stage</th>
+            <th>Hospital / customer</th>
+            <th>System</th>
+            <th>Contact</th>
             <th>Status</th>
-            <th>Due</th>
+            <th>Planned visit</th>
           </tr>
         </thead>
         <tbody>
@@ -514,8 +538,8 @@ function jobsTable(rows = jobs) {
               <td class="mono">${escapeHtml(job.id)}</td>
               <td>${escapeHtml(job.customer)}</td>
               <td>${escapeHtml(job.equipment)}</td>
-              <td>${escapeHtml(job.stage)}</td>
-              <td>${statusChip(job.status)}</td>
+              <td>${escapeHtml(job.contactName || job.sourceContact || "-")}</td>
+              <td>${statusChip(jobStatusForUi(job))}</td>
               <td class="mono">${escapeHtml(job.due)}</td>
             </tr>
           `).join("")}
@@ -538,7 +562,7 @@ function documentsTable(rows = documents) {
               <th>Reference</th>
               <th>Type</th>
               <th>Customer</th>
-              <th>Owner</th>
+              <th>Job status</th>
               <th>Created</th>
               <th>Status</th>
               <th>Action</th>
@@ -546,13 +570,12 @@ function documentsTable(rows = documents) {
           </thead>
           <tbody>
             ${rows.map((doc) => {
-              const generatedFile = documentGeneratedFileFor(doc);
               return `
                 <tr class="${doc.id === state.selectedDocumentId ? "selected" : ""}" data-doc-row="${escapeHtml(doc.id)}">
                   <td class="mono">${escapeHtml(doc.jobId || doc.quotationId || doc.id)}</td>
-                  <td>${escapeHtml(doc.type)}</td>
+                  <td>${escapeHtml(documentTypeLabel(doc.type))}</td>
                   <td>${escapeHtml(doc.customer || "Not assigned")}</td>
-                  <td><span class="role-tag">${escapeHtml(displayInitialsForRecord(doc))}</span></td>
+                  <td>${statusChip(jobStatusForDocument(doc))}</td>
                   <td>${createdCell(doc)}</td>
                   <td>${documentUploadStatusCell(doc)}</td>
                   <td>
@@ -603,14 +626,22 @@ function documentUploadStatusCell(doc) {
   const uploadedUrl = documentUploadedDownloadUrl(doc);
   const isUploaded = Boolean(documentUploadedAt(doc) || doc?.signedFile || doc?.uploadedFile || doc?.uploaded);
   if (uploadedUrl) {
-    return `<a class="btn done compact" href="${escapeHtml(uploadedUrl)}" target="_blank" rel="noopener">Download</a>`;
+    return `<a class="btn done compact" href="${escapeHtml(uploadedUrl)}" target="_blank" rel="noopener" title="Download uploaded signed copy">Download signed</a>`;
   }
 
   if (isUploaded) {
-    return `<button class="btn done compact" type="button" disabled>Download</button>`;
+    return `<button class="btn done compact" type="button" disabled>Download signed</button>`;
   }
 
-  return `<button class="btn warn compact" type="button" data-doc-upload-signed-open="${escapeHtml(doc.id)}">Upload signed</button>`;
+  return `<button class="btn warn compact" type="button" data-doc-upload-signed-open="${escapeHtml(doc.id)}" title="Upload signed Work Act copy">Upload signed</button>`;
+}
+
+function documentUploadStatusText(doc) {
+  const uploadedUrl = documentUploadedDownloadUrl(doc);
+  const isUploaded = Boolean(documentUploadedAt(doc) || doc?.signedFile || doc?.uploadedFile || doc?.uploaded);
+  if (uploadedUrl) return "Signed file ready";
+  if (isUploaded) return "Signed file missing URL";
+  return "Needs signed upload";
 }
 
 function documentUploadedDownloadUrl(doc) {
@@ -733,7 +764,7 @@ function documentDetailPanel(doc) {
       </div>
       <div class="doc-detail-grid">
         ${detailItem("Document", doc.id)}
-        ${detailItem("Type", doc.type)}
+        ${detailItem("Type", documentTypeLabel(doc.type))}
         ${detailItem("Job", doc.jobId)}
         ${detailItem("Customer", doc.customer)}
         ${detailItem("Owner", displayInitialsForRecord(doc))}
@@ -746,7 +777,7 @@ function documentDetailPanel(doc) {
         ${doc.finishedAt ? detailItem("Case/ticket", `Closed ${doc.finishedAt.slice(0, 10)}`) : ""}
       </div>
       <div class="doc-action-row">
-        <button class="btn primary" type="button" data-doc-preview-open="${escapeHtml(doc.id)}">Open preview</button>
+        <button class="btn primary" type="button" data-doc-preview-open="${escapeHtml(doc.id)}">Preview</button>
         ${generatedFile?.downloadUrl ? `<button class="btn dark" type="button" data-doc-preview-open="${escapeHtml(doc.id)}">Open generated PDF</button>` : ""}
         ${documentWorkflowActions(doc, generatedFile)}
       </div>
@@ -798,9 +829,9 @@ function sourceGeneratedFilePanel(sourceRecord) {
         ${versions.length ? detailItem("Versions", String(versions.length)) : ""}
       </div>
       <div class="tg-action-cluster left" style="margin-top:10px">
-        ${sourceRecord.generatedDocumentId ? `<button class="btn dark compact" type="button" data-generate-service-document="${escapeHtml(sourceRecord.generatedDocumentId)}">Generate PDF file</button>` : ""}
-        ${sourceRecord.generatedDocumentId ? `<button class="btn ghost compact" type="button" data-doc-preview-open="${escapeHtml(sourceRecord.generatedDocumentId)}">Open preview</button>` : ""}
-        ${generatedFile?.downloadUrl ? `<a class="btn ghost compact" href="${escapeHtml(generatedFile.downloadUrl)}" target="_blank" rel="noopener">Download</a>` : ""}
+        ${sourceRecord.generatedDocumentId ? `<button class="btn dark compact" type="button" data-generate-service-document="${escapeHtml(sourceRecord.generatedDocumentId)}">Generate PDF</button>` : ""}
+        ${sourceRecord.generatedDocumentId ? `<button class="btn ghost compact" type="button" data-doc-preview-open="${escapeHtml(sourceRecord.generatedDocumentId)}">Preview</button>` : ""}
+        ${generatedFile?.downloadUrl ? `<a class="btn ghost compact" href="${escapeHtml(generatedFile.downloadUrl)}" target="_blank" rel="noopener">Download PDF</a>` : ""}
       </div>
     </div>
   `;
@@ -844,7 +875,7 @@ function uploadedMetadataBlock(doc) {
 }
 
 const documentTypeOptions = [
-  "Service act",
+  "Work Act",
   "Diagnostic report",
   "Commercial offer",
   "Defect act",
@@ -862,12 +893,13 @@ function documentUploadPanel() {
   const targetDoc = documents.find((doc) => doc.id === state.documentUploadTargetId);
   const defaultJob = targetDoc ? jobs.find((job) => job.id === targetDoc.jobId) : jobs[0];
   const defaultType = state.documentUploadDefaultType || documentTypeOptions[0];
+  const targetJob = targetDoc ? jobs.find((job) => job.id === targetDoc.jobId) : null;
   return `
     <div class="document-upload-modal-backdrop" role="presentation">
       <section class="document-upload-modal" role="dialog" aria-modal="true" aria-labelledby="doc-upload-title">
         <div class="document-upload-head">
           <div>
-            <div class="section-title" id="doc-upload-title">${targetDoc ? `Upload signed copy for ${escapeHtml(targetDoc.id)}` : "Upload document"}</div>
+            <div class="section-title" id="doc-upload-title">${targetDoc ? `Upload signed ${escapeHtml(documentTypeLabel(targetDoc.type))}` : "Upload document"}</div>
             <div class="filter-note">${targetDoc ? "Use the signed copy returned by the customer." : "Create a document record from an external file."}</div>
           </div>
           <span class="chip ${targetDoc ? "signature" : "pending"}">${targetDoc ? "Signed return" : "Upload"}</span>
@@ -875,8 +907,9 @@ function documentUploadPanel() {
         ${targetDoc ? `
           <div class="doc-return-summary">
             ${detailItem("Document", targetDoc.id)}
-            ${detailItem("Type", targetDoc.type)}
+            ${detailItem("Type", documentTypeLabel(targetDoc.type))}
             ${detailItem("Job", targetDoc.jobId)}
+            ${targetJob ? detailItem("Job status", jobStatusForUi(targetJob)) : ""}
             ${detailItem("Customer", targetDoc.customer)}
           </div>
         ` : ""}
@@ -926,6 +959,40 @@ function documentUploadPanel() {
         <div class="document-upload-actions">
           <button class="btn primary" type="button" data-doc-upload-submit>Upload</button>
           <button class="btn ghost" type="button" data-doc-upload-cancel>Cancel</button>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function documentCompletionConfirmModal() {
+  const doc = documents.find((item) => item.id === state.jobCompletionConfirmDocId);
+  if (!doc) return "";
+  const job = jobs.find((item) => item.id === doc.jobId);
+  return `
+    <div class="document-upload-modal-backdrop" role="presentation">
+      <section class="document-upload-modal" role="dialog" aria-modal="true" aria-labelledby="job-done-title">
+        <div class="document-upload-head">
+          <div>
+            <div class="section-title" id="job-done-title">Signed Work Act uploaded</div>
+            <div class="filter-note">Do you want to mark the linked Service job as Done?</div>
+          </div>
+          <span class="chip signed">Signed file</span>
+        </div>
+        <div class="doc-return-summary">
+          ${detailItem("Document", doc.id)}
+          ${detailItem("Type", documentTypeLabel(doc.type))}
+          ${detailItem("Job", doc.jobId || "-")}
+          ${detailItem("Current job status", job ? jobStatusForUi(job) : "-")}
+          ${detailItem("Customer", doc.customer || "-")}
+        </div>
+        <div class="info-box">
+          <div class="info-title">Recommended</div>
+          <div class="info-body">Use Mark job Done when the uploaded signed Work Act is the final proof that this job is finished.</div>
+        </div>
+        <div class="document-upload-actions">
+          <button class="btn primary" type="button" data-doc-confirm-job-done="${escapeHtml(doc.id)}">Mark job Done</button>
+          <button class="btn ghost" type="button" data-doc-confirm-job-keep="${escapeHtml(doc.id)}">Upload only</button>
         </div>
       </section>
     </div>
@@ -985,8 +1052,6 @@ function serviceFlow() {
     ["start",    "Intake",     "Request"],
     ["process",  "Contract",   "Warranty"],
     ["duration", "Diagnostics","Duration"],
-    ["decision", "Quote?",     "Sales"],
-    ["action",   "Parts",      "EDD"],
     ["duration", "Repair",     "Duration"],
     ["process",  "Work act",   "Draft"],
     ["end",      "Finished",   "Done"]
@@ -1048,7 +1113,7 @@ function templatePanel(doc = selectedDocument()) {
       ${state.templateEditorOpen ? templateEditorPanel(template) : ""}
       ${previewActive
         ? docPreviewPanel(doc, template, p)
-        : `<pre class="json-preview">${escapeHtml(JSON.stringify({ documentId: doc?.id || "DOC-0000", type: doc?.type || "Service act", jobId: doc?.jobId || "VM-SV-0000", customer: doc?.customer || "Customer", owner: doc?.owner || "Service", template: template?.name || "Service act", templateBody: template?.body || "", output: state.documentOutputFormat }, null, 2))}</pre>`
+        : `<pre class="json-preview">${escapeHtml(JSON.stringify({ documentId: doc?.id || "DOC-0000", type: documentTypeLabel(doc?.type || "Work Act"), jobId: doc?.jobId || "VM-SV-0000", customer: doc?.customer || "Customer", owner: doc?.owner || "Service", template: template?.name || "Work Act", templateBody: template?.body || "", output: state.documentOutputFormat }, null, 2))}</pre>`
       }
     </section>
   `;
@@ -1075,7 +1140,7 @@ function templateEditorPanel(template) {
       <div class="upload-form">
         <div class="field">
           <label for="tpl-editor-name">Template name</label>
-          <input id="tpl-editor-name" value="${escapeHtml(template?.name || "")}" placeholder="Service act">
+          <input id="tpl-editor-name" value="${escapeHtml(template?.name || "")}" placeholder="Work Act">
         </div>
         <div class="field">
           <label for="tpl-editor-owner">Owner</label>
@@ -1237,7 +1302,7 @@ function docPreviewPanel(doc, template, preview) {
       <div class="doc-preview-actions">
         <button class="btn primary compact" type="button" data-doc-preview-open="${escapeHtml(doc?.id || "")}">Open print preview</button>
         <a class="btn primary compact" href="${dlHref}" download="${escapeHtml((doc?.id || "doc") + "-mock.txt")}">Download mock (.txt)</a>
-        ${preview?.serviceDownloadUrl ? `<a class="btn dark compact" href="${escapeHtml(preview.serviceDownloadUrl)}">Download service file</a>` : ""}
+        ${preview?.serviceDownloadUrl ? `<a class="btn dark compact" href="${escapeHtml(preview.serviceDownloadUrl)}">Download PDF</a>` : ""}
         <button class="btn ghost compact" type="button" data-reset-preview>Reset</button>
       </div>
     </div>
@@ -1550,10 +1615,10 @@ function roleStats() {
 
   // admin — default
   return [
-    statCard("Open service jobs",  jobs.length,        "Across diagnostics, repair, and documents", "info"),
-    statCard("Overdue documents",  allOverdue.length,   "Require owner follow-up today",              allOverdue.length > 0 ? "danger" : "ok"),
-    statCard("Customer approvals", 3,                   "Waiting before service handoff",             "warn"),
-    statCard("Finishing this week", 5,                  "Ready for final work act",                   "ok")
+    statCard("Open service jobs", jobs.filter((j) => j.status === "Open" || j.status === "Blocked").length, "Diagnostics, repair, and documents", "info"),
+    statCard("Work Acts", workActs.length, "Configured job documents", workActs.length > 0 ? "warn" : "ok"),
+    statCard("Overdue documents", allOverdue.length, "Require owner follow-up today", allOverdue.length > 0 ? "danger" : "ok"),
+    statCard("Active contracts", contracts.filter((ct) => ct.status !== "Expired").length, "Service coverage context", "")
   ].join("");
 }
 
@@ -1677,25 +1742,26 @@ function roleFocusPanel() {
 function jobsTableRows(rows, options = {}) {
   if (!rows.length) return `<div class="modal-placeholder">No jobs to display.</div>`;
   const selectable = Boolean(options.selectable);
+  const selectedJobId = options.selectedJobId || state.selectedServiceJobId;
   return `
     <table class="data-table">
       <thead>
         <tr>
-          <th>Job ID</th><th>Customer</th><th>Equipment</th>
-          <th>Owner</th><th>Stage</th><th>Status</th><th>Due</th>
+          <th>Job ID</th><th>Hospital / customer</th><th>System</th>
+          <th>Contact</th><th>Engineer</th><th>Status</th><th>Planned visit</th>
         </tr>
       </thead>
       <tbody>
         ${rows.map((job) => `
-          <tr class="${selectable && job.id === state.selectedServiceJobId ? "selected" : ""}"
+          <tr class="${selectable && job.id === selectedJobId ? "selected" : ""}"
               ${selectable ? `data-service-job-row="${escapeHtml(job.id)}" style="cursor:pointer"` : ""}>
             <td class="mono">${escapeHtml(job.id)}</td>
             <td>${escapeHtml(job.customer)}</td>
             <td>${escapeHtml(job.equipment)}</td>
-            <td>${escapeHtml(job.owner)}</td>
-            <td>${escapeHtml(job.stage)}</td>
-            <td>${statusChip(job.status)}</td>
-            <td class="mono">${escapeHtml(job.due)}</td>
+            <td>${escapeHtml(job.contactName || job.sourceContact || "-")}</td>
+            <td>${escapeHtml(job.responsibleEngineer || job.owner)}</td>
+            <td>${statusChip(jobStatusForUi(job))}</td>
+            <td class="mono">${escapeHtml(serviceJobPlannedDate(job))}</td>
           </tr>
         `).join("")}
       </tbody>
@@ -1813,59 +1879,132 @@ function commandPage() {
 }
 
 function servicePage() {
-  const pmSchedule  = computePmSchedule();
-  const pmUpcoming  = pmSchedule.filter((pm) => pm.status === "Scheduled").length;
-  const pmCompleted = pmSchedule.filter((pm) => pm.status === "Completed").length;
-  const myJobList   = visibleJobs();
+  const baseJobList = visibleJobs();
+  const myJobList   = applyServiceJobFilters(baseJobList);
   const isOwn       = state.role === "service";
   const selectedJob = selectedServiceJob(myJobList);
 
   return `
     <div class="page-content">
-      <div class="tile-grid">
-        ${moduleTile("NEW", "New requests",    isOwn ? `${myJobList.length} my jobs` : "4 unassigned jobs")}
-        ${moduleTile("DIA", "Diagnostics",     "2 durations to log")}
-        ${moduleTile("PRT", "Parts pending",   "3 waiting for EDD")}
-        ${moduleTile("PM",  "PM schedule",     `${pmUpcoming} upcoming · ${pmCompleted} done`)}
-        ${moduleTile("VRT", "Vendor returns",  "1 return in progress")}
-        ${moduleTile("DOC", "Final documents", "5 work acts to finish")}
-      </div>
       <section class="panel">
-        <div class="section-heading"><div class="section-title">Service process — Pipeline A (repair, no contract)</div></div>
-        ${serviceFlow()}
+        <div class="section-heading">
+          <div>
+            <div class="section-title">Service job tracker</div>
+            <div class="filter-note">Create and track service jobs here.</div>
+          </div>
+        </div>
+        <div class="stat-grid">${serviceJobSummaryCards(baseJobList)}</div>
       </section>
+      ${serviceJobFilters(baseJobList)}
       <section class="split-layout service-layout">
         <div class="panel split-left">
           <div class="section-heading">
-            <div class="section-title">${isOwn ? `My jobs (${myJobList.length})` : `Service jobs (${myJobList.length})`}</div>
+            <div class="section-title">${isOwn ? `My jobs (${myJobList.length} of ${baseJobList.length})` : `Service jobs (${myJobList.length} of ${baseJobList.length})`}</div>
             <div class="action-row">
               ${isOwn ? `<span class="role-tag service">service</span>` : ""}
               ${canCreateServiceJob() ? `<button class="btn primary compact" type="button" data-action="new-service-job">New service job</button>` : ""}
             </div>
           </div>
-          ${jobsTableRows(myJobList, { selectable: true })}
+          ${myJobList.length ? jobsTableRows(myJobList, { selectable: true, selectedJobId: selectedJob?.id }) : `<div class="modal-placeholder">No service jobs match the current filters.</div>`}
         </div>
         <div class="panel split-right">
           ${selectedJob ? serviceJobDetailPanel(selectedJob) : `<div class="modal-placeholder">Select a job to view details.</div>`}
         </div>
       </section>
-      ${state.role === "svcmgr" || state.role === "admin" ? `
-        <section class="panel">
-          <div class="section-heading">
-            <div class="section-title">Parts awaiting approval</div>
-            <span class="role-tag svcmgr">svcmgr</span>
-          </div>
-          ${partsQueueTable(partsRequests.filter((pr) => pr.status === "Pending approval"))}
-        </section>` : ""}
-      <section class="panel">
-        <div class="section-heading">
-          <div class="section-title">PM submodule — periodic maintenance auto-schedule</div>
-        </div>
-        ${pmScheduleTable()}
-      </section>
       ${devSpecPanel("service")}
     </div>
   `;
+}
+
+function serviceJobFilters(rows = visibleJobs()) {
+  const customersList = ["All", ...new Set(rows.map((job) => job.customer).filter(Boolean))];
+  const statusOptions = ["All", "Open", "Waiting signature", "Done", "Cancelled"];
+  return `
+    <section class="panel slim">
+      <div class="doc-search-row">
+        <label class="filter-control doc-search-text" for="service-job-search-query">
+          <span>Search</span>
+          <input id="service-job-search-query" value="${escapeHtml(state.serviceJobSearchQuery)}" placeholder="Job ID, customer, system, contact, problem">
+        </label>
+        <label class="filter-control" for="service-job-status-filter">
+          <span>Status</span>
+          <select id="service-job-status-filter">
+            ${statusOptions.map((status) => `<option value="${escapeHtml(status)}" ${state.serviceJobStatusFilter === status ? "selected" : ""}>${escapeHtml(status)}</option>`).join("")}
+          </select>
+        </label>
+        <label class="filter-control" for="service-job-customer-filter">
+          <span>Customer</span>
+          <select id="service-job-customer-filter">
+            ${customersList.map((customer) => `<option value="${escapeHtml(customer)}" ${state.serviceJobCustomerFilter === customer ? "selected" : ""}>${escapeHtml(customer)}</option>`).join("")}
+          </select>
+        </label>
+        <label class="filter-control doc-date-filter doc-date-query-filter" for="service-job-date-query">
+          <span>Planned visit</span>
+          <div class="date-combo">
+            <input id="service-job-date-query" type="text" inputmode="numeric" value="${escapeHtml(state.serviceJobDateQuery || "")}" placeholder="2026 / 2026-04 / 2026-04-17">
+            <input class="date-combo-picker" type="date" value="${escapeHtml(fullIsoDateOrEmpty(state.serviceJobDateQuery || ""))}" aria-label="Pick planned visit date" data-service-job-date-picker>
+          </div>
+        </label>
+        <div class="doc-search-actions">
+          <button class="btn dark compact" type="button" data-service-job-search-apply>Search</button>
+          <button class="btn ghost compact" type="button" data-service-job-search-clear>Cancel</button>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function applyServiceJobFilters(rows) {
+  const query = String(state.serviceJobSearchQuery || "").trim().toLowerCase();
+  const status = state.serviceJobStatusFilter || "All";
+  const customer = state.serviceJobCustomerFilter || "All";
+  const dateQuery = state.serviceJobDateQuery || "";
+
+  return rows.filter((job) => {
+    const jobStatus = jobStatusForUi(job);
+    if (status !== "All" && jobStatus !== status) return false;
+    if (customer !== "All" && job.customer !== customer) return false;
+    if (!serviceJobDateMatches(job, dateQuery)) return false;
+    if (!query) return true;
+
+    const haystack = [
+      job.id,
+      job.customer,
+      job.customerId,
+      job.equipment,
+      job.equipmentId,
+      job.serial,
+      job.contactName,
+      job.contactNumber,
+      job.sourceContact,
+      job.phone,
+      job.problemDescription,
+      job.sourceDescription,
+      job.responsibleEngineer,
+      job.owner,
+      jobStatus,
+      serviceJobPlannedDate(job)
+    ].filter(Boolean).join(" ").toLowerCase();
+    return haystack.includes(query);
+  });
+}
+
+function serviceJobPlannedDate(job) {
+  return job?.plannedVisitDate || job?.due || "";
+}
+
+function serviceJobDateMatches(job, query = "") {
+  const normalizedQuery = normalizeDateQuery(query);
+  if (!normalizedQuery) return true;
+
+  const normalizedDate = normalizeDateQuery(serviceJobPlannedDate(job));
+  const queryDigits = normalizedQuery.replace(/\D/g, "");
+  const dateDigits = normalizedDate.replace(/\D/g, "");
+
+  if (!queryDigits) return true;
+  if (normalizedDate.startsWith(normalizedQuery)) return true;
+  if (dateDigits.startsWith(queryDigits)) return true;
+  return dateDigits.includes(queryDigits);
 }
 
 function selectedServiceJob(rows = visibleJobs()) {
@@ -1873,33 +2012,23 @@ function selectedServiceJob(rows = visibleJobs()) {
 }
 
 function serviceJobDetailPanel(job) {
-  const linkedDocs = documents.filter((doc) => doc.jobId === job.id);
-  const linkedParts = partsRequests.filter((pr) => pr.jobId === job.id);
-  const act = workActs.find((item) => item.jobId === job.id) || null;
   return `
     <div class="section-heading">
-      <div class="section-title">${escapeHtml(job.id)} - ${escapeHtml(job.customer)}</div>
-      ${statusChip(job.status)}
+      <div>
+        <div class="section-title">Selected service job</div>
+        <div class="filter-note">${escapeHtml(job.id)} / ${escapeHtml(job.customer)}</div>
+      </div>
+      ${statusChip(jobStatusForUi(job))}
     </div>
     <div class="doc-detail-grid">
-      ${detailItem("Current stage", job.stage)}
-      ${detailItem("Owner", job.owner)}
-      ${detailItem("Equipment", job.equipment)}
+      ${detailItem("Job ID", job.id)}
+      ${detailItem("Hospital / customer", job.customer)}
+      ${detailItem("System", job.equipment)}
       ${detailItem("Serial", job.serial || "Pending")}
-      ${detailItem("Priority", job.priority || "Normal")}
-      ${detailItem("Due", job.due)}
-    </div>
-    <div class="detail-block">
-      <div class="detail-group-title">Linked documents (${linkedDocs.length})</div>
-      ${linkedDocs.length ? linkedDocumentList(linkedDocs) : `<div class="modal-placeholder">No linked documents yet.</div>`}
-    </div>
-    <div class="detail-block">
-      <div class="detail-group-title">Linked parts requests (${linkedParts.length})</div>
-      ${linkedParts.length ? linkedPartsList(linkedParts) : `<div class="modal-placeholder">No linked parts requests.</div>`}
-    </div>
-    <div class="detail-block">
-      <div class="detail-group-title">Work Act draft</div>
-      ${workActDraftPanel(job, act)}
+      ${detailItem("Contact", [job.contactName || job.sourceContact, job.contactNumber || job.phone].filter(Boolean).join(" / ") || "-")}
+      ${detailItem("Problem", job.problemDescription || job.sourceDescription || job.issue || "-")}
+      ${detailItem("Planned visit", serviceJobPlannedDate(job))}
+      ${detailItem("Responsible engineer", job.responsibleEngineer || job.owner)}
     </div>
   `;
 }
@@ -1908,8 +2037,8 @@ function workActDraftPanelLegacy(job, act) {
   if (!act) {
     return `
       <div class="work-act-empty">
-        <p>Draft record first, then equipment selection and Template apply.</p>
-        <button class="btn primary" type="button" data-work-act-create="${escapeHtml(job.id)}">Create Work Act draft</button>
+        <p>Create one Work Act for this job. The Work Act is where the completed work, steps, equipment, preview, and PDF are prepared.</p>
+        <button class="btn primary" type="button" data-work-act-create="${escapeHtml(job.id)}">Create Work Act</button>
       </div>
     `;
   }
@@ -1958,10 +2087,10 @@ function workActDraftPanelLegacy(job, act) {
           </select>
         </label>
         <button class="btn" type="button" data-work-act-apply-template="${escapeHtml(act.id)}">Apply template</button>
-        <button class="btn ghost" type="button" data-work-act-add-row="${escapeHtml(act.id)}">Add work row</button>
-        <button class="btn primary" type="button" data-work-act-generate="${escapeHtml(act.id)}">Create document draft</button>
-        ${act.generatedDocumentId ? `<button class="btn dark" type="button" data-generate-service-document="${escapeHtml(act.generatedDocumentId)}">Generate PDF file</button>` : ""}
-        ${act.generatedDocumentId ? `<button class="btn dark" type="button" data-doc-preview-open="${escapeHtml(act.generatedDocumentId)}">Open preview</button>` : ""}
+        <button class="btn ghost" type="button" data-work-act-add-row="${escapeHtml(act.id)}">Add row</button>
+        <button class="btn primary" type="button" data-work-act-generate="${escapeHtml(act.id)}">Create PDF draft</button>
+        ${act.generatedDocumentId ? `<button class="btn dark" type="button" data-generate-service-document="${escapeHtml(act.generatedDocumentId)}">Generate PDF</button>` : ""}
+        ${act.generatedDocumentId ? `<button class="btn dark" type="button" data-doc-preview-open="${escapeHtml(act.generatedDocumentId)}">Preview</button>` : ""}
       </div>
       <label class="field work-act-text">
         <span>Work Description</span>
@@ -1975,12 +2104,13 @@ function workActDraftPanelLegacy(job, act) {
   `;
 }
 
-function workActDraftPanel(job, act) {
+function workActDraftPanel(job, act, linkedWorkActDoc = null) {
   if (!act) {
+    const actionLabel = linkedWorkActDoc ? "Open Work Act" : "Create Work Act";
     return `
       <div class="work-act-empty">
-        <p>Draft record first, then equipment selection and Template apply.</p>
-        <button class="btn primary" type="button" data-work-act-create="${escapeHtml(job.id)}">Create Work Act draft</button>
+        <p>${linkedWorkActDoc ? "Open the existing Work Act for this job. The Work Act is where the completed work, steps, equipment, preview, and PDF are prepared." : "Create one Work Act for this job. The Work Act is where the completed work, steps, equipment, preview, and PDF are prepared."}</p>
+        <button class="btn primary" type="button" data-work-act-create="${escapeHtml(job.id)}">${actionLabel}</button>
       </div>
     `;
   }
@@ -2040,9 +2170,10 @@ function workActDraftPanel(job, act) {
         <div class="tg-action-cluster">
           <button class="btn ghost compact" type="button" data-work-act-apply-template="${escapeHtml(act.id)}">Apply template</button>
           <button class="btn ghost compact" type="button" data-work-act-add-row="${escapeHtml(act.id)}">Add row</button>
-          <button class="btn primary compact" type="button" data-work-act-generate="${escapeHtml(act.id)}">Create draft</button>
+          <button class="btn primary compact" type="button" data-work-act-generate="${escapeHtml(act.id)}">${act.generatedDocumentId ? "Update PDF draft" : "Create PDF draft"}</button>
           ${act.generatedDocumentId ? `<button class="btn dark compact" type="button" data-generate-service-document="${escapeHtml(act.generatedDocumentId)}">Generate PDF</button>` : ""}
           ${act.generatedDocumentId ? `<button class="btn ghost compact" type="button" data-doc-preview-open="${escapeHtml(act.generatedDocumentId)}">Preview</button>` : ""}
+          ${act.generatedDocumentId ? `<button class="btn done compact" type="button" data-work-act-open-advanced="${escapeHtml(act.id)}">Edit in advanced editor</button>` : ""}
         </div>
       </div>
       <label class="field work-act-text">
@@ -2053,8 +2184,78 @@ function workActDraftPanel(job, act) {
         <div class="detail-group-title">Work: List (${rows.length})</div>
         ${rows.length ? workActRowsTable(act) : `<div class="modal-placeholder">Apply a template or add a row.</div>`}
       </div>
+      ${workActAdvancedEditorPanel(act)}
     </div>
   `;
+}
+
+function serviceJobSummaryCards(rows) {
+  const countByStatus = (status) => rows.filter((job) => jobStatusForUi(job) === status).length;
+  return [
+    statCard("Open", countByStatus("Open"), "Jobs ready to work on", "info"),
+    statCard("Waiting signature", countByStatus("Waiting signature"), "Signed file is still missing", "warn")
+  ].join("");
+}
+
+function workActAdvancedEditorPanel(act) {
+  const doc = documents.find((item) => item.id === act.generatedDocumentId || item.workActId === act.id);
+  const session = doc && state.workActCollaboraSession?.sourceId === doc.id
+    ? state.workActCollaboraSession
+    : null;
+  const shouldShow = Boolean(
+    doc &&
+    (
+      session ||
+      state.workActEditorDocumentId === doc.id ||
+      state.workActCollaboraStatus ||
+      state.workActCollaboraError ||
+      act.collaboraSessionId
+    )
+  );
+  if (!doc || !shouldShow) return "";
+
+  const pdfPreviewUrl = collaboraPdfPreviewUrl(session);
+  const sourceDownloadUrl = session?.downloadUrl || act.collaboraDownloadUrl || "";
+
+  return `
+    <div class="work-act-section work-act-advanced-editor">
+      <div class="section-heading">
+        <div>
+          <div class="detail-group-title">Advanced editor for this Work Act document</div>
+          <div class="filter-note">Document ${escapeHtml(doc.id)} is opened from this Work Act configuration. Save in Collabora, then preview the exported PDF result.</div>
+        </div>
+        <div class="tg-action-cluster">
+          <button class="btn ghost compact" type="button" data-work-act-open-advanced="${escapeHtml(act.id)}">Reload editor</button>
+          ${pdfPreviewUrl ? `<a class="btn primary compact" href="${escapeHtml(pdfPreviewUrl)}" target="_blank" rel="noopener">Preview result PDF</a>` : ""}
+          ${sourceDownloadUrl ? `<a class="btn ghost compact" href="${escapeHtml(sourceDownloadUrl)}" target="_blank" rel="noopener">Download edited source</a>` : ""}
+        </div>
+      </div>
+      <div class="doc-detail-grid compact">
+        ${detailItem("Document", doc.id)}
+        ${detailItem("Work Act", act.number || act.id)}
+        ${detailItem("Job", act.jobId || doc.jobId || "-")}
+        ${detailItem("Customer", act.customer || doc.customer || "-")}
+        ${detailItem("Generated status", doc.generatedFile?.versionLabel || doc.deliveryStatus || doc.status || "-")}
+        ${detailItem("Editor file", session?.fileName || act.collaboraFileName || "Not opened")}
+      </div>
+      ${state.workActCollaboraError ? `<div class="form-error">${escapeHtml(state.workActCollaboraError)}</div>` : ""}
+      ${state.workActCollaboraStatus ? `<div class="info-box" style="margin-top:10px"><div class="info-title">Work Act editor</div><div class="info-body">${escapeHtml(state.workActCollaboraStatus)}</div></div>` : ""}
+      ${session?.editorUrl ? `
+        <iframe class="work-act-collabora-frame" title="${escapeHtml(act.number || act.id)} advanced editor" src="${escapeHtml(session.editorUrl)}"></iframe>
+      ` : `
+        <div class="work-act-collabora-loading">
+          <div class="detail-group-title">Advanced editor is ready to open</div>
+          <div class="filter-note">Press Reload editor to create a local Collabora editing session for this exact Work Act document.</div>
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function collaboraPdfPreviewUrl(session) {
+  const url = session?.pdfDownloadUrl || "";
+  if (!url) return "";
+  return `${url}${url.includes("?") ? "&" : "?"}inline=1`;
 }
 
 function workActOptionsPanel(act) {
@@ -2722,6 +2923,7 @@ function workActsWorkspace() {
   const selectedAct = workActs.find((item) => item.id === state.selectedWorkActId)
     || workActs.find((item) => item.jobId === selectedJob?.id)
     || null;
+  const selectedJobHasAct = Boolean(selectedJob && (workActs.some((item) => item.jobId === selectedJob.id) || workActDocumentForJob(selectedJob)));
   const groupedRows = groupWorkActsByEntryDate(rows);
   const statusOptions = ["All", ...Array.from(new Set(workActs.map((act) => act.status || "Draft")))];
 
@@ -2730,7 +2932,7 @@ function workActsWorkspace() {
       <div class="section-heading">
         <div>
           <div class="section-title">Work Acts</div>
-          <div class="filter-note">Drafts are generated from service jobs or created manually. Templates are copied into a concrete Work Act as isolated rows.</div>
+          <div class="filter-note">One Service job has one Work Act. Configure the work, preview the result, and generate the PDF here.</div>
         </div>
       </div>
       <div class="tg-command-bar">
@@ -2741,18 +2943,18 @@ function workActsWorkspace() {
           </select>
         </label>
         <div class="tg-action-cluster">
-          <button class="btn primary compact" type="button" data-work-act-create="${escapeHtml(selectedJob?.id || "")}">Create Work Act draft</button>
+          <button class="btn primary compact" type="button" data-work-act-create="${escapeHtml(selectedJob?.id || "")}">${selectedJobHasAct ? "Open Work Act" : "Create Work Act"}</button>
         </div>
       </div>
       ${selectedJob ? `
         <div class="detail-block">
-          <div class="detail-group-title">Selected Work Act draft</div>
+          <div class="detail-group-title">Selected Work Act</div>
           ${workActDraftPanel(selectedJob, selectedAct)}
         </div>
       ` : ""}
       ${workActs.length ? `
         <div class="detail-block">
-          <div class="detail-group-title">All Work Act drafts (${rows.length} of ${workActs.length})</div>
+          <div class="detail-group-title">All Work Acts (${rows.length} of ${workActs.length})</div>
           <div class="tg-filter-strip work-act-list-filters">
             <label class="filter-control doc-search-text">
               <span>Search</span>
@@ -2771,8 +2973,8 @@ function workActsWorkspace() {
         </div>
       ` : `
         <div class="info-box">
-          <div class="info-title">No Work Act drafts yet</div>
-          <div class="info-body">Create a Work Act from a Service job first. The next refinement will move the full Work Act draft creation flow into this module.</div>
+          <div class="info-title">No Work Acts yet</div>
+          <div class="info-body">Create a Work Act from a Service job first.</div>
         </div>
       `}
     </section>
@@ -4673,14 +4875,6 @@ function adminPage() {
   const selected = users.find((u) => u.id === state.adminEditUserId) || users[0];
   return `
     <div class="page-content">
-      <div class="tile-grid">
-        ${moduleTile("USR", "Users",              `${users.length} configured`)}
-        ${moduleTile("TPL", "Templates",          `${templates.length} planned`)}
-        ${moduleTile("CFG", "Workflow settings",  "Stages and SLA rules")}
-        ${moduleTile("CTR", "Contract archive",   "Restore to edit mode")}
-        ${state.role === "admin" ? moduleTile("BUG", "Bug reports", `${bugReports.filter((item) => item.status === "New").length} new`) : ""}
-      </div>
-
       ${state.role === "admin" ? adminBugReportsPanel() : ""}
       ${state.role === "admin" ? adminLogsPanel() : ""}
 
@@ -5106,6 +5300,66 @@ function calendarPage() {
 // ---------------------------------------------------------------------------
 // Generated document print preview
 // ---------------------------------------------------------------------------
+function documentCollaboraViewOverlay() {
+  if (!state.documentViewOpen) return "";
+
+  const doc = documents.find((item) => item.id === state.documentViewDocumentId) || selectedDocument();
+  if (!doc) return "";
+
+  const template = documentTemplateForDoc(doc);
+  const generatedFile = documentGeneratedFileFor(doc);
+  const session = state.documentViewCollaboraSession?.sourceId === doc.id
+    ? state.documentViewCollaboraSession
+    : null;
+  const viewTitle = `${doc.jobId || doc.quotationId || doc.id} - Generated document view`;
+  const fileName = generatedFileDisplayName(generatedFile) || session?.fileName || "Generated file";
+
+  return `
+    <div class="print-preview-overlay doc-collabora-overlay" role="dialog" aria-modal="true" aria-label="Generated document Collabora view">
+      <div class="print-preview-window doc-collabora-window">
+        <div class="print-preview-titlebar">
+          <div>
+            <div class="print-preview-caption">${escapeHtml(viewTitle)}</div>
+            <div class="print-preview-subtitle">${escapeHtml(doc.type)} / ${escapeHtml(doc.customer)} / ${escapeHtml(fileName)}</div>
+          </div>
+          <button class="btn ghost compact" type="button" data-doc-collabora-close>Close</button>
+        </div>
+        <div class="doc-collabora-ribbon">
+          <div>
+            <div class="detail-group-title">Collabora view mode</div>
+            <div class="filter-note">Review the generated document here. The table Download action is reserved for the uploaded signed copy.</div>
+          </div>
+          <span class="chip done">Generated preview</span>
+        </div>
+        ${state.documentViewError ? `<div class="form-error doc-collabora-message">${escapeHtml(state.documentViewError)}</div>` : ""}
+        ${state.documentViewStatus ? `<div class="print-preview-status-note">${escapeHtml(state.documentViewStatus)}</div>` : ""}
+        <div class="doc-collabora-body">
+          ${session?.editorUrl ? `
+            <iframe class="doc-collabora-frame" title="${escapeHtml(doc.id)} generated document in Collabora view mode" src="${escapeHtml(session.editorUrl)}"></iframe>
+          ` : state.documentViewError ? `
+            <div class="print-preview-paper-shell" style="--preview-zoom:1">
+              ${documentPreviewA4Pages(doc, template, 1)}
+            </div>
+          ` : `
+            <div class="doc-collabora-loading">
+              <div class="detail-group-title">Starting Collabora...</div>
+              <div class="filter-note">Preparing a local read-only WOPI session for the generated file.</div>
+            </div>
+          `}
+        </div>
+        <div class="print-preview-statusbar">
+          <div>
+            <span>${session?.readOnly === false ? "Editing" : "View only"}</span>
+            <span>${escapeHtml(doc.id)}</span>
+          </div>
+          <div>${escapeHtml(generatedFile?.versionLabel || "")}</div>
+          <div>${escapeHtml(documentUploadStatusText(doc))}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function documentPrintPreviewOverlay() {
   if (!state.printPreviewOpen) return "";
 
@@ -5562,21 +5816,21 @@ export function renderPage() {
   let pageHtml = "";
   switch (state.page) {
     case "service":   pageHtml = servicePage(); break;
-    case "sales":     pageHtml = salesPage(); break;
+    case "sales":     pageHtml = servicePage(); break;
     case "contracts": pageHtml = contractsPage(); break;
     case "documents": pageHtml = documentsPage(); break;
     case "workacts": pageHtml = workActsPage(); break;
     case "templates":
     case "templategen": pageHtml = templatesPage(); break;
-    case "finance":   pageHtml = financePage(); break;
+    case "finance":   pageHtml = servicePage(); break;
     case "customers": pageHtml = customersPage(); break;
     case "equipment": pageHtml = equipmentPage(); break;
-    case "parts":     pageHtml = partsPage(); break;
-    case "reports":   pageHtml = reportsPage(); break;
+    case "parts":     pageHtml = servicePage(); break;
+    case "reports":   pageHtml = servicePage(); break;
     case "admin":     pageHtml = adminPage(); break;
     case "calendar":  pageHtml = calendarPage(); break;
     case "command":
-    default:          pageHtml = commandPage();
+    default:          pageHtml = servicePage();
   }
-  return `${pageHtml}${documentPrintPreviewOverlay()}${feedbackSelectionOverlay()}${feedbackOverlay()}${feedbackLauncher()}`;
+  return `${pageHtml}${documentCompletionConfirmModal()}${documentCollaboraViewOverlay()}${documentPrintPreviewOverlay()}${feedbackSelectionOverlay()}${feedbackOverlay()}${feedbackLauncher()}`;
 }

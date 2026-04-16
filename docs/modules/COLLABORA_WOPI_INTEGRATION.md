@@ -1,6 +1,6 @@
 # Collabora WOPI Integration
 
-Date: 2026-04-15
+Date: 2026-04-16
 
 This document is the source of truth for the local Collabora CODE advanced editor runtime and the WOPI bridge used by Viva Medical modules.
 
@@ -15,8 +15,11 @@ Implemented as a personal/development runtime:
 - Browser access goes through the existing `web` nginx proxy on `http://localhost:8080/`.
 - WOPI file/session access is served by `document-service`.
 - The first implemented consumer is `Templates -> Open in advanced editor`.
+- `Documents -> View` also uses Collabora in read-only view mode for generated documents.
+- `Work Acts -> Edit in advanced editor` uses Collabora in writable edit mode for the exact Work Act document selected from Work Acts or Documents `Edit`.
 - Collabora opens in `Editing` mode and saves back into `document-service/storage/collabora-wopi`.
 - The edited `.fodt` source remains in local WOPI storage, and the app download action exports the current saved session to PDF.
+- Documents view sessions are different: they copy an existing generated file into local WOPI storage, open with `permission=view`, and do not save back to the document record.
 
 Current limitation:
 
@@ -114,6 +117,38 @@ User clicks Open in advanced editor
 
 The browser sees Collabora through `localhost:8080`. Collabora sees the WOPI source through `http://document-service:3001`.
 
+Documents view path:
+
+```text
+User clicks Documents / View
+  -> frontend finds the real generated file registry id
+  -> if missing, frontend generates PDF first
+  -> POST /api/documents/collabora/sessions with mode=view and fileId
+  -> document-service copies that generated file into storage/collabora-wopi
+  -> document-service creates a read-only WOPI session
+  -> frontend renders Collabora iframe
+  -> Collabora calls CheckFileInfo / GetFile
+  -> user reviews generated output only
+```
+
+Documents `View` is not the signed/uploaded-file download flow. Signed/uploaded download stays in the Documents table `Status` column.
+
+Work Act document edit path:
+
+```text
+User clicks Work Acts / Edit in advanced editor
+or Documents / Edit on a Service Act
+  -> frontend selects the exact Work Act source and linked document id
+  -> POST /api/documents/collabora/sessions with sourceType=work-act-document
+  -> document-service renders a Work Act-specific .fodt source
+  -> the .fodt embeds the Viva Medical logo from document-service/templates/viva-medical-logo.png
+  -> frontend renders Collabora iframe in Editing mode
+  -> Collabora saves the edited source back to storage/collabora-wopi
+  -> Preview result PDF exports the latest saved source with inline PDF disposition
+```
+
+This path is implemented only for Work Act / Service Act documents. Other modules need their own source-specific payload and configuration page before they should open advanced edit mode.
+
 ## Backend Endpoints
 
 Public app endpoints behind nginx:
@@ -122,6 +157,7 @@ Public app endpoints behind nginx:
 - `GET /api/documents/collabora/sessions/:sessionId`
 - `GET /api/documents/collabora/sessions/:sessionId/download` - source `.fodt` download.
 - `GET /api/documents/collabora/sessions/:sessionId/download?format=pdf` - PDF export/download from the latest saved source.
+- `GET /api/documents/collabora/sessions/:sessionId/download?format=pdf&inline=1` - PDF export shown inline for preview-result flows.
 
 Internal WOPI endpoints used by Collabora:
 
@@ -138,8 +174,11 @@ A public Collabora session includes:
 
 - `id`
 - `fileId`
+- `mode`
+- `readOnly`
 - `sourceType`
 - `sourceId`
+- `sourceFileId`
 - `title`
 - `fileName`
 - `mimeType`
@@ -183,6 +222,42 @@ The first consumer, Templates Work List Template, sends:
 
 Templates no longer send Work Act row data in this payload. Concrete row editing belongs to the `Work Acts` module; those rows can be added to a Work Act generated document later.
 
+Documents generated view sends:
+
+- `sourceType = document-generated-preview`
+- `sourceId`
+- `ownerId`
+- `documentId`
+- `fileId` - generated file registry id.
+- `generatedFileName`
+- `mode = view`
+- `permission = view`
+- `readOnly = true`
+- `disableExport = true`
+- `title`
+- `meta` with document type, customer, job/quotation reference, and generated file version.
+
+The backend resolves `fileId` against `files.json`, verifies the file belongs to the document when `documentId`/`ownerId` is provided, copies the stored generated file into WOPI storage, and opens Collabora with the file extension-specific `view` action where available.
+
+Work Act document edit sends:
+
+- `sourceType = work-act-document`
+- `sourceId = doc.id`
+- `ownerId = doc.id`
+- `documentId`
+- `workActId`
+- `mode = edit`
+- `permission = edit`
+- `title`
+- user context
+- seller/company fields from the Viva Medical company profile
+- buyer/customer/job/equipment fields from the Work Act and linked service job
+- Work Act `workRows`
+- Work Act `reportOptions`
+- short `meta` with document id, Work Act id, job id, customer, and source module.
+
+The backend renders a Work Act editing `.fodt` from this payload. This Collabora source is separate from the normal Carbone `work-act.fodt` PDF generation template and is intentionally optimized for same-page advanced editing/preview.
+
 For new modules, keep this pattern:
 
 - `sourceType` names the domain source, for example `commercial-offer-template`, `contract-layout`, or `work-act-draft`.
@@ -209,6 +284,19 @@ If Collabora opens as `Viewing`, check these first:
 - `CheckFileInfo` returns writable fields.
 - The `editorUrl` includes `permission=edit`.
 - Collabora logs do not show `No authorized hosts found matching the target host`.
+
+Documents read-only view sessions intentionally return:
+
+- `UserCanWrite: false`
+- `ReadOnly: true`
+- `SupportsUpdate: false`
+- `SupportsLocks: false`
+- `SupportsGetLock: false`
+- `DisableExport: true` by default from the Documents payload.
+
+This is expected for generated document review. Do not "fix" Documents view into edit mode unless the product decision changes.
+
+Work Act advanced edit sessions intentionally return writable metadata and should show Collabora `Editing`. If they open as `Viewing`, treat it as a bug in the Work Act payload, session mode, or WOPI writable fields.
 
 ## Adding Collabora To Another Module
 

@@ -941,6 +941,35 @@
   text-align: center;
 }
 
+.work-act-advanced-editor {
+  background: var(--bg-card);
+}
+
+.work-act-collabora-frame {
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r);
+  display: block;
+  height: min(74vh, 820px);
+  margin-top: 12px;
+  min-height: 620px;
+  width: 100%;
+}
+
+.work-act-collabora-loading {
+  align-items: center;
+  background: var(--wb);
+  border: 1px dashed var(--border);
+  border-radius: var(--r);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin-top: 12px;
+  min-height: 260px;
+  padding: 20px;
+  text-align: center;
+}
+
 .wlt-link-config {
   display: flex;
   flex-direction: column;
@@ -2121,6 +2150,56 @@
   height: 100%;
   min-height: 720px;
   width: 100%;
+}
+
+.doc-collabora-window {
+  background: var(--bg-card);
+}
+
+.doc-collabora-ribbon {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.doc-collabora-message {
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.doc-collabora-body {
+  background: var(--print-desk);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.doc-collabora-frame {
+  background: #fff;
+  border: 1px solid var(--paper-border);
+  display: block;
+  height: 100%;
+  min-height: 720px;
+  width: 100%;
+}
+
+.doc-collabora-loading {
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px dashed var(--border);
+  border-radius: var(--r);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  justify-content: center;
+  min-height: 420px;
+  padding: 24px;
+  text-align: center;
 }
 
 .print-preview-paper-shell {

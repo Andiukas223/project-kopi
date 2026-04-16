@@ -1142,8 +1142,8 @@ export const jobs = [
     serial: "CK-4418",
     owner: "M. Vaitkus",
     priority: "Normal",
-    stage: "Waiting for quotation",
-    status: "Pending",
+    stage: "Customer confirmation",
+    status: "Open",
     due: "2026-04-17",
     documentStatus: "Review"
   },
@@ -1154,8 +1154,8 @@ export const jobs = [
     serial: "WB-7720",
     owner: "A. Jankauske",
     priority: "High",
-    stage: "Parts pending",
-    status: "Blocked",
+    stage: "Repair blocked",
+    status: "Open",
     due: "2026-04-14",
     documentStatus: "Customer"
   },
@@ -1179,7 +1179,7 @@ export const jobs = [
 export const documents = [
   {
     id: "DOC-3108",
-    type: "Service act",
+    type: "Work Act",
     jobId: "VM-SV-1024",
     customer: "Vilnius Clinical Hospital",
     owner: "Service",
@@ -1250,7 +1250,7 @@ export const invoices = [
     paymentStatus: "Pending",
     due: "2026-04-22",
     generatedAt: null,
-    notes: "Diagnostics and initial corrective work. Generate invoice after service act review."
+    notes: "Diagnostics and initial corrective work. Generate invoice after Work Act review."
   },
   {
     id: "INV-9002",
@@ -1311,7 +1311,7 @@ export const invoices = [
 export const templates = [
   {
     id: "tpl-service-act",
-    name: "Service act",
+    name: "Work Act",
     format: "ODT/DOCX/PDF",
     owner: "Service",
     body: "Work act for service visits. Include customer, equipment, serial number, work performed, parts used, duration, engineer, and customer signature.",

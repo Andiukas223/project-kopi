@@ -420,6 +420,7 @@
 .chip.warn,
 .chip.customer,
 .chip.signature,
+.chip.waiting-signature,
 .chip.need-upload,
 .chip.needs-upload {
   background: var(--amber-lt);

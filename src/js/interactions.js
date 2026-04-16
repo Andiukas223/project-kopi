@@ -10,6 +10,7 @@ import { saveDemoState } from "./persistence.js";
 import { renderSupportPortalPreview } from "./render.js";
 import { state } from "./state.js";
 import { creatorMeta, currentUserName, initialsFromName } from "./userIdentity.js";
+import { openWorkActAdvancedEditorForAct } from "./workActAdvancedEditor.js";
 
 let renderAppCallback = null;
 
@@ -20,6 +21,7 @@ export function bindInteractions(renderApp) {
   document.addEventListener("change", handleChange);
   document.addEventListener("input", handleInput);
   document.addEventListener("focusin", handleFocusIn);
+  document.addEventListener("keydown", handleKeydown);
 }
 
 function normalizedTemplateConfigTab(tabId) {
@@ -273,7 +275,19 @@ function handleClick(event) {
     return;
   }
 
-  // Parts — select row
+  // Service filters
+  const serviceJobSearchApply = event.target.closest("[data-service-job-search-apply]");
+  if (serviceJobSearchApply) {
+    applyServiceJobSearch();
+    return;
+  }
+
+  const serviceJobSearchClear = event.target.closest("[data-service-job-search-clear]");
+  if (serviceJobSearchClear) {
+    clearServiceJobSearch();
+    return;
+  }
+
   const serviceJobRow = event.target.closest("[data-service-job-row]");
   if (serviceJobRow) {
     state.selectedServiceJobId = serviceJobRow.dataset.serviceJobRow;
@@ -322,6 +336,12 @@ function handleClick(event) {
   const workActGenerate = event.target.closest("[data-work-act-generate]");
   if (workActGenerate) {
     createWorkActDocumentDraft(workActGenerate.dataset.workActGenerate);
+    return;
+  }
+
+  const workActAdvancedEditor = event.target.closest("[data-work-act-open-advanced]");
+  if (workActAdvancedEditor) {
+    void openWorkActAdvancedEditorForAct(workActAdvancedEditor.dataset.workActOpenAdvanced, renderAppCallback);
     return;
   }
 
@@ -647,6 +667,14 @@ function handleFocusIn(event) {
 // Central change dispatcher
 // ---------------------------------------------------------------------------
 function handleChange(event) {
+  if (event.target.matches("[data-service-job-date-picker]")) {
+    state.serviceJobDateQuery = event.target.value || "";
+    const textInput = document.getElementById("service-job-date-query");
+    if (textInput) textInput.value = state.serviceJobDateQuery;
+    applyServiceJobSearch();
+    return;
+  }
+
   // Admin — toggle permission checkbox
   if (event.target.matches("[data-perm]")) {
     const userId = event.target.dataset.user;
@@ -938,6 +966,40 @@ function handleInput(event) {
   }
 }
 
+function handleKeydown(event) {
+  if (event.key !== "Enter" || !isServiceJobSearchEnterTarget(event.target)) return;
+  event.preventDefault();
+  applyServiceJobSearch();
+}
+
+function isServiceJobSearchEnterTarget(target) {
+  return target instanceof HTMLElement && (
+    target.matches("#service-job-search-query") ||
+    target.matches("#service-job-date-query") ||
+    target.matches("[data-service-job-date-picker]")
+  );
+}
+
+function applyServiceJobSearch() {
+  state.serviceJobSearchQuery = getControlValue("service-job-search-query");
+  state.serviceJobStatusFilter = getControlValue("service-job-status-filter") || "All";
+  state.serviceJobCustomerFilter = getControlValue("service-job-customer-filter") || "All";
+  state.serviceJobDateQuery = getControlValue("service-job-date-query");
+  renderAppCallback();
+}
+
+function clearServiceJobSearch() {
+  state.serviceJobSearchQuery = "";
+  state.serviceJobStatusFilter = "All";
+  state.serviceJobCustomerFilter = "All";
+  state.serviceJobDateQuery = "";
+  renderAppCallback();
+}
+
+function getControlValue(id) {
+  return document.getElementById(id)?.value.trim() || "";
+}
+
 function filterWltPicker(input) {
   const combo = input.closest("[data-wlt-combobox]");
   if (!combo) return;
@@ -1198,6 +1260,7 @@ function createWorkActDraft(jobId) {
   const act = ensureWorkActDraft(jobId);
   if (!act) return;
   selectWorkActContext(act);
+  state.page = "workacts";
   state.workActError = "";
   saveDemoState();
   renderAppCallback();
@@ -1210,24 +1273,26 @@ function ensureWorkActDraft(jobId) {
   const existing = workActs.find((item) => item.jobId === jobId);
   if (existing) return existing;
 
+  const linkedDocument = workActDocumentForJobId(jobId);
   const today = new Date().toISOString().slice(0, 10);
   const jobEquipment = equipment.find((item) => item.name === job.equipment || item.serial === job.serial || item.id === job.equipmentId);
   const actId = `WA-${260412 + workActs.length}`;
+  const workDescription = job.problemDescription || job.sourceDescription || linkedDocument?.description || "Service work";
   const act = {
     id: actId,
     number: `VM-WA-${String(workActs.length + 1).padStart(4, "0")}`,
-    date: today,
+    date: linkedDocument?.created || today,
     jobId: job.id,
     company: "Viva Medical",
     companyProfile: "Default",
     customer: job.customer,
     type: serviceTypeFromJob(job),
-    status: "Draft",
+    status: linkedDocument?.generatedFile ? "Generated" : linkedDocument ? "Document draft" : "Draft",
     source: `Service job ${job.id}`,
-    workDescription: job.stage || "Service work",
+    workDescription,
     equipmentItems: jobEquipment ? [equipmentSnapshot(jobEquipment)] : [],
     workTemplateId: "",
-    workText: "",
+    workText: job.problemDescription || "",
     workRows: [],
     reportOptions: {
       entryPerson: users.find((user) => user.roles?.includes("service"))?.name || "Service",
@@ -1244,13 +1309,24 @@ function ensureWorkActDraft(jobId) {
       showStartedCompletedTime: false,
       useThreeSideTemplate: false
     },
-    generatedDocumentId: null,
+    generatedDocumentId: linkedDocument?.id || null,
+    generatedFile: linkedDocument?.generatedFile || null,
+    generatedFileVersions: linkedDocument?.generatedFileVersions || [],
     ...creatorMeta(),
     updatedAt: new Date().toISOString()
   };
 
   workActs.unshift(act);
+  if (linkedDocument) linkedDocument.workActId = act.id;
   return act;
+}
+
+function workActDocumentForJobId(jobId) {
+  return documents.find((doc) => {
+    if (doc.jobId !== jobId) return false;
+    const type = String(doc.type || "").toLowerCase();
+    return Boolean(doc.workActId || type.includes("work act") || type.includes("service act"));
+  }) || null;
 }
 
 function serviceTypeFromJob(job) {
@@ -1435,7 +1511,7 @@ function createWorkActDocumentDraft(actId) {
     const createdAt = new Date().toISOString();
     documents.unshift({
       id: docId,
-      type: "Service act",
+      type: "Work Act",
       jobId: act.jobId,
       customer: act.customer,
       owner: "Service",
@@ -2392,7 +2468,7 @@ function handoffToService(qteId) {
     id:           docId,
     type:         q.type === "PM Contract" ? "PM contract"
                 : q.type === "Installation" ? "Acceptance report"
-                : "Service act",
+                : "Work Act",
     jobId,
     customer:     q.customer,
     owner:        "Service",

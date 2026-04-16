@@ -1,8 +1,31 @@
 # Workspace Modules
 
-Date: 2026-04-15
+Date: 2026-04-16
 
 This document describes active Viva Medical workspace modules. It replaces the old pattern where module rules were mixed into the broad project plan.
+
+## Active Module Focus
+
+The active sidebar is intentionally narrowed to the modules that are expected to be used and refined now:
+
+- `Service`
+- `Work Acts`
+- `Contracts`
+- `Documents`
+- `Templates`
+- `Customers`
+- `Equipment`
+- `Calendar`
+- `Admin`
+
+The following prototype modules are no longer active sidebar modules:
+
+- `Sales`
+- `Finance`
+- `Parts`
+- `Reports`
+
+Their older prototype code/data can remain temporarily as dormant reference/fallback state, but new UX polish should not target them unless the product direction changes.
 
 ## Global Module Rules
 
@@ -24,14 +47,16 @@ Purpose:
 Owns:
 
 - Current page, role, theme, language.
-- Sidebar badges/reminders.
+- Sidebar module grouping and active item state.
 - Global `Report issue` entry point.
 
 Current UI:
 
 - Topbar wordmark: `Viva Medical` + `Informational system` / `Informacine sistema`.
 - Theme toggle fixed near the bottom-left, centered in the `Workspace` sidebar column, with sun/moon labels.
-- Sidebar modules grouped as Workspace, Registry, Control, and Reminders.
+- Sidebar modules are grouped visually, but the top non-functional `Workspace` text label is not shown.
+- Sidebar navigation shows module names only. Initials/icons (`SV`, `WA`, `CT`, etc.) and yellow status badge bubbles are intentionally not used because they confuse module navigation with task/status queues.
+- The old sidebar `Reminders` block is not active. Reminder/notification logic will be redesigned later.
 
 Does not own:
 
@@ -64,7 +89,10 @@ Rules:
 
 Purpose:
 
-- Single operational overview for open work, reminders, queue pressure, and role-specific focus.
+- Dormant prototype module for open work, reminders, queue pressure, and role-specific focus.
+- Not an active sidebar module in the current focused workspace.
+- The current default/start workspace is `Service`.
+- Do not polish or extend this area unless a new command/overview concept is intentionally designed.
 
 Owns:
 
@@ -92,50 +120,55 @@ Does not own:
 
 Purpose:
 
-- Own technical cases, diagnostics, repair work, engineer queues, and service-side job context.
+- Own the simple Service job record used to track that work exists, who owns it, and where/when it should be done.
+- Service is intentionally not the document editor. The real work content belongs to `Work Acts`.
 
 Owns:
 
 - Service job records.
-- Job stage/status.
-- Diagnostics/repair duration entry.
-- Engineer assignment context.
-- Service Manager parts approval queue.
+- Job id.
+- Hospital/customer.
+- System/equipment label.
+- Contact name and contact number.
+- Short problem description.
+- Planned visit date.
+- Responsible engineer.
+- Simple job status: `Open`, `Waiting signature`, `Done`, `Cancelled`.
 
 Shows:
 
-- Service jobs table.
-- Selected job detail.
-- Linked documents for selected job.
-- Linked parts requests.
-- PM schedule table.
-- Service flow diagram.
+- Service job tracker.
+- Search/filter bar for job text, status, customer, and planned visit date.
+- Two tracker cards only: `Open` and `Waiting signature`.
+- Selected job detail with job fields only.
 
 Creates/updates:
 
-- New service job through wizard.
-- Work Act source context by linking into `Work Acts`.
-- Parts request context when repair requires parts.
+- New service job through the simplified job form.
+- Job status updates coming from Work Act generation and Documents signed upload confirmation.
 
 Links to:
 
-- `Work Acts` for Work Act creation.
+- `Work Acts` as the separate owner of Work Act content/configuration.
 - `Documents` for generated/signed document custody.
-- `Parts` for parts requests.
-- `Contracts` for service coverage and remaining balance.
-- `Calendar` for PM events.
+- `Customers` and `Equipment` for registry context where available.
+- `Calendar` later for planned visit visibility.
 
 Does not own:
 
 - Commercial offer approval.
 - Invoice/payment status.
 - Signed file storage.
+- Work Act content, work rows, generated PDF editing, or signed file download.
+- Work Act create/edit controls in the Service job detail panel.
+- Parts/logistics delivery state.
 
 ## Work Acts
 
 Purpose:
 
-- Own concrete Work Act drafts and source records before they become generated/signed documents.
+- Own the concrete Work Act for a Service job: document content, configuration, preview, advanced edit, and generated PDF handoff.
+- One Service job has exactly one Work Act.
 
 UI naming:
 
@@ -149,29 +182,33 @@ Detailed Work Acts source of truth:
 
 Owns:
 
-- Work Act draft/source record.
+- Work Act source/configuration record.
 - Work Act number/reference.
 - Source service job link.
 - Selected equipment for the specific act.
 - Concrete work rows/points for the specific act.
 - Work description, report options, and entry person.
 - Generated document/file metadata link.
+- Work Act-specific Collabora advanced editor session for the exact generated document.
 
 Shows:
 
 - Source service job selector.
-- Work Act draft list.
-- Selected Work Act draft builder.
+- Work Act list.
+- Selected Work Act builder.
 - Equipment picker.
 - Template picker.
 - Work rows/points and comments.
 - Generated PDF actions when available.
+- Advanced editor section with Collabora `Editing`, source `.fodt` download, and inline PDF result preview.
 
 Creates/updates:
 
-- Work Act draft from a Service job.
+- Work Act from a Service job.
 - Work Act-specific equipment/work row data.
 - Generated document draft link.
+- Advanced edited `.fodt` session state for the linked Work Act document.
+- Service job status to `Waiting signature` after generated PDF exists.
 
 Links to:
 
@@ -186,13 +223,15 @@ Does not own:
 - Reusable template configuration.
 - Signed file upload/download custody.
 - Invoice/payment state.
-- Full Service job lifecycle.
+- Final Service job completion confirmation. Documents owns that signed upload confirmation step.
 
 ## Sales
 
 Purpose:
 
-- Own commercial offers, customer approval, and handoff to Service.
+- Dormant prototype module for commercial offers, customer approval, and handoff to Service.
+- Not an active sidebar module in the current focused workspace.
+- Do not polish or extend this area unless Sales becomes active again.
 
 Owns:
 
@@ -338,15 +377,17 @@ Current table:
 - `Reference`
 - `Type`
 - `Customer`
-- `Owner`
+- `Job status`
 - `Created`
 - `Status`
 - `Action`
 
 Action rule:
 
-- `Status` owns `Upload signed` / green `Download`.
+- `Job status` shows the linked Service job status.
+- `Status` owns yellow `Upload signed` / green `Download signed`.
 - `Action` owns only daily row actions: `View`, `Edit`.
+- Uploading a signed Work Act opens a confirmation. Confirming marks the linked Service job `Done`; declining leaves it `Waiting signature`.
 
 Does not own:
 
@@ -358,7 +399,9 @@ Does not own:
 
 Purpose:
 
-- Own invoice register, uploaded invoice files, and payment status.
+- Dormant prototype module for invoice register, uploaded invoice files, and payment status.
+- Not an active sidebar module in the current focused workspace.
+- Do not polish or extend this area unless Finance becomes active again.
 
 Owns:
 
@@ -390,7 +433,7 @@ Links to:
 Does not own:
 
 - Commercial offer approval.
-- Signed service act upload.
+- Signed Work Act upload.
 - Parts delivery.
 
 ## Customers
@@ -462,7 +505,9 @@ Does not own:
 
 Purpose:
 
-- Own parts requests, approval, fulfillment, delivery decision, and vendor return cases.
+- Dormant prototype module for parts requests, approval, fulfillment, delivery decision, and vendor return cases.
+- Not an active sidebar module in the current focused workspace.
+- Do not polish or extend this area unless Parts becomes active again.
 
 Owns:
 
@@ -535,7 +580,9 @@ Does not own:
 
 Purpose:
 
-- Read-only health/summary view across modules.
+- Dormant prototype module for read-only health/summary views across modules.
+- Not an active sidebar module in the current focused workspace.
+- Useful reporting should move into the owning module or Admin overview instead of a separate Reports module.
 
 Owns:
 
@@ -574,6 +621,7 @@ Shows:
 - Permission matrix.
 - Bug reports with screenshots/context.
 - Admin logs from demo/audit events.
+- No top shortcut tile row; Admin should start with real admin work panels, not decorative module cards.
 
 Creates/updates:
 
@@ -591,21 +639,14 @@ Does not own:
 - Daily execution of service/sales/finance work.
 - User-facing document upload/download flow.
 
-## Sidebar Badges And Reminders
+## Sidebar Navigation
 
-Badge rules:
+Current rules:
 
-- Command Center badge: overdue document/open work overview.
-- Service badge: open/blocked service jobs relevant to current role.
-- Documents badge: open document queue for role owner, or overdue count for Admin.
-- Parts badge: pending approval for Service Manager/Admin; in-transit/arrived/vendor returns for Logistics/Warehouse.
-- Finance badge: pending invoices.
-- Contracts badge: edit-mode/expired contracts.
-
-Reminder rules:
-
-- Reminders can mention overdue docs, parts actions, and PM visits.
-- Reminders are overview signals. They do not redefine the owner module of the underlying record.
+- Sidebar items show only the module label.
+- Module initials/icons are not shown.
+- Yellow status/count badge bubbles are not shown.
+- Queue pressure, reminders, overdue states, and module counters should be redesigned as a separate notification/overview concept instead of being attached to every sidebar item.
 
 ## Future Backend Split
 
@@ -615,6 +656,7 @@ When moving from prototype state to DB/API, module boundaries should become reso
 - `equipment`
 - `contracts`
 - `service_jobs`
+- `work_acts`
 - `quotations`
 - `parts_requests`
 - `documents`

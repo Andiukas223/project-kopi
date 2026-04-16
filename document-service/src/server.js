@@ -104,6 +104,11 @@ app.get("/collabora/sessions/:sessionId/download", async (req, res) => {
     if (format === "pdf") {
       const pdf = await exportWopiSessionPdf(session);
       res.setHeader("Content-Type", "application/pdf");
+      if (String(req.query.inline || "") === "1") {
+        res.setHeader("Content-Disposition", `inline; filename="${pdf.fileName.replace(/"/g, "")}"`);
+        res.sendFile(pdf.filePath);
+        return;
+      }
       res.download(pdf.filePath, pdf.fileName);
       return;
     }
@@ -284,22 +289,28 @@ async function createCollaboraSession(body = {}) {
   const sessionId = `wopi-${crypto.randomUUID().slice(0, 12)}`;
   const fileId = `wopi-file-${crypto.randomUUID().slice(0, 12)}`;
   const accessToken = crypto.randomBytes(32).toString("base64url");
-  const title = String(body.title || body.name || "Work List Template").slice(0, 180);
+  const sourceFile = await collaboraSourceFileFromBody(body);
+  const mode = normaliseCollaboraMode(body, sourceFile);
+  const readOnly = mode === "view" || body.readOnly === true;
+  const title = String(body.title || body.name || (sourceFile ? "Generated document" : "Work List Template")).slice(0, 180);
   const sourceType = String(body.sourceType || "work-list-template").slice(0, 80);
   const sourceId = String(body.sourceId || body.templateId || sessionId).slice(0, 120);
-  const fileName = `${safeFilePart(sourceId)}-${safeFilePart(title)}-${sessionId}.fodt`;
+  const extension = sourceFile?.extension || "fodt";
+  const fileName = `${safeFilePart(sourceId)}-${safeFilePart(title)}-${sessionId}.${extension}`;
   const filePath = path.join(wopiStorageDir, fileName);
   const now = new Date().toISOString();
-  const buffer = Buffer.from(renderWorkListTemplateFodt({ ...body, title }), "utf8");
+  const buffer = sourceFile?.buffer || Buffer.from(await renderCollaboraSessionFodt({ ...body, title }), "utf8");
 
   await fs.writeFile(filePath, buffer);
 
   const wopiSrc = `${wopiInternalBaseUrl}/wopi/files/${encodeURIComponent(fileId)}`;
-  const editorUrl = await buildCollaboraEditorUrl({ wopiSrc, accessToken, extension: "fodt" });
+  const editorUrl = await buildCollaboraEditorUrl({ wopiSrc, accessToken, extension, mode });
   const session = {
     id: sessionId,
     fileId,
     accessToken,
+    mode,
+    readOnly,
     sourceType,
     sourceId,
     ownerId: String(body.ownerId || "local-owner").slice(0, 120),
@@ -322,10 +333,16 @@ async function createCollaboraSession(body = {}) {
     editorUrl,
     downloadUrl: `/api/documents/collabora/sessions/${sessionId}/download`,
     pdfDownloadUrl: `/api/documents/collabora/sessions/${sessionId}/download?format=pdf`,
+    sourceFileId: sourceFile?.fileRecord?.id || "",
+    disablePrint: body.disablePrint === true,
+    disableExport: body.disableExport === true || readOnly,
+    disableCopy: body.disableCopy === true,
     meta: {
       company: String(body.company || "").slice(0, 180),
       entryPerson: String(body.entryPerson || "").slice(0, 180),
-      serviceType: String(body.serviceType || "").slice(0, 80)
+      serviceType: String(body.serviceType || "").slice(0, 80),
+      ...(body.meta && typeof body.meta === "object" ? body.meta : {}),
+      sourceFileName: sourceFile?.fileRecord?.fileName || ""
     }
   };
 
@@ -333,30 +350,96 @@ async function createCollaboraSession(body = {}) {
   return publicWopiSession(session);
 }
 
-async function buildCollaboraEditorUrl({ wopiSrc, accessToken, extension }) {
-  const actionUrl = await collaboraActionUrlForExtension(extension);
+function normaliseCollaboraMode(body = {}, sourceFile = null) {
+  const requested = String(body.mode || body.permission || body.viewMode || "").toLowerCase();
+  if (requested === "view" || requested === "readonly" || requested === "read-only") return "view";
+  if (requested === "edit") return "edit";
+  return sourceFile ? "view" : "edit";
+}
+
+async function collaboraSourceFileFromBody(body = {}) {
+  const sourceFileId = String(
+    body.fileId ||
+    body.sourceFileId ||
+    body.generatedFileId ||
+    body.generatedFile?.fileId ||
+    body.generatedFile?.id ||
+    ""
+  ).trim();
+  const expectedOwnerId = String(body.documentId || body.ownerId || "").trim();
+
+  if (sourceFileId) {
+    const files = await readJsonArray(fileIndexPath);
+    const fileRecord = files.find((file) => file.id === sourceFileId);
+    if (!fileRecord) {
+      throw new Error(`Generated file not found in registry: ${sourceFileId}.`);
+    }
+    if (expectedOwnerId && fileRecord.ownerId && fileRecord.ownerId !== expectedOwnerId) {
+      throw new Error("Generated file does not belong to this document.");
+    }
+    return collaboraSourceFromFileRecord(fileRecord);
+  }
+
+  const fallbackFileName = path.basename(String(body.fileName || body.generatedFileName || ""));
+  if (!fallbackFileName) return null;
+
+  const filePath = path.join(generatedDir, fallbackFileName);
+  const buffer = await fs.readFile(filePath);
+  return {
+    buffer,
+    extension: extensionForFileName(fallbackFileName),
+    fileRecord: {
+      id: "",
+      fileName: fallbackFileName,
+      mimeType: contentTypeForFile(fallbackFileName)
+    }
+  };
+}
+
+async function collaboraSourceFromFileRecord(fileRecord = {}) {
+  const filePath = resolveStoredFilePath(fileRecord.storagePath);
+  const buffer = await fs.readFile(filePath);
+  return {
+    buffer,
+    extension: extensionForFileName(fileRecord.fileName),
+    fileRecord
+  };
+}
+
+function extensionForFileName(fileName = "") {
+  return (path.extname(fileName).replace(/^\./, "").toLowerCase() || "fodt").replace(/[^a-z0-9]/g, "") || "fodt";
+}
+
+async function buildCollaboraEditorUrl({ wopiSrc, accessToken, extension, mode = "edit" }) {
+  const actionName = mode === "view" ? "view" : "edit";
+  const actionUrl = await collaboraActionUrlForExtension(extension, actionName);
   const joiner = actionUrl.endsWith("?") || actionUrl.endsWith("&")
     ? ""
     : actionUrl.includes("?") ? "&" : "?";
   const accessTokenTtl = Date.now() + 24 * 60 * 60 * 1000;
-  return `${actionUrl}${joiner}WOPISrc=${encodeURIComponent(wopiSrc)}&access_token=${encodeURIComponent(accessToken)}&access_token_ttl=${accessTokenTtl}&permission=edit`;
+  const permission = mode === "view" ? "view" : "edit";
+  return `${actionUrl}${joiner}WOPISrc=${encodeURIComponent(wopiSrc)}&access_token=${encodeURIComponent(accessToken)}&access_token_ttl=${accessTokenTtl}&permission=${permission}`;
 }
 
-async function collaboraActionUrlForExtension(extension = "fodt") {
+async function collaboraActionUrlForExtension(extension = "fodt", actionName = "edit") {
   const response = await fetch(`${collaboraInternalUrl}/hosting/discovery`);
   if (!response.ok) {
     throw new Error(`Collabora discovery failed with HTTP ${response.status}.`);
   }
 
   const discovery = await response.text();
+  const ext = String(extension || "fodt").replace(/^\./, "").toLowerCase();
   const actionTags = discovery.match(/<action\b[^>]*>/g) || [];
   const actionTag = actionTags.find((tag) =>
-    xmlAttr(tag, "ext") === extension &&
+    xmlAttr(tag, "ext") === ext &&
+    xmlAttr(tag, "name") === actionName
+  ) || actionTags.find((tag) =>
+    xmlAttr(tag, "ext") === ext &&
     xmlAttr(tag, "name") === "edit"
-  ) || actionTags.find((tag) => xmlAttr(tag, "ext") === extension);
+  ) || actionTags.find((tag) => xmlAttr(tag, "ext") === ext);
   const urlsrc = xmlAttr(actionTag || "", "urlsrc");
   if (!urlsrc) {
-    throw new Error(`Collabora does not advertise an editor action for .${extension}.`);
+    throw new Error(`Collabora does not advertise a ${actionName} action for .${ext}.`);
   }
 
   const parsed = new URL(xmlUnescape(urlsrc));
@@ -375,6 +458,13 @@ function xmlUnescape(value = "") {
     .replace(/&apos;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">");
+}
+
+async function renderCollaboraSessionFodt(body = {}) {
+  if (String(body.sourceType || "") === "work-act-document") {
+    return renderWorkActDocumentFodt(body, await vivaMedicalLogoBase64());
+  }
+  return renderWorkListTemplateFodt(body);
 }
 
 function renderWorkListTemplateFodt(body = {}) {
@@ -455,12 +545,120 @@ function wopiCellXml(value = "") {
   return `<table:table-cell table:style-name="TableCell" office:value-type="string"><text:p>${escapeXml(value)}</text:p></table:table-cell>`;
 }
 
+let cachedVivaMedicalLogoBase64 = null;
+
+async function vivaMedicalLogoBase64() {
+  if (cachedVivaMedicalLogoBase64 !== null) return cachedVivaMedicalLogoBase64;
+  try {
+    const buffer = await fs.readFile(path.join(templatesDir, "viva-medical-logo.png"));
+    cachedVivaMedicalLogoBase64 = buffer.toString("base64");
+  } catch {
+    cachedVivaMedicalLogoBase64 = "";
+  }
+  return cachedVivaMedicalLogoBase64;
+}
+
+function renderWorkActDocumentFodt(body = {}, logoBase64 = "") {
+  const title = body.title || body.workActNumber || body.documentId || "Work Act";
+  const documentDate = body.documentDate || new Date().toISOString().slice(0, 10);
+  const sellerRows = [
+    body.sellerName || body.sellerDisplayName || body.company || "Viva Medical",
+    body.sellerAddress,
+    [body.sellerPhone ? `Tel. ${body.sellerPhone}` : "", body.sellerWebsite].filter(Boolean).join(", "),
+    [
+      body.sellerCompanyCode ? `Imones kodas: ${body.sellerCompanyCode}` : "",
+      body.sellerVatCode ? `PVM kodas: ${body.sellerVatCode}` : ""
+    ].filter(Boolean).join(", "),
+    [
+      body.sellerBankAccount ? `a.s.: ${body.sellerBankAccount}` : "",
+      body.sellerBankName ? `bankas ${body.sellerBankName}` : ""
+    ].filter(Boolean).join(", ")
+  ].filter(Boolean);
+  const equipmentRows = Array.isArray(body.equipmentItems) && body.equipmentItems.length
+    ? body.equipmentItems.map((item) => [
+      item.name || "",
+      item.serial || "",
+      item.location || item.category || "",
+      body.jobId || ""
+    ])
+    : [["Equipment", "", body.workLocation || "", body.jobId || ""]];
+  const workRows = Array.isArray(body.workRows) && body.workRows.length
+    ? body.workRows.map((row) => [
+      String(row.number || ""),
+      row.description || "",
+      row.completed ? "Yes" : "",
+      row.comments || ""
+    ])
+    : [["1", body.workText || body.workDescription || "Service work performed.", "", ""]];
+  const reportRows = Object.entries(body.reportOptions || {})
+    .filter(([key]) => !["entryPerson"].includes(key))
+    .map(([key, value]) => [workActOptionLabel(key), value ? "Yes" : "No"]);
+  const logoXml = logoBase64 ? `
+        <text:p text:style-name="LogoLine">
+          <draw:frame draw:name="VivaMedicalLogo" text:anchor-type="as-char" svg:width="2.75in" svg:height="0.76in">
+            <draw:image xlink:href="Pictures/viva-medical-logo.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad">
+              <office:binary-data>${logoBase64}</office:binary-data>
+            </draw:image>
+          </draw:frame>
+        </text:p>` : `<text:p text:style-name="LogoText">${escapeXml(body.sellerDisplayName || "Viva Medical")}</text:p>`;
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" office:version="1.2" office:mimetype="application/vnd.oasis.opendocument.text">
+  <office:styles>
+    <style:style style:name="Standard" style:family="paragraph"><style:text-properties fo:font-size="10pt"/></style:style>
+    <style:style style:name="LogoLine" style:family="paragraph"><style:paragraph-properties fo:text-align="end"/></style:style>
+    <style:style style:name="LogoText" style:family="paragraph"><style:paragraph-properties fo:text-align="end"/><style:text-properties fo:font-size="18pt" fo:font-weight="bold"/></style:style>
+    <style:style style:name="SellerSmall" style:family="paragraph"><style:paragraph-properties fo:text-align="end"/><style:text-properties fo:font-size="8pt"/></style:style>
+    <style:style style:name="Title" style:family="paragraph"><style:paragraph-properties fo:text-align="center"/><style:text-properties fo:font-size="13pt" fo:font-weight="bold"/></style:style>
+    <style:style style:name="Heading" style:family="paragraph"><style:text-properties fo:font-size="11pt" fo:font-weight="bold"/></style:style>
+    <style:style style:name="Small" style:family="paragraph"><style:text-properties fo:font-size="8pt"/></style:style>
+  </office:styles>
+  <office:automatic-styles>
+    <style:style style:name="TableCell" style:family="table-cell"><style:table-cell-properties fo:border="0.5pt solid #000000" fo:padding="0.04in"/></style:style>
+  </office:automatic-styles>
+  <office:body>
+    <office:text>
+      ${logoXml}
+      ${sellerRows.map((line) => `<text:p text:style-name="SellerSmall">${escapeXml(line)}</text:p>`).join("\n      ")}
+      <text:p text:style-name="Heading">UZSAKOVAS: ${escapeXml(body.buyerName || "")}</text:p>
+      <text:p>Im. kodas: ${escapeXml(body.buyerCompanyCode || "")}</text:p>
+      <text:p>PVM kodas: ${escapeXml(body.buyerVatCode || "")}</text:p>
+      <text:p>Darbu atlikimo vieta: ${escapeXml(body.workLocation || body.buyerAddress || "")}</text:p>
+      <text:p>Kontaktas: ${escapeXml(body.contact || "")}</text:p>
+      <text:p text:style-name="Title">ATLIKTU DARBU AKTAS Nr. ${escapeXml(body.workActNumber || body.documentId || title)}</text:p>
+      <text:p text:style-name="Title">${escapeXml(documentDate)}</text:p>
+      <text:p>Darbo / case Nr.: ${escapeXml(body.jobId || "")}</text:p>
+      <text:p text:style-name="Heading">Prietaiso duomenys</text:p>
+      ${wopiTableXml(["Prietaiso pavadinimas", "Serijos Nr.", "Vieta / kategorija", "Darbo Nr."], equipmentRows)}
+      <text:p text:style-name="Heading">Atliktu darbu tekstas</text:p>
+      <text:p>${escapeXml(body.workText || body.workDescription || "")}</text:p>
+      <text:p text:style-name="Heading">Darbu sarasas</text:p>
+      ${wopiTableXml(["Nr.", "Darbo aprasymas", "Atlikta", "Pastabos"], workRows)}
+      ${reportRows.length ? `<text:p text:style-name="Heading">Spausdinimo nustatymai</text:p>${wopiTableXml(["Nustatymas", "Reiksme"], reportRows)}` : ""}
+      <text:p text:style-name="Heading">Vykdytojo patvirtinimas</text:p>
+      <text:p>Vykdytojas patvirtina, kad darbai atlikti pagal nurodyta uzduoti ir perduoti uzsakovui.</text:p>
+      <text:p text:style-name="Small">Uzsakovas ________________________________        Vykdytojas ________________________________</text:p>
+      <text:p text:style-name="Small">Vardas, pavarde, pareigos                         Vardas, pavarde, pareigos</text:p>
+      <text:p text:style-name="Small">Parasas                                           Parasas</text:p>
+    </office:text>
+  </office:body>
+</office:document>`;
+}
+
+function workActOptionLabel(key = "") {
+  return String(key)
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 async function handleWopiCheckFileInfo(req, res) {
   const session = await authorizeWopiRequest(req, res);
   if (!session) return;
 
   const filePath = resolveStoredFilePath(session.storagePath);
   const stat = await fs.stat(filePath);
+  const readOnly = isReadOnlyWopiSession(session);
   session.lastAccessedAt = new Date().toISOString();
   session.sizeBytes = stat.size;
   await upsertWopiSession(session);
@@ -472,20 +670,20 @@ async function handleWopiCheckFileInfo(req, res) {
     Size: stat.size,
     UserId: session.userId || "local-owner",
     UserFriendlyName: session.userName || "Local owner",
-    UserCanWrite: true,
-    ReadOnly: false,
-    SupportsUpdate: true,
-    SupportsLocks: true,
-    SupportsGetLock: true,
-    SupportsExtendedLockLength: true,
+    UserCanWrite: !readOnly,
+    ReadOnly: readOnly,
+    SupportsUpdate: !readOnly,
+    SupportsLocks: !readOnly,
+    SupportsGetLock: !readOnly,
+    SupportsExtendedLockLength: !readOnly,
     SupportsRename: false,
     SupportsUserInfo: false,
     Version: String(session.version || 1),
     LastModifiedTime: stat.mtime.toISOString(),
     PostMessageOrigin: collaboraPublicUrl,
-    DisablePrint: false,
-    DisableExport: false,
-    DisableCopy: false
+    DisablePrint: session.disablePrint === true,
+    DisableExport: session.disableExport === true,
+    DisableCopy: session.disableCopy === true
   });
 }
 
@@ -502,6 +700,11 @@ async function handleWopiGetFile(req, res) {
 async function handleWopiPutFile(req, res) {
   const session = await authorizeWopiRequest(req, res);
   if (!session) return;
+
+  if (isReadOnlyWopiSession(session)) {
+    res.status(403).json({ ok: false, error: "This Collabora session is read-only." });
+    return;
+  }
 
   const requestLock = String(req.header("X-WOPI-Lock") || "");
   if (session.lock && session.lock !== requestLock) {
@@ -535,6 +738,18 @@ async function handleWopiFileOperation(req, res) {
 
   const override = String(req.header("X-WOPI-Override") || "").toUpperCase();
   const requestLock = String(req.header("X-WOPI-Lock") || "");
+
+  if (isReadOnlyWopiSession(session)) {
+    if (override === "GET_LOCK") {
+      res.setHeader("X-WOPI-Lock", "");
+      res.status(200).end();
+      return;
+    }
+    if (["LOCK", "REFRESH_LOCK", "UNLOCK"].includes(override)) {
+      res.status(200).end();
+      return;
+    }
+  }
 
   if (override === "LOCK") {
     if (!requestLock) {
@@ -607,12 +822,19 @@ function sendWopiLockConflict(res, lock, reason) {
   res.status(409).end();
 }
 
+function isReadOnlyWopiSession(session = {}) {
+  return session.readOnly === true || session.mode === "view";
+}
+
 function publicWopiSession(session = {}) {
   return {
     id: session.id,
     fileId: session.fileId,
+    mode: session.mode || "edit",
+    readOnly: isReadOnlyWopiSession(session),
     sourceType: session.sourceType,
     sourceId: session.sourceId,
+    sourceFileId: session.sourceFileId || "",
     title: session.title,
     fileName: session.fileName,
     mimeType: session.mimeType,
@@ -632,6 +854,10 @@ function publicWopiSession(session = {}) {
 
 async function exportWopiSessionPdf(session = {}) {
   const sourcePath = resolveStoredFilePath(session.storagePath);
+  if (path.extname(session.fileName).toLowerCase() === ".pdf") {
+    return { filePath: sourcePath, fileName: session.fileName };
+  }
+
   const sourceStat = await fs.stat(sourcePath);
   const baseName = path.basename(session.fileName, path.extname(session.fileName));
   const pdfFileName = `${baseName}-v${Number(session.version) || 1}.pdf`;

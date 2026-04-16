@@ -1,6 +1,6 @@
 # Current Status And Roadmap
 
-Date: 2026-04-15
+Date: 2026-04-16
 
 Latest pushed implementation baseline noted before the current uncommitted review pass: `28fd1dd refactor: split contracts from sales and finance`.
 
@@ -41,7 +41,7 @@ Detailed module documentation now lives in `docs/modules/`:
 
 - `docs/modules/WORKSPACE_MODULES.md` - current workspace module ownership and UI rules.
 - `docs/modules/DOCUMENTS_MODULE.md` - detailed Documents repository/file custody behavior.
-- `docs/modules/WORK_ACTS_MODULE.md` - detailed Work Acts source draft behavior and Work Act/Templates/Documents boundary.
+- `docs/modules/WORK_ACTS_MODULE.md` - detailed Work Acts behavior, one-job-one-Work-Act rule, and Work Act/Templates/Documents boundary.
 - `docs/modules/TEMPLATES_MODULE.md` - detailed Templates and Output Layouts behavior.
 - `docs/modules/WORK_EQUIPMENT_FUTURE_MODULE.md` - future Work Equipment/metrology tool module context.
 - `docs/modules/COLLABORA_WOPI_INTEGRATION.md` - shared Collabora CODE/WOPI runtime and module adoption playbook.
@@ -49,32 +49,57 @@ Detailed module documentation now lives in `docs/modules/`:
 
 ### App Shell
 
-- Fixed topbar, sidebar, main workspace, role switcher, dynamic navigation badges.
+- Fixed topbar, sidebar, main workspace, and role switcher.
 - Topbar wordmark subtitle is `Informational system` in EN and `Informacine sistema` in LT.
 - Light and dark mode with persisted theme state.
 - Theme toggle is fixed near the bottom-left and centered within the `Workspace` sidebar column, using `☀️` / `🌙` labels.
 - LT/EN language toggle foundation for topbar/sidebar/global shell labels.
+- Sidebar navigation now shows only module names. Initials/icons and yellow status/count badge bubbles are intentionally removed from the active shell.
+- The top non-functional `Workspace` sidebar label is hidden so the sidebar starts directly with module navigation.
 - Docker/web control is intentionally outside the web UI through `vm-web-control.ps1` / `.cmd`.
 - `Report issue` is global and available from every page.
 
 ### Command Center
 
-- Role-filtered overview panels.
-- Service/job/document/parts reminders in sidebar.
-- Document pipeline health card still exists as a high-level operational overview, but daily document handling is now done in `Documents`, `Work Acts`, and `Templates`.
+- Dormant prototype only; hidden from the active sidebar.
+- The current default/start workspace is `Service`.
+- The old sidebar Reminders strip is removed from the active shell. Reminder/notification logic is not considered connected enough yet and will be redesigned later.
+- Future overview/command logic should be designed from scratch instead of polishing the old Command Center screen.
+
+### Active Module Focus
+
+Current active sidebar modules are intentionally limited to the workflows that will be refined now:
+
+- Service
+- Work Acts
+- Contracts
+- Documents
+- Templates
+- Customers
+- Equipment
+- Calendar
+- Admin
+
+`Sales`, `Finance`, `Parts`, and `Reports` are no longer active sidebar modules. Their prototype code/data can remain as dormant reference state, but new UX polish should target the active module set above.
 
 ### Service
 
-- Service jobs table and selected job context.
-- New service job wizard with 8 steps and pipeline type A/B/C/D routing.
-- Diagnostics and repair use manual duration entry, not live timers.
-- PM scheduling with month-limited reschedule logic.
-- Service Manager parts approval queue.
-- Work Act creation flow now has its own `Work Acts` workspace, and service context links into it.
+- Service is now the simple job tracker.
+- New service job creation is a single focused form, not the old 8-step A/B/C/D routing wizard.
+- Required job fields: Job ID, Hospital/customer, System, Contact name, Contact number, Short problem description, Planned visit date, Responsible engineer.
+- Service job statuses are intentionally simple: `Open`, `Waiting signature`, `Done`, `Cancelled`.
+- The Service tracker summary intentionally shows only `Open` and `Waiting signature`.
+- Service has a compact search/filter bar for job text, status, customer, and planned visit date. Text/date filters apply with `Enter` or the `Search` button, and the date field supports partial dates or calendar picker selection.
+- One Service job has exactly one Work Act.
+- The selected job panel shows only Service job fields. Work Act specifics and create/edit controls stay in the `Work Acts` workspace.
+- Work Act generation moves the linked job to `Waiting signature`.
+- Signed Work Act upload confirmation in `Documents` marks the linked job `Done`.
+- PM scheduling and parts/approval flows remain prototype reference logic and should not drive the active Service UX until redesigned.
 
 ### Sales
 
-- Quotation pipeline with offer/approval/handoff detail tabs.
+- Dormant prototype only; hidden from the active sidebar.
+- Quotation pipeline with offer/approval/handoff detail tabs remains in old code as reference.
 - New quotation form.
 - Sales owns commercial offers, customer approval, and service handoff only.
 - Contract upload/configuration moved to `Contracts`.
@@ -89,7 +114,8 @@ Detailed module documentation now lives in `docs/modules/`:
 
 ### Finance
 
-- Invoice register for created and uploaded invoices.
+- Dormant prototype only; hidden from the active sidebar.
+- Invoice register for created and uploaded invoices remains in old code as reference.
 - Upload invoice opens the shared document upload flow preselected as `Invoice`.
 - Uploaded invoice files create invoice register rows.
 - `Generate invoice`, `Mark paid`, `Mark cancelled` remain prototype actions.
@@ -102,28 +128,28 @@ Documents is now a repository and file custody module, not the main template edi
 Implemented behavior:
 
 - Search/filter table by text, type, customer, creator initials, and a single compact created-date query. The created-date filter accepts partial dates (`2026`, `2026-04`, `2026-04-15`) or a calendar picker selection. Queue and status filters were removed from the active UI to reduce clutter.
-- Table contains the important document custody fields directly; the old selected document side panel is no longer needed as the primary source of information. Documents index does not show delivery status; delivery belongs to Parts/Shipping flows. The document register focuses on one upload `Status`: before signed/uploaded file exists it shows a yellow `Upload signed` action, and after upload it shows a green `Download` link. File names are not shown as a separate index column.
+- Table contains the important document custody fields directly; the old selected document side panel is no longer needed as the primary source of information. Documents index does not show delivery status; delivery belongs to Parts/Shipping flows. The table columns are `Reference`, `Type`, `Customer`, `Job status`, `Created`, `Status`, `Action`. The document register focuses on one upload `Status`: before signed/uploaded file exists it shows a yellow `Upload signed` action, and after upload it shows a green `Download signed` link. File names are not shown as a separate index column.
 - The repository table shows document `Created` date instead of `Due`; creation/upload date is the daily reference point. Internal due dates can still support SLA/overdue reminders.
 - Documents index rows no longer show the old red overdue stripe; overdue remains a reminder/overview concern, while the table focuses on upload status and actions.
-- `View` opens the generated/uploaded document preview.
+- `View` opens the generated document preview.
+- Documents index `View` opens the generated document through Collabora read-only view mode. The table `Status > Download signed` action is reserved for the uploaded signed copy.
 - `Edit` routes to the correct source workspace where possible:
   - Work Act -> `Work Acts`
-  - Defect Act -> `Template Generation / Defect Acts`
-  - Commercial Offer/Quotation -> `Template Generation / Commercial Offers`
-  - Invoice -> `Finance`
-  - Parts/vendor documents -> `Parts`
-- `Download` appears in the table `Status` column when a signed/uploaded file is available. Generated-file download remains available from preview/source contexts rather than as a separate Documents index action.
+- Retired/inactive source modules stay in Documents until their source workspace is reactivated.
+- Work Act / legacy Service Act `Edit` opens the exact linked Work Act configuration page and starts a writable Collabora advanced editor session for that same document. Legacy/demo Service Act rows without a Work Act source create a minimal linked Work Act shell instead of landing on an empty Work Acts page.
+- `Download signed` appears in the table `Status` column when a signed/uploaded file is available. Generated-file download remains available from preview/source contexts rather than as a separate Documents index action.
 - `Reject` is not exposed in the Documents index action column.
 - The generic `Advance` button was removed.
 - Archiving is removed from the active Documents workflow for now.
 - Generated documents expose the `Upload signed` action directly in the table `Status` column. The action opens a centered upload modal with drag-and-drop/click file selection plus `Upload` and `Cancel`.
-- After a signed copy is uploaded, the table `Status` column changes to green `Download`; `Finish` / `DONE` is not exposed in the Documents index action column.
+- After a signed copy is uploaded, the table `Status` column changes to green `Download signed`; `Finish` / `DONE` is not exposed in the Documents index action column.
+- If the signed upload is for a Work Act, a completion confirmation opens. Confirming marks the linked Service job `Done`; declining keeps the job `Waiting signature`.
 - Uploaded signed copies are stored through `document-service` and linked back to the same document record.
 - Nginx allows larger document uploads with `client_max_body_size 20m`.
 - The table reference uses the source/job reference (`VM-SV-...`, `QTE-...`) instead of exposing the internal `DOC-...` as the primary daily identifier. Internal document IDs remain for system links and logs.
 - User-facing Owner is the creator initials (`AL`, `VK`, `RP`). Internal module queue ownership remains in data for routing, but it is no longer exposed as an active Documents filter.
 - Newly created document drafts auto-generate a PDF through `document-service` by default, with file registry metadata, preview URL, and download URL. Manual generate remains available as a regenerate action.
-- Document workflow status is normalized from file state: generated file -> `Signature` / `Needs signed upload`, signed file -> green `Download` in Status. Persisted `Auto generating` states are reset on load and queued again so documents do not get stuck without a generated file.
+- Document workflow status is normalized from file state: generated file -> `Signature` / `Needs signed upload`, signed file -> green `Download signed` in Status. Persisted `Auto generating` states are reset on load and queued again so documents do not get stuck without a generated file.
 - Mock preview artifacts are not treated as real generated files in the repository. A document must have a `document-service` download/preview URL before it can signal signed-upload readiness.
 - Documents table text remains selectable for copy/paste; row selection must not clear an active text selection.
 - Document types without a dedicated output layout use `tpl-generic-document` / `generic-document.fodt` until a specific layout is designed.
@@ -135,7 +161,8 @@ Draft / generated draft
   -> Preview or download generated file
   -> Collect signature outside the system
   -> Upload signed copy into the same document record
-  -> Status changes to green Download
+  -> Status changes to green Download signed
+  -> For Work Acts, confirm whether the linked Service job is Done
 ```
 
 Reject path is not exposed in the Documents index table:
@@ -178,7 +205,8 @@ Current state:
 
 - Sidebar module `Work Acts` exists.
 - Internal route/page id is `workacts`.
-- The page reuses the existing Work Act draft/list/builder implementation that previously lived under the legacy Template Generation source-flow naming.
+- The page is the concrete Work Act workspace for the selected Service job.
+- One Service job has exactly one Work Act.
 - `Documents -> Edit` for Work Act routes to `Work Acts`.
 - Detailed implementation handoff lives in `docs/modules/WORK_ACTS_MODULE.md`.
 
@@ -186,13 +214,16 @@ Work Acts implemented:
 
 - Tomis-aligned grouped/list view.
 - Source service job selector.
-- Work Act draft creation.
+- `Create Work Act` / `Open Work Act` behavior.
 - Equipment auto-prefill from job and manual equipment search/dropdown add/remove.
 - Template picker.
 - Work Description field.
 - Work rows/checklist editing.
 - Report options/print settings, including equipment working, ready for use, hygiene, signature, working hours, travel hours, started/completed time, system identity/name.
-- Direct `Generate PDF file` after document draft creation.
+- `Create PDF draft` / `Update PDF draft`, then direct `Generate PDF`.
+- Generated Work Act PDF sets the linked Service job to `Waiting signature`.
+- Direct `Edit in advanced editor` for Work Act documents, using a Work Act-specific Collabora `.fodt` source with the Viva Medical logo embedded.
+- `Preview result PDF` exports the latest saved Collabora Work Act source inline for review.
 - Generated file version metadata (`fileId`, `version`, `versionLabel`, `downloadUrl`, `previewUrl`).
 - Source-aware preview/download/email audit.
 
@@ -317,7 +348,7 @@ Not implemented yet:
 - Daily users still need access to a controlled visual/rich editor for micro edits, user-specific templates, and production bug/workaround capture.
 - Admin is an overseer for users, roles, permissions, pipeline progress, and exception queues, not just a final approver.
 - Archive in Documents is deferred.
-- The main document return path is: generate -> preview/download -> collect signature -> upload signed copy -> green Download in Status.
+- The main document return path is: generate -> preview/download generated file -> collect signature -> upload signed copy -> green Download signed in Status.
 - Page/document previews should stay white even in dark mode because they represent printable output.
 - Runtime files and captured screenshots should not be committed to git.
 

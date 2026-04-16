@@ -169,35 +169,6 @@
   color: var(--on-dark);
 }
 
-.sb-icon {
-  color: rgba(255, 255, 255, .74);
-  flex-shrink: 0;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 10px;
-  font-weight: 700;
-  text-align: center;
-  width: 18px;
-}
-
-.sb-badge {
-  border-radius: 999px;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 10px;
-  font-weight: 700;
-  margin-left: auto;
-  padding: 1px 7px;
-}
-
-.sb-badge.brand {
-  background: var(--brand);
-  color: var(--on-accent);
-}
-
-.sb-badge.warn {
-  background: var(--amber);
-  color: var(--on-accent);
-}
-
 .main {
   display: flex;
   flex: 1;

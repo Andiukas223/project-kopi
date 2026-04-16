@@ -4,6 +4,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AppUrl = "http://localhost:8080/"
 
@@ -22,14 +23,24 @@ function Write-WarnLine {
   Write-Host "[warn] $Message" -ForegroundColor Yellow
 }
 
+function Assert-ExitCode {
+  param(
+    [int]$ExitCode,
+    [string]$Command
+  )
+
+  if ($ExitCode -ne 0) {
+    throw "$Command failed with exit code $ExitCode"
+  }
+}
+
 function Invoke-DockerCompose {
   param([string[]]$Arguments)
-  Push-Location $ProjectRoot
+
+  Push-Location -LiteralPath $ProjectRoot
   try {
     & docker compose @Arguments
-    if ($LASTEXITCODE -ne 0) {
-      throw "docker compose $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
-    }
+    Assert-ExitCode -ExitCode $LASTEXITCODE -Command "docker compose $($Arguments -join ' ')"
   }
   finally {
     Pop-Location
@@ -71,50 +82,92 @@ function Open-Web {
   Start-Process $AppUrl
 }
 
-function Show-Menu {
-  while ($true) {
-    Clear-Host
-    Write-Host "Viva Medical Service IS - local web control" -ForegroundColor White
-    Write-Host "Project: $ProjectRoot" -ForegroundColor DarkGray
-    Write-Host ""
-    Write-Host "1. Turn on"
-    Write-Host "2. Turn off"
-    Write-Host "3. Restart"
-    Write-Host "4. Status"
-    Write-Host "5. Logs"
-    Write-Host "6. Open browser"
-    Write-Host "7. Quit"
-    Write-Host ""
+function Get-MenuItems {
+  @(
+    [pscustomobject]@{ Choice = "1"; Label = "Turn on"; Action = "on" }
+    [pscustomobject]@{ Choice = "2"; Label = "Turn off"; Action = "off" }
+    [pscustomobject]@{ Choice = "3"; Label = "Restart"; Action = "restart" }
+    [pscustomobject]@{ Choice = "4"; Label = "Status"; Action = "status" }
+    [pscustomobject]@{ Choice = "5"; Label = "Logs"; Action = "logs" }
+    [pscustomobject]@{ Choice = "6"; Label = "Open browser"; Action = "open" }
+    [pscustomobject]@{ Choice = "7"; Label = "Quit"; Action = "quit" }
+  )
+}
 
-    $choice = Read-Host "Choose action"
-    try {
-      switch ($choice) {
-        "1" { Start-Web }
-        "2" { Stop-Web }
-        "3" { Restart-Web }
-        "4" { Show-Status }
-        "5" { Show-Logs }
-        "6" { Open-Web }
-        "7" { return }
-        default { Write-WarnLine "unknown option" }
-      }
-    }
-    catch {
-      Write-WarnLine $_.Exception.Message
-    }
+function Show-MenuHeader {
+  Clear-Host
+  Write-Host "Viva Medical Service IS - local web control" -ForegroundColor White
+  Write-Host "Project: $ProjectRoot" -ForegroundColor DarkGray
+  Write-Host ""
+}
 
-    Write-Host ""
-    Read-Host "Press Enter to continue"
+function Show-MenuOptions {
+  Get-MenuItems | ForEach-Object {
+    Write-Host "$($_.Choice). $($_.Label)"
+  }
+  Write-Host ""
+}
+
+function Read-MenuAction {
+  $choice = Read-Host "Choose action"
+  $selectedItem = Get-MenuItems | Where-Object { $_.Choice -eq $choice } | Select-Object -First 1
+
+  if ($null -eq $selectedItem) {
+    Write-WarnLine "unknown option"
+    return $null
+  }
+
+  return $selectedItem.Action
+}
+
+function Wait-ForMenuInput {
+  Write-Host ""
+  Read-Host "Press Enter to continue"
+}
+
+function Invoke-WebAction {
+  param([string]$SelectedAction)
+
+  switch ($SelectedAction) {
+    "menu" { Show-Menu }
+    "on" { Start-Web }
+    "off" { Stop-Web }
+    "restart" { Restart-Web }
+    "status" { Show-Status }
+    "logs" { Show-Logs }
+    "open" { Open-Web }
+    "quit" { return }
   }
 }
 
-switch ($Action) {
-  "menu" { Show-Menu }
-  "on" { Start-Web }
-  "off" { Stop-Web }
-  "restart" { Restart-Web }
-  "status" { Show-Status }
-  "logs" { Show-Logs }
-  "open" { Open-Web }
-  "quit" { return }
+function Invoke-WebActionSafely {
+  param([string]$SelectedAction)
+
+  if ([string]::IsNullOrWhiteSpace($SelectedAction)) {
+    return
+  }
+
+  try {
+    Invoke-WebAction -SelectedAction $SelectedAction
+  }
+  catch {
+    Write-WarnLine $_.Exception.Message
+  }
 }
+
+function Show-Menu {
+  while ($true) {
+    Show-MenuHeader
+    Show-MenuOptions
+
+    $selectedAction = Read-MenuAction
+    if ($selectedAction -eq "quit") {
+      return
+    }
+
+    Invoke-WebActionSafely -SelectedAction $selectedAction
+    Wait-ForMenuInput
+  }
+}
+
+Invoke-WebAction -SelectedAction $Action

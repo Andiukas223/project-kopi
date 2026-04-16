@@ -16,7 +16,7 @@ When a user opens `Templates`, the landing screen is a Work List Template config
 
 Templates are split into two different concepts:
 
-- Procedure/checklist templates copied into Work Act drafts.
+- Procedure/checklist templates copied into concrete Work Acts.
 - Advanced printable output layouts used for generated files.
 
 Do not mix these two concepts. A procedure/checklist template describes what work should be performed. An output layout describes how a generated document should look.
@@ -54,7 +54,7 @@ Implementation entry points:
 
 - A generated document layout shown in `Output Layouts`.
 - Current data collection: `templates`.
-- Example: Service act, Commercial offer, Defect act.
+- Example: Work Act, Commercial offer, Defect act.
 
 `Output layout blueprint`:
 
@@ -78,9 +78,9 @@ Purpose:
 
 - Store reusable work/procedure checklists.
 - Let users configure, save, delete, cancel, and open an advanced editor for templates.
-- Provide applicable templates to Work Act drafts.
+- Provide applicable templates to concrete Work Acts.
 - Keep repeatable work instructions out of individual service jobs until a specific Work Act needs them.
-- Do not own concrete Work Act drafts. Those belong to `Work Acts`.
+- Do not own concrete Work Acts. Those belong to `Work Acts`.
 
 Current data owner:
 
@@ -163,7 +163,7 @@ The `Templates` workspace currently supports:
 - Saving Collabora session metadata back onto the selected template when the template is saved.
 - Deleting the selected template from prototype state.
 - Cancelling unsaved metadata/advanced-editor changes by rerendering from persisted data.
-- Work rows are intentionally not shown on this page. They belong in `Work Acts`, where rows are added to a concrete service act and appended to the generated Work Act document.
+- Work rows are intentionally not shown on this page. They belong in `Work Acts`, where rows are added to a concrete Work Act and appended to the generated Work Act document.
 
 Searchable combobox/dropdown behavior:
 
@@ -238,7 +238,7 @@ Current limitation:
 
 ## Procedure Template Applicability
 
-Work Act drafts use procedure templates through applicability rules.
+Work Acts use procedure templates through applicability rules.
 
 Current logic:
 
@@ -261,7 +261,7 @@ Rules:
 - Empty link lists mean broadly applicable.
 - Specific links narrow applicability.
 - Archived templates should not be offered for new active work.
-- Once a procedure template is copied into a Work Act draft, the Work Act should have its own isolated rows. Later registry template changes should not silently rewrite historical or in-progress Work Acts.
+- Once a procedure template is copied into a Work Act, the Work Act should have its own isolated rows. Later registry template changes should not silently rewrite historical or in-progress Work Acts.
 
 ## Output Layouts Configuration
 
@@ -284,7 +284,7 @@ Current UI functions:
 
 Current output templates:
 
-- `tpl-service-act` - Service act.
+- `tpl-service-act` - Work Act.
 - `tpl-diagnostic` - Diagnostic report.
 - `tpl-quotation` - Commercial offer.
 - `tpl-defect-act` - Defect act.
@@ -340,11 +340,11 @@ Rules:
 
 ## Relationship To Work Acts
 
-Procedure templates feed Work Act drafts:
+Procedure templates feed Work Acts:
 
 ```text
 Procedure template
-  -> selected for Work Act draft
+  -> selected for Work Act
   -> Work Act user adds/selects concrete rows for the real service visit
   -> those rows are appended to the generated Work Act document
   -> generated document is created
@@ -353,8 +353,8 @@ Procedure template
 
 Rules:
 
-- Procedure template changes affect future draft creation, not already uploaded signed documents.
-- Work Act drafts own their concrete row list and comments.
+- Procedure template changes affect future Work Acts, not already uploaded signed documents.
+- Work Acts own their concrete row list and comments.
 - Generated and signed file custody stays in `Documents`.
 
 ## Relationship To Documents
@@ -442,7 +442,7 @@ When changing Templates, verify:
 - Work rows are not visible in Templates and are handled in `Work Acts`.
 - Work Act template selection offers applicable active templates first.
 - Archived templates are not offered for new active work.
-- Existing Service act / Commercial offer / Defect act generation still works.
+- Existing Work Act / Commercial offer / Defect act generation still works.
 - Signed upload/download in Documents is unchanged.
 
 ## Future Improvements

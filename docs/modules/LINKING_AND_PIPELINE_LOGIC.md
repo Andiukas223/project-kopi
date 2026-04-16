@@ -1,6 +1,6 @@
 # Linking And Pipeline Logic
 
-Date: 2026-04-15
+Date: 2026-04-16
 
 This document explains how records link across Viva Medical modules and how work should move through the prototype. It is intentionally detailed because most future bugs will come from unclear ownership or hidden duplicated state.
 
@@ -19,6 +19,42 @@ Examples:
 - The customer and equipment master data are owned by `Customers` and `Equipment`.
 
 Do not copy ownership into another module just because a row is displayed there. Display links, not duplicated business truth.
+
+## P0 Service / Work Act / Documents Model
+
+The active product model is intentionally simple:
+
+- `Service` owns the job tracker record.
+- `Work Acts` owns the document content/configuration/preview for that job.
+- `Documents` owns generated/signed file custody.
+- One Service job has exactly one Work Act.
+- The active `Service` page is only the job tracker: new job creation, job search/filtering, open/waiting-signature counters, and selected job details.
+- Work Act creation/configuration controls belong in `Work Acts`, not in the Service job detail panel.
+
+Service job creation fields:
+
+- Job ID.
+- Hospital/customer.
+- System.
+- Contact name.
+- Contact number.
+- Short problem description.
+- Planned visit date.
+- Responsible engineer.
+
+Service job statuses:
+
+- `Open` - job exists and still needs work or a Work Act.
+- `Waiting signature` - generated Work Act exists and the signed copy is expected or uploaded but not confirmed.
+- `Done` - signed Work Act upload was confirmed as final proof.
+- `Cancelled` - job was stopped but retained.
+
+Completion rule:
+
+- Work Act PDF generation moves the linked job to `Waiting signature`.
+- Signed Work Act upload happens in `Documents`.
+- After upload, the user must confirm whether the job is complete.
+- Only that confirmation marks the linked Service job `Done`.
 
 ## Main Record Types
 
@@ -89,13 +125,13 @@ Reason:
 |---|---|---|---|
 | Customer | Customers | Service, Sales, Contracts, Equipment, Documents, Finance | `customerId`, customer name |
 | Equipment | Equipment | Service, Contracts, Calendar, Customers | `equipmentId`, serial |
-| Service job | Service | Command Center, Documents, Parts, Finance, Work Acts | `jobId` |
+| Service job | Service | Documents, Work Acts, Calendar later | `jobId` |
 | Quotation | Sales | Commercial Offer source workflows, Documents, Finance | `quotationId`, `customerId`, `equipmentId` |
 | Contract | Contracts | Service, Calendar, Customers, Equipment | `contractId`, `customerId`, `equipmentId` |
-| Work Act source | Work Acts | Service, Documents preview/source context | `jobId`, `generatedDocumentId` |
+| Work Act source | Work Acts | Service, Documents preview/source context | `jobId`, `documentId`, `generatedDocumentId`, `workActId` |
 | Defect Act source | Source workflow | Service, Documents preview/source context | `jobId`, `generatedDocumentId` |
 | Commercial Offer source | Source workflow | Sales, Documents preview/source context | `quotationId`, `generatedDocumentId` |
-| Procedure/checklist template | Templates | Work Act draft selector | `workTemplateId`, `linkedEquipmentIds`, `linkedHospitalIds`, `linkedServiceTypes` |
+| Procedure/checklist template | Templates | Work Act selector | `workTemplateId`, `linkedEquipmentIds`, `linkedHospitalIds`, `linkedServiceTypes` |
 | Work equipment tool | Future Work Equipment | Templates, Work Acts | `linkedWorkEquipmentIds`, future used-tool ids |
 | Output layout | Templates / output layout metadata | document-service, generated preview | `templateId`, document type |
 | Document record | Documents | Service, Sales, Finance, Admin, Reports | `documentId`, `jobId`, `quotationId` |
@@ -122,10 +158,9 @@ Equipment
   -> Calendar warranty/PM events
 
 Service Job
-  -> Parts Requests
-  -> Work Act / Defect Act source drafts
+  -> exactly one Work Act source/configuration
   -> Documents
-  -> Invoices
+  -> Calendar later for planned visit visibility
 
 Quotation
   -> Commercial Offer source draft
@@ -142,6 +177,21 @@ Document record
   -> Generated file record
   -> Signed/uploaded file record
   -> Source workspace via Edit route
+  -> Work Act advanced edit session when the document is a Work Act or legacy Service Act
+```
+
+## Legacy Expanded Pipeline Notes
+
+The older A/B/C/D pipeline descriptions below are retained as domain reference. They should not drive the current UI until those modules are intentionally reactivated. The active P0 flow is:
+
+```text
+Service creates job
+  -> Work Acts creates/configures one Work Act
+  -> document-service generates PDF
+  -> Service job becomes Waiting signature
+  -> Documents uploads signed Work Act
+  -> User confirms completion
+  -> Service job becomes Done
 ```
 
 ## Pipeline Type A: Repair Without Service Contract
@@ -167,12 +217,15 @@ Service creates/receives technical case
   -> Sales hands off to Service
   -> Repair stage
   -> Engineer enters repair duration manually
-  -> Work Acts creates Work Act
+  -> Work Acts creates/opens the one linked Work Act
   -> document-service generates PDF
+  -> Service job becomes Waiting signature
   -> Documents shows `Upload signed`
   -> Engineer collects signature outside system
   -> Engineer uploads signed copy in Documents
-  -> Documents Status becomes green `Download`
+  -> User confirms completion
+  -> Service job becomes Done
+  -> Documents Status becomes green `Download signed`
   -> Finance creates/uploads invoice when billing is needed
 ```
 
@@ -209,10 +262,11 @@ Service job created
   -> Diagnostics
   -> Parts check if needed
   -> Repair proceeds under contract rules
-  -> Work Acts creates Work Act
+  -> Work Acts creates/opens the one linked Work Act
   -> document-service generates PDF
   -> Documents handles signed upload
-  -> Documents Status becomes green `Download`
+  -> User confirms completion
+  -> Documents Status becomes green `Download signed`
 ```
 
 Rules:
@@ -245,7 +299,7 @@ Sales creates Commercial Offer / Quotation
   -> Equipment acceptance date is set from upload date
   -> Warranty expiry is calculated
   -> Calendar gets warranty expiry event
-  -> Documents Status becomes green `Download`
+  -> Documents Status becomes green `Download signed`
 ```
 
 Owner modules:
@@ -274,10 +328,11 @@ Contract has `pmPerYear`
   -> Calendar computes PM schedule across contract period
   -> User can reschedule within same month
   -> Service performs PM visit
-  -> Work Acts creates PM/Work Act document
+  -> Work Acts creates/opens the one linked Work Act document
   -> document-service generates PDF
   -> Documents handles signed upload
-  -> Documents Status becomes green `Download`
+  -> User confirms completion
+  -> Documents Status becomes green `Download signed`
 ```
 
 PM rules:
@@ -303,7 +358,10 @@ Source record exists
   -> File registry returns file record
   -> Document stores `generatedFile`
   -> Source record stores same generated file/version metadata
+  -> If source is Work Act, linked Service job becomes Waiting signature
   -> Documents index shows yellow `Upload signed`
+  -> Documents `View` opens the generated file through Collabora read-only view mode
+  -> Documents `Edit` opens the owning source workspace for configuration/editing
 ```
 
 Source record examples:
@@ -311,6 +369,26 @@ Source record examples:
 - Work Act source.
 - Defect Act source.
 - Commercial Offer draft.
+
+Work Act edit route:
+
+```text
+Documents Work Act or legacy Service Act row
+  -> Edit
+  -> Work Acts module
+  -> select source by doc.workActId / generatedDocumentId / jobId
+  -> if missing, create a minimal Work Act shell linked to the same doc.id
+  -> open Collabora advanced editor with sourceType=work-act-document
+  -> save edited .fodt in local WOPI storage
+  -> Preview result PDF exports latest saved Collabora source
+```
+
+Rules:
+
+- `View` is generated-output review and stays read-only.
+- `Edit` is source-workspace configuration and advanced editing.
+- The Work Act advanced editor uses the exact Documents row clicked by the user.
+- Only Work Act / legacy Service Act has this advanced edit path right now.
 
 Fields to sync to document:
 
@@ -346,9 +424,9 @@ Use this when a source draft needs reusable work instructions or a printable lay
 
 ```text
 Procedure/checklist template exists in Templates
-  -> Work Act draft selects an applicable active template
-  -> Template rows are copied into the Work Act draft
-  -> User edits the concrete Work Act draft as needed
+  -> Work Act selects an applicable active template
+  -> Template rows are copied into the Work Act
+  -> User edits the concrete Work Act as needed
   -> Output Layout is selected from document type / template mapping
   -> document-service renders generated file
   -> Documents receives generated file custody
@@ -384,7 +462,10 @@ Documents row has yellow `Upload signed`
   -> Frontend uploads file to document-service
   -> document-service creates file registry record
   -> Document stores signed/uploaded file metadata
-  -> Documents row Status becomes green `Download`
+  -> Documents row Status becomes green `Download signed`
+  -> If document is a Work Act, confirmation asks whether the linked Service job is Done
+  -> Confirm Done marks Service job Done
+  -> Keep open leaves Service job Waiting signature
 ```
 
 Document fields:
@@ -407,7 +488,9 @@ File metadata:
 UI rules:
 
 - Upload button lives in `Status`.
-- Download after upload lives in `Status`.
+- Download after upload lives in `Status` as `Download signed`.
+- `View` opens the generated document, not the signed/uploaded return file.
+- Green `Download signed` downloads the signed/uploaded return file.
 - `Action` remains `View` / `Edit`.
 
 ## External Upload Pipeline
@@ -450,7 +533,7 @@ Service/Sales work creates need for billing
 Rules:
 
 - Documents must not show payment status in its index.
-- Finance must not own signed service act upload.
+- Finance must not own signed Work Act upload.
 - Invoice file custody can be displayed through Documents, but payment truth stays in Finance.
 
 ## Parts And Delivery Pipeline
@@ -549,12 +632,13 @@ Avoid using one generic `Status` meaning everywhere.
 Documents:
 
 - `Upload signed`
-- green `Download`
+- green `Download signed`
 - internal generated/signed metadata
 
 Service:
 
-- job execution status/stage, for example Open/Blocked/Finished or Diagnostics/Repair.
+- simple job status: `Open`, `Waiting signature`, `Done`, `Cancelled`.
+- job planning/contact fields and responsible engineer.
 
 Sales:
 
@@ -637,5 +721,5 @@ When implementing a flow that crosses modules, verify:
 - Display reference uses job/quotation/source reference before internal document id.
 - File upload creates file registry metadata.
 - Generated and signed files are separate records.
-- Sidebar badges count the intended role-specific queues.
+- Sidebar navigation stays label-only; queue badges/reminders need a separate future notification design.
 - Documentation links are updated in this folder.
