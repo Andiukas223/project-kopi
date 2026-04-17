@@ -9,21 +9,6 @@ services:
       - ./document-service/storage:/app/storage
     networks:
       - app-net
-      - collabora-net
-    restart: unless-stopped
-
-  collabora:
-    image: collabora/code:latest
-    expose:
-      - "9980"
-    environment:
-      - aliasgroup1=http://document-service:3001
-      - username=${COLLABORA_ADMIN_USER:-admin}
-      - password=${COLLABORA_ADMIN_PASSWORD:-local-dev-only-change-me}
-      - extra_params=--o:ssl.enable=false --o:ssl.termination=false --o:net.proto=IPv4 --o:mount_jail_tree=false --o:fetch_update_check=0 --o:allow_update_popup=false --o:home_mode.enable=true
-      - dictionaries=en_US lt_LT
-    networks:
-      - collabora-net
     restart: unless-stopped
 
   web:
@@ -32,13 +17,9 @@ services:
       - "8080:80"
     depends_on:
       - document-service
-      - collabora
     networks:
       - app-net
-      - collabora-net
     restart: unless-stopped
 
 networks:
   app-net:
-  collabora-net:
-    internal: true

@@ -1,11 +1,11 @@
 # Templates Module
 
-Date: 2026-04-15
+Date: 2026-04-16
 
 This document is the source of truth for the user-facing `Templates` workspace.
 Use it for future changes to reusable procedure/checklist templates and output document layouts.
 
-Shared Collabora CODE / WOPI runtime rules live in `COLLABORA_WOPI_INTEGRATION.md`. Keep this file focused on Templates behavior and use the Collabora document for cross-module advanced-editor setup.
+Collabora/WOPI is decommissioned. Keep this file focused on active Templates behavior: structured metadata, applicability links, Umo editing, and output layout configuration.
 
 ## Scope
 
@@ -28,18 +28,23 @@ Workspace:
 - Sidebar module: `Templates`
 - Internal route/page id: `templates`
 - Legacy route/page id: `templategen`
-- Landing screen: Work List Template configurator with metadata, link configuration, actions, and advanced-editor preview.
+- Landing screen: Work List Template configurator with metadata, link configuration, actions, merge fields, and Umo editor.
 - No top-level tab row is shown on the `Templates` landing screen.
 
 Implementation entry points:
 
 - `src/js/data.js` - seed data for templates and output layouts.
-- `src/js/state.js` - selected template, edit mode, filters, Collabora session status, and template editor state.
-- `src/js/render.js` - `Templates` workspace UI, template configurator, visual editor/Collabora iframe preview, and output layout helpers.
-- `src/js/interactions.js` - Work List Template CRUD handlers and `Open in advanced editor` Collabora session creation.
-- `document-service/src/server.js` - document generation, file template endpoints, and the local WOPI bridge used by Collabora.
-- `docker-compose.yml` - local `collabora` runtime and internal Docker networks.
-- `nginx.conf` - `/hosting`, `/browser`, `/cool`, `/loleaflet`, and `/lool` reverse proxy routes for Collabora.
+- `src/js/state.js` - selected template, edit-mode compatibility flag, and template error state.
+- `src/modules/templates/TemplatesPage.vue` - active Vue 3 Templates workspace UI: Work List Template configurator, metadata fields, applicability comboboxes, merge fields, actions, generation, and Umo editor.
+- `src/components/documentEditor/UmoDocumentEditor.vue` - Umo wrapper for template content editing, content load/save snapshots, Ctrl+S, and token insertion.
+- `src/components/documentEditor/editorContent.js` - editor content normalization helpers.
+- `src/modules/templates/components/WltSearchableCombobox.vue` - Vue wrapper for the existing searchable combobox DOM contract.
+- `src/modules/templates/templateViewModel.js` - Vue-facing helper functions for selected template, options, Umo-compatible editor HTML, and normalized link arrays.
+- `src/js/render.js` - generated document print preview/template mapping helpers still used by source preview flows. It no longer renders the active Templates landing page, the Work Acts route, or the old Documents-side output-layout editor panel.
+- `src/js/interactions.js` - delegated Work List Template save/delete/cancel compatibility handlers and searchable combobox behavior. Old legacy new/filter/archive/start-work-act/rich-toolbar handlers have been removed.
+- `document-service/src/server.js` - document generation and file template endpoints.
+- `docker-compose.yml` - `web` + `document-service` runtime.
+- `nginx.conf` - `/api/documents/` reverse proxy.
 
 ## Terminology
 
@@ -77,7 +82,7 @@ Implementation entry points:
 Purpose:
 
 - Store reusable work/procedure checklists.
-- Let users configure, save, delete, cancel, and open an advanced editor for templates.
+- Let users configure, save, delete, cancel, and edit template body content through Umo.
 - Provide applicable templates to concrete Work Acts.
 - Keep repeatable work instructions out of individual service jobs until a specific Work Act needs them.
 - Do not own concrete Work Acts. Those belong to `Work Acts`.
@@ -90,24 +95,13 @@ Current state owner:
 
 - `selectedWltId`
 - `wltEditMode`
-- `wltNewOpen`
 - `wltError`
-- `wltNewError`
-- `wltSearchQuery`
-- `wltStatusFilter`
-- `wltServiceTypeFilter`
-- `wltEntryPersonFilter`
-- `wltCollaboraSession`
-- `wltCollaboraStatus`
-- `wltCollaboraError`
 
-Current UI functions:
+Current UI entry points:
 
-- `workListTemplatesWorkspace()`
-- `wltVisualHtml()`
-- `filteredWorkListTemplates()`
-- `workListTemplateOptionsForAct()`
-- `isWorkListTemplateApplicableToAct()`
+- `src/modules/templates/TemplatesPage.vue`
+- `src/modules/templates/templateViewModel.js`
+- Work Act Template applicability is used by the Vue Work Acts route through `src/modules/workActs/workActsViewModel.js`.
 
 ## Procedure Template Fields
 
@@ -127,21 +121,17 @@ Current fields:
 - `language` - `lt` or `en`.
 - `bodyText` - summary sentence or short procedure intro.
 - `workRows` - legacy data kept only for old prototype records/migration. The active Templates UI does not edit it, and Work Act creation must not copy it.
-- `richBodyHtml` - optional visual editor HTML.
+- `richBodyHtml` - compatibility HTML snapshot for older demo records.
+- `editorContent` - current Umo editor content snapshot with HTML, plain text, optional JSON, and update timestamp.
 - `editorNote` - optional bug/workaround/review note.
 - `isActive` - `false` means archived; missing/true means active.
-- `collaboraSessionId` - latest local WOPI session id saved from the advanced editor.
-- `collaboraFileName` - latest generated `.fodt` session filename.
-- `collaboraDownloadUrl` - local source `.fodt` download endpoint for the latest saved Collabora session.
-- `collaboraPdfDownloadUrl` - local PDF export endpoint for the latest saved Collabora session.
-- `collaboraUpdatedAt` - timestamp when the template was last connected to a Collabora session.
 
 Rules:
 
 - Prefer stable ids over display names for links.
 - Current prototype has a visible `Delete` action for the selected template. Production delete should become permissioned and version-aware.
 - `Templates` stores applicability and reusable template body/context. It should not be used as the daily Work Act row editor.
-- `richBodyHtml` is for visual editing and micro formatting of the template body.
+- `editorContent` is for Umo editing and micro formatting of the template body. `richBodyHtml` remains a compatibility fallback.
 - `editorNote` is for implementation notes, workaround notes, or known review needs. It is not customer-facing document copy.
 
 ## Procedure Template UI Behavior
@@ -156,13 +146,11 @@ The `Templates` workspace currently supports:
 - Linking `Equipment` through a searchable combobox/autocomplete dropdown. The main field itself is the search input; opening the dropdown shows matching equipment rows.
 - Linking `Hospitals` through a searchable combobox/autocomplete dropdown. The main field itself is the search input; opening the dropdown shows matching hospital/customer rows.
 - Linking `Work Equipment` through a searchable combobox/autocomplete dropdown of service/metrology tools. This list is a seed registry for a future `Work Equipment` module.
-- Viewing the current advanced-editor document preview on the same screen.
-- Opening the advanced editor in Collabora CODE through the same page iframe.
-- Downloading a PDF exported from the edited local Collabora session.
-- Saving template metadata, applicability links, and advanced-editor HTML.
-- Saving Collabora session metadata back onto the selected template when the template is saved.
+- Viewing and editing the current Umo editor content on the same screen.
+- Managing merge fields and inserting `{d.fieldKey}` tokens into template content.
+- Saving template metadata, applicability links, and visual editor HTML.
 - Deleting the selected template from prototype state.
-- Cancelling unsaved metadata/advanced-editor changes by rerendering from persisted data.
+- Cancelling unsaved metadata/visual-editor changes by rerendering from persisted data.
 - Work rows are intentionally not shown on this page. They belong in `Work Acts`, where rows are added to a concrete Work Act and appended to the generated Work Act document.
 
 Searchable combobox/dropdown behavior:
@@ -183,58 +171,28 @@ Selection behavior:
 - Editing a selected template should not silently switch to another selected template.
 - Cancel should leave persisted data untouched.
 
-## Advanced Editor Runtime Decision
+## Editor Runtime Decision
 
-See also: `COLLABORA_WOPI_INTEGRATION.md` for the full shared runtime, endpoint, payload, verification, and troubleshooting playbook.
+Collabora/WOPI is decommissioned and is not part of active Templates behavior.
 
-Target editor:
+Active editor:
 
-- Use Collabora Online Development Edition (`CODE`) as the future LibreOffice-like advanced editor runtime.
-- `CODE` is acceptable for this project because the app is intended for personal/development use:
-  - the app runs on the owner's own computer or own server;
-  - documents are edited only by the owner;
-  - there is no customer, employee, or company production use;
-  - no SLA or official vendor support is required;
-  - if the editor breaks, the owner accepts debugging it or working around it.
+- Umo is the current same-page template body editing path.
+- Structured fields remain the source of truth for company, entry person, template name, service type, and applicability links.
+- `editorContent` persists the Umo editor HTML/text/json snapshot, with `richBodyHtml` retained only for compatibility.
+- PDF generation remains handled through source modules and `document-service`.
 
-Rules:
+Removed behavior:
 
-- Do not treat `CODE` as a production support commitment.
-- If this app later becomes a real multi-user company system, revisit Collabora Online paid subscription/support before production launch.
-- `Open in advanced editor` opens Collabora through a same-page iframe, using `document-service` as the file/session/WOPI bridge.
-- Runtime container: `collabora` in `docker-compose.yml`.
-- Network rule: the Collabora container is attached only to the internal `collabora-net` Docker network and has no host-published port.
-- WOPI host allowlist rule: Collabora allows `http://document-service:3001` through `aliasgroup1`; do not point this at the public `web` proxy unless the WOPI source URL is also changed.
-- Browser access goes through the existing `web` nginx proxy on `http://localhost:8080/` using Collabora paths such as `/hosting`, `/browser`, `/cool`, `/loleaflet`, and `/lool`.
-- The first Docker image pull still contacts Docker Hub; after the image exists locally, the running Collabora service is intended to stay server-local/private.
-- Runtime external network posture: `collabora-net` is marked `internal: true`, so the Collabora container has no normal outbound gateway. The editor UI can contain vendor links, but the running container is not given an external route.
-- Runtime posture: Collabora is started with `mount_jail_tree=false` for Docker compatibility, plus `fetch_update_check=0`, `allow_update_popup=false`, and `home_mode.enable=true` so update/welcome/feedback calls are disabled for this personal/dev setup. Home mode limits concurrent open connections/documents, which is acceptable for single-owner use.
+- No `Open in advanced editor` action.
+- No Collabora iframe.
+- No `/api/documents/collabora/sessions` calls.
+- No WOPI metadata stored on templates.
+- No Collabora PDF export flow.
 
-Implemented local WOPI MVP:
+Future rule:
 
-- Frontend calls `POST /api/documents/collabora/sessions` when the user presses `Open in advanced editor`.
-- `document-service` renders a temporary flat OpenDocument Text file (`.fodt`) from the current configurator values: company, entry person, template name, service type, linked equipment, linked hospitals, linked work equipment, body text, and rich preview HTML.
-- `document-service` stores the session file under `document-service/storage/collabora-wopi/`.
-- The session returns a Collabora editor URL resolved from `/hosting/discovery`, a source `.fodt` download URL, and a PDF export URL.
-- The frontend replaces the preview pane with a Collabora iframe and a `Download PDF` link.
-- Collabora opens in `Editing` mode when `CheckFileInfo` returns writable metadata.
-- Pressing Collabora `Save` writes back through WOPI and updates the stored session file, file size, version, `updatedAt`, and `lastSavedAt`.
-- The runtime config disables Collabora update/welcome/feedback popups, and the frontend also suppresses the first-run welcome dialog through same-origin browser storage before opening the iframe, so the editor opens directly to the document.
-
-Implemented WOPI endpoints:
-
-- `GET /wopi/files/:fileId` - CheckFileInfo.
-- `GET /wopi/files/:fileId/contents` - GetFile.
-- `POST /wopi/files/:fileId` - LOCK, GET_LOCK, REFRESH_LOCK, and UNLOCK handling.
-- `POST /wopi/files/:fileId/contents` - PutFile/save-back from Collabora.
-- `GET /api/documents/collabora/sessions/:sessionId` - session metadata lookup.
-- `GET /api/documents/collabora/sessions/:sessionId/download` - download the edited `.fodt`.
-- `GET /api/documents/collabora/sessions/:sessionId/download?format=pdf` - export the edited session source to PDF with LibreOffice and download it.
-
-Current limitation:
-
-- The edited `.fodt` is saved locally and the user-facing download exports it to PDF, but it is not yet parsed back into linked equipment, linked hospitals, linked work equipment, or `richBodyHtml`.
-- Template `Save` currently persists the Collabora session metadata/download link on the selected template. A later pass should add either structured FODT parsing or an explicit "promote edited FODT to template source" flow.
+- If a browser document editor other than Umo is proposed, treat `docs/modules/COLLABORA_WOPI_INTEGRATION.md` as a historical decision record and create a new explicit product/runtime decision before implementation.
 
 ## Procedure Template Applicability
 
@@ -276,11 +234,13 @@ Current data owners:
 - `templates` in `src/js/data.js`.
 - `documentTemplateBlueprints` in `src/js/data.js`.
 
-Current UI functions:
+Current helper functions:
 
-- `outputTemplatesWorkspace(doc)`
-- `templatePanel(doc)`
-- `documentTemplateForDoc(doc)`
+- `documentTemplateForDoc(doc)` in `src/js/render.js` maps document records to output templates for generated preview fallback behavior.
+
+Removed legacy helpers:
+
+- The old `templatePanel(doc)` Documents-side mock generation/editor surface is removed from the active frontend.
 
 Current output templates:
 
@@ -321,19 +281,24 @@ Rules:
 
 ## Output Layout Editor Behavior
 
-Output layout editing is still implemented in helper functions, but it is not exposed as a separate top-level tab on the current `Templates` landing screen.
+There is no active Vue output-layout editor screen right now.
 
-The output layout editor supports:
+Current retained behavior:
 
-- Selecting/editing output template metadata.
-- Editing body text.
-- Viewing merge fields.
-- Editing blueprint sections where a blueprint exists.
-- Resetting to defaults.
-- Exporting/uploading FODT where supported by the document service.
+- Output template seed records still live in `templates`.
+- Output layout blueprint metadata still lives in `documentTemplateBlueprints`.
+- Generated preview fallback still maps document records to output templates through `documentTemplateForDoc(doc)`.
+- Real PDF generation still uses the backend template map and `.fodt` files in `document-service`.
+
+Removed frontend behavior:
+
+- The old Documents-side `Generate mock` panel.
+- The old inline output template metadata/body editor.
+- The old frontend `Export sections as .fodt` and `Upload .fodt template` controls.
 
 Rules:
 
+- A future output-layout editor should be implemented as a dedicated Vue/admin surface instead of restoring the removed legacy panel.
 - This area is advanced/admin by nature.
 - Daily service users should work mostly in the `Templates` configurator and source document flows.
 - FODT upload/export must not be confused with signed customer upload. Signed customer upload belongs to `Documents`.
@@ -380,7 +345,8 @@ Templates owns:
 Add or change a procedure/checklist template:
 
 - Update `workListTemplates` seed data in `src/js/data.js`.
-- If the UI needs a new field/filter, update `workListTemplatesWorkspace()` and related WLT handlers in `src/js/render.js`.
+- If the UI needs a new field/filter, update `src/modules/templates/TemplatesPage.vue`, `src/modules/templates/templateViewModel.js`, and the relevant delegated handlers in `src/js/interactions.js`.
+- If a create/new-template flow is reintroduced, implement it as Vue UI instead of restoring the deleted legacy `workListTemplatesWorkspace()` renderer.
 - If new state is needed, update `src/js/state.js`.
 - Update this document.
 
@@ -402,13 +368,13 @@ Add a merge field:
 
 Change visual editor behavior:
 
-- Update `workListTemplatesWorkspace()`, rich editor command handlers, and related CSS.
+- Update `src/modules/templates/TemplatesPage.vue`, `src/modules/templates/templateViewModel.js`, rich editor command handlers in `src/js/interactions.js`, and related CSS.
 - Keep concrete Work Act rows in `Work Acts`; do not reintroduce row add/edit UI into Templates unless the ownership decision changes.
 - Update this document.
 
 Change applicability rules:
 
-- Update `isWorkListTemplateApplicableToAct()`.
+- Update the applicability helper in `src/modules/workActs/workActsViewModel.js`.
 - Verify equipment, hospital, service type, and fallback behavior.
 - Update this document and `LINKING_AND_PIPELINE_LOGIC.md` if cross-module linking changes.
 
@@ -434,11 +400,9 @@ When changing Templates, verify:
 - Equipment, hospitals, and work equipment links save.
 - Delete removes the selected template from prototype state and selects the next available template.
 - Cancel leaves persisted data untouched.
+- Umo editor remains usable on the same page.
 - Visual editor Save persists expected HTML and structured metadata.
-- `Open in advanced editor` creates a Collabora session and renders the iframe in `Editing` mode.
-- Collabora `Save` updates the WOPI session `version` and `lastSavedAt`.
-- `Download PDF` exports and downloads the current saved session file as PDF.
-- Collabora remains inaccessible directly on `localhost:9980`; browser access must go through `http://localhost:8080/`.
+- No `Open in advanced editor` or Collabora iframe action is visible.
 - Work rows are not visible in Templates and are handled in `Work Acts`.
 - Work Act template selection offers applicable active templates first.
 - Archived templates are not offered for new active work.

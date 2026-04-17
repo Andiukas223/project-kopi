@@ -2,6 +2,12 @@
 
 Data: 2026-04-15
 
+Current runtime update, 2026-04-16:
+
+- This file is historical backlog/context. Active runtime decisions are in `docs/CURRENT_STATUS_AND_ROADMAP.md`, `docs/PRODUCTION_DEPLOYMENT.md`, and module docs.
+- Collabora/WOPI was removed from the active architecture. Historical backlog rows that mention Collabora, WOPI, or `Open in advanced editor` are no longer current requirements.
+- Vue 3 migration starts with a Vue/Vite shell and keeps legacy modules through a compatibility layer until each module is migrated.
+
 ## 1. Projekto tikslas
 
 Sukurti vidine verslo valdymo web aplikacija Viva Medical komandai. Aplikacija turi atrodyti ir veikti kaip desktop-first administracine sistema: virsutine juosta, soninis meniu, moduliai, korteles, lenteles, subpuslapiai, wizard modalai, diagnostikos/remonto trukmes laukeliai ir process flow diagramos.
@@ -416,7 +422,7 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 | Unified file storage foundation | `document-service` registruoja generated/uploaded/signed/template/feedback failus per `files.json`; runtime storage ignoruojamas git |
 | localStorage persistence | Mutable kolekcijos (jobs, documents, equipment ir kt.) išsaugomos per puslapio reload |
 | Carbone document-service | Node.js + Carbone + LibreOffice Docker konteineris; `/health`, `/preview`, `/generate`, `/download` API; nginx proxy; `work-act.fodt`, `commercial-offer.fodt`, `defect-act.fodt`, `generic-document.fodt` šablonai |
-| **Templates modulis** | Atskiras sidebar modulis su Tomis tipo Work List Template konfiguratoriumi: Company, Entry person, Template name, Service type, Equipment, Hospitals, Work Equipment, Advanced editor preview |
+| **Templates modulis** | Atskiras sidebar modulis su Tomis tipo Work List Template konfiguratoriumi: Company, Entry person, Template name, Service type, Equipment, Hospitals, Work Equipment, Umo editor |
 | Work Acts workspace | Job selector, draft create, equipment search/add/remove, Template picker, Work Description + Work Rows editor, Service act document draft → Documents |
 | Defect Acts workspace | Job selector, draft create, defect description/findings/correction/risk/acknowledgement editor, Defect act document draft → Documents |
 | Commercial Offers workspace | Source quotation selector, draft create, scope/line items/validity/payment terms/notes editor, `Create document draft` → Documents; `commercialOfferDrafts` kolekcija su localStorage |
@@ -462,7 +468,7 @@ Sidebar juosta (sarašo tipo). Kiekvienas įrašas: `vieta / case open date / st
 | ~~B-20~~ | ~~**Defect Acts workspace in Template Generation**~~ | **Done:** Defect Acts tab'e pridetas source service job selector, Defect Act draft create flow, defect description / engineer findings / recommended correction / risk / customer acknowledgement editorius ir Defect act dokumento draft kurimas i `Documents`. |
 | ~~B-21~~ | ~~**Work Act builder UX labels and equipment search**~~ | **Done:** `Work List Template` pervadintas i `Work List Template Name`, Work Text terminas pakeistas i `Work Description`, o equipment selection pakeistas i search/dropdown su `Add equipment` ir pasirinktu equipment juosta su `X` pasalinimu. |
 | ~~B-22~~ | ~~**Commercial Offers workspace**~~ | **Done:** `Template Generation / Commercial Offers` tab turi pilna kūrimo/redagavimo flow: source quotation selector, draft create, scope/line items/validity/payment terms/notes editor, `Create document draft` veiksmas. `commercialOfferDrafts` kolekcija su `localStorage` persistencija. |
-| ~~B-23~~ | ~~**Templates CRUD**~~ | **Done:** `Templates` workspace turi selected template konfiguratoriu su Company, Entry person, Template name, Service type, Equipment/Hospitals/Work Equipment linkais, Advanced editor preview, `Open in advanced editor`, `Save`, `Delete`, `Cancel`, ir inline work row add/remove/text-edit. |
+| ~~B-23~~ | ~~**Templates CRUD**~~ | **Done/current:** `Templates` workspace turi selected template konfiguratoriu su Company, Entry person, Template name, Service type, Equipment/Hospitals/Work Equipment linkais, same-page Umo editor, merge fields, `Save`, `Delete`, `Cancel`. `Open in advanced editor` ir Templates inline work row redagavimas buvo pasalinti is aktyvios architekturos; Work rows priklauso `Work Acts`. |
 
 ---
 
@@ -481,7 +487,7 @@ Svarbiausios isvados:
 - `Documents` turi buti dokumentu talpykla ir paieskos vieta, o dokumentu generavimas turi persikelti i atskira `Template Generation` moduli.
 - Dabartinis generic template editor yra laikinas ir turi virsti advanced `Template Generation / Output Layouts` arba Admin/settings dalimi.
 - Kasdienis user neturi kiekviena karta maketuoti dokumento nuo nulio: normalus flow yra strukturuotas darbo irasas -> parinktas Template -> standartinis Output Layout -> sugeneruotas dokumentas.
-- Kasdienis user vis tiek turi tureti prieiga prie visual/rich editoriaus micro editams, bugui uzfiksuoti arba savo darbo sablonui susikurti, panasiai kaip Tomis. Tam reikia atskiro nuodugnaus Tomis crawl su vartotojo pagalba.
+- Kasdienis user vis tiek turi tureti prieiga prie Umo editoriaus micro editams, bugui uzfiksuoti arba savo darbo sablonui susikurti, panasiai kaip Tomis.
 - Admin role kryptis: useriu, roliu ir leidimu valdymas bei pipeline/progreso overseer dashboard. Admin neturi buti vien tik patvirtintojo role.
 
 ### Dokumentavimo taisyklė
@@ -517,9 +523,9 @@ Kitas chat turetu:
 
 | Klausimas | Kur naudojama |
 |---|---|
-| App pavadinimas (`Viva Medical` / `Service IS` / kitas) | `src/index.html` topbar; modulio pavadinimas rodomas sidebar'e, ne atskirame page header |
+| App pavadinimas (`Viva Medical` / `Service IS` / kitas) | Vue shell topbar in `src/components/shell/AppTopbar.vue`; modulio pavadinimas rodomas sidebar'e, ne atskirame page header |
 | Brand spalva iš logo → `--brand` CSS kintamasis | `src/styles/base.css` `:root` (dabar mėlyna placeholder spalva) |
-| Logo eksportas → `assets/logo.svg` | `src/index.html` topbar (dabar tekstinis wordmark) |
+| Logo eksportas → `assets/logo.svg` | Vue shell topbar in `src/components/shell/AppTopbar.vue` (dabar tekstinis wordmark) |
 | UI kalba (LT / EN) | Yra `state.language` + `src/js/i18n.js` uzuomazga shell/sidebar/topbar tekstams; reikia tolimesnes modulio tekstu revizijos |
 
 ### Techniniai next steps (po atvirų klausimų)
@@ -534,7 +540,7 @@ Kitas chat turetu:
 | ~~B-29~~ | ~~**Defect Act Tomis-aligned visits**~~ | **Done:** Defect Acts pridetas Actual Visits grid su DA/WA, planned start, work/travel hours, completed, comments, add/remove eilutemis, document-service payload laukais, preview renderinimu ir `Create Part Request Offer` placeholder. |
 | ~~B-30~~ | ~~**Output template conditional rendering**~~ | **Done:** `.fodt` output sablonuose prideti Carbone conditional blokai Work Act report options/signature zonai, Commercial Offer header/scope/footer/line items laukams ir Defect Act visits/findings/correction/risk laukams. |
 | ~~B-31~~ | ~~**Tomis visual editor crawl**~~ | **Done:** read-only perziuretas Tomis `Work List Template (Aespire TB)` detail, embedded rich/table editorius, service/equipment/hospital/work-equipment applicability tab'ai, dual-list assignment controls ir `Template - Advanced Editor` Word-like ribbon. Radiniai dokumentuoti `docs/DOCUMENT_GENERATION_TOMIS_FINDINGS.md`. |
-| ~~B-32~~ | ~~**User-accessible visual template editor**~~ | **Done as MVP:** `Templates` workspace turi same-page advanced editor preview, contenteditable rich editoriu, basic formatting/list toolbar, checklist-row insertion, visual HTML persistence ir bug/workaround note lauka, bet strukturuotos work rows ir applicability metadata lieka default generavimo source. |
+| ~~B-32~~ | ~~**User-accessible visual template editor**~~ | **Done as Umo MVP:** `Templates` workspace turi same-page Umo editoriu, HTML/text/json content snapshots, merge-field insertion, visual HTML persistence ir save/load per `document-service`; strukturuotos work rows ir applicability metadata lieka default generavimo source. |
 | ~~B-33~~ | ~~**Generated document preview and delivery**~~ | **Done as MVP:** source record'uose, generated output preview, Work Act linkuose ir `Documents` eilutese pridetas `Open preview`; Tomis tipo modalas turi print/quick print, zoom, export/download, email compose, inline service PDF preview, delivery statusa ir audit history. `document-service` grazina atskira inline `previewUrl`, todel PDF preview nebeatidaro download dialogo. |
 | ~~B-34~~ | ~~**Bug/feedback capture for production**~~ | **Done as MVP:** visi useriai turi `Report issue`, kuris ijungia Windows snipping tipo click-drag pasirinkimo rezima, padaro tik pasirinktos zonos screenshot, prisega ji kaip admin-only papildoma informacija, prireikus atidaro red-pencil anotavimo canvas, reikalauja trumpo komentaro, issaugo context/page/role/selected records ir ikelia reporta i demo state. Report queue, screenshot, komentaras, statusas ir history matomi tik aktyviai `admin` role. |
 | ~~B-35-lite~~ | ~~**Production feedback backend foundation**~~ | **Done as storage/API foundation:** bug reports perkelti is browser `localStorage` i `document-service` backend storage: persistent `storage` volume, screenshot attachment failai, `feedback-reports.json`, `files.json`, `POST/GET/PATCH /feedback/reports`, admin status/assignee filtrai ir workflow. Pilna auth/permissions ir DB migracija lieka backend fazei. |
@@ -543,7 +549,7 @@ Kitas chat turetu:
 | ~~B-38~~ | ~~**Defect Act / Commercial Offer generation parity**~~ | **Done:** Defect Acts ir Commercial Offers source paneliai dabar rodo generated file/version metadata, turi direct `Generate PDF file`, `Open preview` ir `Download` veiksmus po document draft sukurimo, o preview/download/print/export/email audit irasai susiejami su source recordu ir tuo paciu Documents file registry objektu. |
 | B-39 | **Document repository workflow polish** | Patobulinti Documents kaip paprasta repository queue: row signalai `Upload signed` / green `Download`, geresni empty states, file history row expansion, be archyvavimo kol nera retention dizaino. |
 | B-40 | **Finance invoice register polish** | Finance yra invoice ownership vieta: prideti paieska/filtrus kaip Documents, geresne upload metadata (amount, invoice no, due, terms), source quotation/job/document linkus ir paid/signed invoice flow jei reikia. |
-| B-41 | **Visual template editor V2** | Started: Templates landing perdarytas i Tomis tipo Work List Template konfiguratoriu su same-page advanced editor preview. Toliau po papildomo Tomis crawl: table editing, merge fields, logo/image placeholders, autosave, dirty-state warning, revert, duplicate as personal template, version history. |
+| B-41 | **Umo template editor V2** | Started: Templates landing perdarytas i Tomis tipo Work List Template konfiguratoriu su same-page Umo editoriumi. Toliau po papildomo Tomis crawl: table editing, stronger merge fields, logo/image placeholders, autosave, dirty-state warning, revert, duplicate as personal template, version history. |
 | B-42 | **Backend data model and auth** | PostgreSQL + migracijos, users/roles/permissions, customers/equipment/jobs/documents/templates/files/feedback/audit modeliai, auth/session, route permission checks. |
 | B-43 | **Production file custody** | `files.json` perkelti i DB, file version chains, signed upload versions, object storage adapter, checksum/MIME/size validation, retention and backup policy. |
 | B-44 | **Real email delivery** | SMTP/API provider, outbound email drafts/sent audit, attachments from file registry, customer contact autofill, send failure/retry flow. |

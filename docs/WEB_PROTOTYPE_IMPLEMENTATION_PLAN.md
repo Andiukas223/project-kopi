@@ -6,6 +6,8 @@ Current status source of truth: `docs/CURRENT_STATUS_AND_ROADMAP.md`.
 
 Tomis reverse-engineering process: `docs/TOMIS_CRAWL_PLAYBOOK.md`.
 
+2026-04-16 migration note: this file is historical prototype context. The active frontend is Vue 3/Vite with a legacy compatibility host; `navigation.js`, `src/index.html`, Collabora/WOPI runtime, and old Documents/Templates/Work Acts renderers are no longer active architecture.
+
 ## Goal
 
 Build a Docker-runnable web prototype for Viva Medical's internal business management system.
@@ -802,7 +804,7 @@ All original criteria met and exceeded:
 
 | Question | Where it applies |
 |---|---|
-| App name in UI (`Viva Medical` / `Service IS` / other) | `src/index.html` topbar; active module is shown in the sidebar, not in page headers |
+| App name in UI (`Viva Medical` / `Service IS` / other) | Vue shell topbar in `src/components/shell/AppTopbar.vue`; active module is shown in the sidebar, not in page headers |
 | Brand colour from logo → `--brand` CSS variable | `src/styles/base.css` `:root` |
-| Logo export → `assets/logo.svg` | `src/index.html` topbar |
+| Logo export → `assets/logo.svg` | Vue shell topbar in `src/components/shell/AppTopbar.vue` |
 | UI language (LT / EN) | `state.language` + `src/js/i18n.js` scaffold exists for shell/sidebar/topbar; module-level copy still needs a deliberate translation pass |

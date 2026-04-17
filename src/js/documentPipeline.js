@@ -1,8 +1,7 @@
-import { calendarEvents, commercialOfferDrafts, companyProfiles, contracts, customers, defectActs, documentTemplateBlueprints, documents, equipment, invoices, jobs, partsRequests, quotations, templates, workActs } from "./data.js";
+import { calendarEvents, commercialOfferDrafts, companyProfiles, contracts, customers, defectActs, documents, equipment, invoices, jobs, partsRequests, quotations, templates, workActs } from "./data.js";
 import { saveDemoState } from "./persistence.js";
 import { state } from "./state.js";
 import { creatorMeta, currentUserName } from "./userIdentity.js";
-import { openWorkActAdvancedEditorForAct } from "./workActAdvancedEditor.js";
 
 const statusByStage = {
   Draft: "Draft",
@@ -29,7 +28,7 @@ export function bindDocumentPipeline(renderApp) {
   document.addEventListener("click", (event) => {
     const docViewButton = event.target.closest("[data-doc-view]");
     if (docViewButton) {
-      void openDocumentCollaboraView(docViewButton.dataset.docView);
+      void viewGeneratedDocument(docViewButton.dataset.docView);
       return;
     }
 
@@ -151,58 +150,6 @@ export function bindDocumentPipeline(renderApp) {
       return;
     }
 
-    const templateButton = event.target.closest("[data-template-pick]");
-    if (templateButton) {
-      state.selectedTemplateId = templateButton.dataset.templatePick;
-      state.generationStatus = "Ready";
-      state.generatedDocPreview = null;
-      state.templateEditorError = "";
-      state.templateFileStatus = "";
-      state.templateFileError = "";
-      renderAppCallback();
-      return;
-    }
-
-    const templateEditButton = event.target.closest("[data-template-editor-open]");
-    if (templateEditButton) {
-      state.templateEditorOpen = true;
-      state.templateEditorError = "";
-      renderAppCallback();
-      return;
-    }
-
-    const templateEditCancelButton = event.target.closest("[data-template-editor-cancel]");
-    if (templateEditCancelButton) {
-      state.templateEditorOpen = false;
-      state.templateEditorError = "";
-      renderAppCallback();
-      return;
-    }
-
-    const templateSaveButton = event.target.closest("[data-template-editor-save]");
-    if (templateSaveButton) {
-      saveTemplateEdits();
-      return;
-    }
-
-    const templateResetButton = event.target.closest("[data-template-editor-reset]");
-    if (templateResetButton) {
-      resetTemplateBody();
-      return;
-    }
-
-    const templateFodtExportButton = event.target.closest("[data-template-fodt-export]");
-    if (templateFodtExportButton) {
-      exportTemplateSectionsAsFodt(templateFodtExportButton.dataset.templateFodtExport);
-      return;
-    }
-
-    const generateButton = event.target.closest("[data-generate-document]");
-    if (generateButton) {
-      generateMockDocument(generateButton.dataset.generateDocument);
-      return;
-    }
-
     const serviceGenerateButton = event.target.closest("[data-generate-service-document]");
     if (serviceGenerateButton) {
       generateServiceDocument(serviceGenerateButton.dataset.generateServiceDocument);
@@ -218,12 +165,6 @@ export function bindDocumentPipeline(renderApp) {
     const previewCloseButton = event.target.closest("[data-doc-preview-close]");
     if (previewCloseButton) {
       closeDocumentPrintPreview();
-      return;
-    }
-
-    const collaboraViewCloseButton = event.target.closest("[data-doc-collabora-close]");
-    if (collaboraViewCloseButton) {
-      closeDocumentCollaboraView();
       return;
     }
 
@@ -268,16 +209,23 @@ export function bindDocumentPipeline(renderApp) {
       return;
     }
 
-    const resetPreview = event.target.closest("[data-reset-preview]");
-    if (resetPreview) {
-      state.generatedDocPreview = null;
-      state.generationStatus = "Ready";
-      renderAppCallback();
-      return;
-    }
   });
 
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      if (state.printPreviewOpen) {
+        event.preventDefault();
+        closeDocumentPrintPreview();
+        return;
+      }
+
+      if (state.documentUploadOpen) {
+        event.preventDefault();
+        closeDocumentUploadDialog();
+        return;
+      }
+    }
+
     if (event.key !== "Enter" || !isDocumentSearchEnterTarget(event.target)) return;
     event.preventDefault();
     applyDocumentSearch();
@@ -305,25 +253,6 @@ export function bindDocumentPipeline(renderApp) {
   });
 
   document.addEventListener("change", (event) => {
-    if (event.target.matches("[data-template-select]")) {
-      state.selectedTemplateId = event.target.value;
-      state.generationStatus = "Ready";
-      state.generatedDocPreview = null;
-      state.templateEditorError = "";
-      state.templateFileStatus = "";
-      state.templateFileError = "";
-      renderAppCallback();
-      return;
-    }
-
-    if (event.target.matches("[data-output-format]")) {
-      state.documentOutputFormat = event.target.value;
-      state.generationStatus = "Ready";
-      state.generatedDocPreview = null;
-      renderAppCallback();
-      return;
-    }
-
     if (event.target.matches("[data-doc-date-picker]")) {
       state.documentDateQuery = event.target.value || "";
       const textInput = document.getElementById("doc-date-query");
@@ -337,11 +266,6 @@ export function bindDocumentPipeline(renderApp) {
       return;
     }
 
-    if (event.target.matches("[data-template-fodt-upload]")) {
-      uploadFodtTemplate(event.target.dataset.templateFodtUpload, event.target.files?.[0]);
-      event.target.value = "";
-      return;
-    }
   });
 }
 
@@ -391,7 +315,6 @@ async function routeDocumentEdit(id) {
 
   const type = String(doc.type || "").toLowerCase();
 
-  let workActToOpen = null;
   if (type.includes("defect")) {
     keepDocumentInRepository(doc);
   } else if (type.includes("quotation") || type.includes("commercial offer")) {
@@ -403,20 +326,16 @@ async function routeDocumentEdit(id) {
   } else if (type.includes("acceptance")) {
     routeToServiceJob(doc);
   } else {
-    workActToOpen = routeToWorkAct(doc);
+    routeToWorkAct(doc);
   }
 
   renderAppCallback();
-
-  if (workActToOpen?.id) {
-    await openWorkActAdvancedEditorForAct(workActToOpen.id, renderAppCallback, { documentId: doc.id });
-  }
 }
 
 function keepDocumentInRepository(doc) {
   state.page = "documents";
   state.selectedDocumentId = doc.id;
-  state.documentViewStatus = "This document type does not have an active source editor yet.";
+  state.generationStatus = "This document type does not have an active source editor yet.";
 }
 
 function routeToWorkAct(doc) {
@@ -432,9 +351,6 @@ function routeToWorkAct(doc) {
   state.templateGenWorkActJobId = act?.jobId || doc.jobId || state.templateGenWorkActJobId;
   state.selectedServiceJobId = doc.jobId || state.selectedServiceJobId;
   state.workActEditorDocumentId = doc.id;
-  state.workActCollaboraStatus = "";
-  state.workActCollaboraError = "";
-  state.workActCollaboraSession = null;
   return act || null;
 }
 
@@ -518,51 +434,6 @@ function documentEquipmentSnapshot(eq) {
     location: eq.location,
     customer: eq.customer
   };
-}
-
-function routeToDefectAct(doc) {
-  const act = defectActs.find((item) =>
-    item.id === doc.defectActId ||
-    item.generatedDocumentId === doc.id ||
-    item.jobId === doc.jobId
-  );
-  state.page = "templategen";
-  state.templateGenTab = "defect-acts";
-  state.selectedTemplateId = "tpl-defect-act";
-  state.selectedDefectActId = act?.id || null;
-  state.templateGenDefectActJobId = act?.jobId || doc.jobId || state.templateGenDefectActJobId;
-  state.selectedServiceJobId = doc.jobId || state.selectedServiceJobId;
-}
-
-function routeToCommercialOffer(doc) {
-  const draft = commercialOfferDrafts.find((item) =>
-    item.id === doc.commercialOfferDraftId ||
-    item.generatedDocumentId === doc.id ||
-    item.quotationId === doc.jobId
-  );
-  const quotation = quotations.find((item) =>
-    item.id === doc.jobId ||
-    item.id === draft?.quotationId ||
-    item.customer === doc.customer
-  );
-  state.page = "templategen";
-  state.templateGenTab = "commercial-offers";
-  state.selectedTemplateId = "tpl-quotation";
-  state.selectedCommercialOfferDraftId = draft?.id || null;
-  state.templateGenCommercialOfferQuotationId = draft?.quotationId || quotation?.id || state.templateGenCommercialOfferQuotationId;
-  if (quotation?.id) state.selectedQuotationId = quotation.id;
-}
-
-function routeToInvoice(doc) {
-  const invoice = invoices.find((item) => item.documentId === doc.id || item.jobId === doc.jobId || item.customer === doc.customer);
-  state.page = "finance";
-  if (invoice?.id) state.selectedInvoiceId = invoice.id;
-}
-
-function routeToParts(doc) {
-  const partRequest = partsRequests.find((item) => item.id === doc.partsRequestId || item.jobId === doc.jobId || item.description === doc.description);
-  state.page = "parts";
-  if (partRequest?.id) state.selectedPartsRequestId = partRequest.id;
 }
 
 function routeToServiceJob(doc) {
@@ -1006,8 +877,6 @@ function applyDocumentSearch() {
   state.documentTypeFilter = getControlValue("doc-type-filter") || "All";
   state.documentCustomerFilter = getControlValue("doc-customer-filter") || "All";
   state.documentDateQuery = getControlValue("doc-date-query");
-  state.documentDateFrom = "";
-  state.documentDateTo = "";
   renderAppCallback();
 }
 
@@ -1016,8 +885,6 @@ function clearDocumentSearch() {
   state.documentTypeFilter = "All";
   state.documentCustomerFilter = "All";
   state.documentDateQuery = "";
-  state.documentDateFrom = "";
-  state.documentDateTo = "";
   renderAppCallback();
 }
 
@@ -1035,201 +902,6 @@ function ownerForDocumentType(type) {
   if (type === "Invoice") return "Finance";
   if (["Acceptance report", "Warranty confirmation"].includes(type)) return "Admin";
   return "Service";
-}
-
-function generateMockDocument(id) {
-  const doc = documents.find((item) => item.id === id);
-  const template = templates.find((item) => item.id === state.selectedTemplateId);
-  if (!doc || !template) return;
-
-  state.selectedDocumentId = doc.id;
-  state.generationStatus = `${state.documentOutputFormat.toUpperCase()} mock ready`;
-  state.generatedDocPreview = {
-    docId:       doc.id,
-    templateId:  template.id,
-    format:      state.documentOutputFormat,
-    generatedAt: new Date().toISOString()
-  };
-  doc.generatedFile = {
-    fileName: `${doc.id}-mock.${state.documentOutputFormat}`,
-    format: state.documentOutputFormat,
-    generatedAt: state.generatedDocPreview.generatedAt,
-    templateId: template.id,
-    source: "mock"
-  };
-  doc.pipelineStep = "Signature";
-  doc.status = "Signature";
-  doc.deliveryStatus = "Needs signed upload";
-  addDocumentDeliveryAudit(doc, "Mock generated", `${state.documentOutputFormat.toUpperCase()} mock preview generated`);
-  saveDemoState();
-  renderAppCallback();
-}
-
-function saveTemplateEdits() {
-  const template = templates.find((item) => item.id === state.selectedTemplateId);
-  if (!template) return;
-
-  const blueprint = documentTemplateBlueprints[template.id];
-  const name = getControlValue("tpl-editor-name");
-  const owner = getControlValue("tpl-editor-owner");
-  const format = getControlValue("tpl-editor-format");
-  const sections = blueprint ? readTemplateSections(blueprint) : [];
-  const body = blueprint ? composeTemplateBody(sections) : getControlValue("tpl-editor-body");
-
-  if (!name || !owner || !format || !body || (blueprint && sections.some((section) => !section.value))) {
-    state.templateEditorError = blueprint
-      ? "Template name, owner, output format, and all section text are required."
-      : "Template name, owner, output format, and body are required.";
-    state.templateEditorOpen = true;
-    renderAppCallback();
-    return;
-  }
-
-  template.name = name;
-  template.owner = owner;
-  template.format = format;
-  template.body = body;
-  if (blueprint) template.sections = sections;
-  template.updatedAt = new Date().toISOString();
-
-  state.templateEditorError = "";
-  state.templateEditorSavedAt = template.updatedAt;
-  state.generatedDocPreview = null;
-  state.generationStatus = "Ready";
-  saveDemoState();
-  renderAppCallback();
-}
-
-function resetTemplateBody() {
-  const template = templates.find((item) => item.id === state.selectedTemplateId);
-  if (!template) return;
-
-  const blueprint = documentTemplateBlueprints[template.id];
-  if (blueprint) {
-    template.sections = blueprint.sections.map((section) => ({ ...section }));
-    template.body = composeTemplateBody(template.sections);
-  } else {
-    template.body = template.defaultBody || defaultTemplateBody(template);
-  }
-  template.updatedAt = new Date().toISOString();
-  state.templateEditorError = "";
-  state.templateEditorSavedAt = template.updatedAt;
-  state.generatedDocPreview = null;
-  state.generationStatus = "Ready";
-  saveDemoState();
-  renderAppCallback();
-}
-
-function defaultTemplateBody(template) {
-  return `${template.name} template for ${template.owner} documents. Include document number, customer, job, equipment, owner, notes, and signatures.`;
-}
-
-function readTemplateSections(blueprint) {
-  return blueprint.sections.map((section) => ({
-    id: section.id,
-    label: section.label,
-    value: getControlValue(`tpl-section-${section.id}`)
-  }));
-}
-
-function composeTemplateBody(sections) {
-  return sections
-    .map((section) => `${section.label}\n${section.value}`)
-    .join("\n\n")
-    .trim();
-}
-
-async function exportTemplateSectionsAsFodt(templateId) {
-  const template = templates.find((item) => item.id === templateId);
-  if (!template) return;
-
-  const blueprint = documentTemplateBlueprints[template.id];
-  const sections = blueprint ? readTemplateSections(blueprint) : [];
-  const body = blueprint ? composeTemplateBody(sections) : template.body || "";
-
-  if (blueprint && sections.some((section) => !section.value)) {
-    state.templateFileError = "All template sections must have text before FODT export.";
-    state.templateEditorOpen = true;
-    renderAppCallback();
-    return;
-  }
-
-  await saveFodtTemplateToService({
-    template,
-    payload: {
-      templateId: template.id,
-      templateName: template.name,
-      templateBody: body,
-      templateSections: sections,
-      fileName: `${template.id}-sections.fodt`
-    },
-    successPrefix: "Exported sections"
-  });
-}
-
-async function uploadFodtTemplate(templateId, file) {
-  const template = templates.find((item) => item.id === templateId);
-  if (!template || !file) return;
-
-  if (!file.name.toLowerCase().endsWith(".fodt")) {
-    state.templateFileError = "Only .fodt template files are supported in this prototype step.";
-    state.templateEditorOpen = true;
-    renderAppCallback();
-    return;
-  }
-
-  try {
-    const contentBase64 = await readFileAsBase64(file);
-    await saveFodtTemplateToService({
-      template,
-      payload: {
-        templateId: template.id,
-        templateName: template.name,
-        fileName: file.name,
-        contentBase64
-      },
-      successPrefix: "Uploaded FODT"
-    });
-  } catch (error) {
-    state.templateFileStatus = "";
-    state.templateFileError = error.message || "Could not read template file.";
-    state.templateEditorOpen = true;
-    renderAppCallback();
-  }
-}
-
-async function saveFodtTemplateToService({ template, payload, successPrefix }) {
-  state.templateFileStatus = "Document service template sync working";
-  state.templateFileError = "";
-  state.templateEditorOpen = true;
-  renderAppCallback();
-
-  try {
-    const response = await fetch("/api/documents/template/upload", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const result = await readJsonResponse(response, "Template upload failed");
-    if (!response.ok || !result.ok) {
-      throw new Error(result.error || "Template upload failed.");
-    }
-
-    template.fodtFileName = result.fileName;
-    template.fodtDownloadUrl = result.downloadUrl;
-    template.fodtFileRecord = result.fileRecord || null;
-    template.updatedAt = new Date().toISOString();
-    state.templateFileStatus = `${successPrefix}: ${result.fileName}`;
-    state.templateFileError = "";
-    state.generatedDocPreview = null;
-    state.generationStatus = "Ready";
-    saveDemoState();
-  } catch (error) {
-    state.templateFileStatus = "";
-    state.templateFileError = error.message || "Template upload failed.";
-  }
-
-  renderAppCallback();
 }
 
 function readFileAsBase64(file) {
@@ -1529,6 +1201,43 @@ function shouldAutoGenerateDocument(doc) {
   return true;
 }
 
+async function viewGeneratedDocument(id) {
+  const doc = documents.find((item) => item.id === id);
+  if (!doc) return;
+
+  const hasReachableGeneratedFile = await documentGeneratedFileIsReachable(doc);
+  if (!hasReachableGeneratedFile) {
+    if (doc.generatedFile) {
+      doc.generatedFile = null;
+      state.generatedDocPreview = null;
+    }
+    await generateServiceDocument(id, {
+      format: "pdf",
+      reason: "Generated for preview"
+    });
+  }
+
+  openDocumentPrintPreview(id);
+}
+
+async function documentGeneratedFileIsReachable(doc) {
+  if (!documentHasGeneratedFile(doc)) return false;
+  const fileId = doc.generatedFile.fileId || doc.generatedFile.id || doc.generatedFile.fileRecord?.id || "";
+  if (!fileId) return false;
+
+  try {
+    const response = await fetch("/api/documents/files", {
+      cache: "no-store",
+      headers: { "X-VM-Role": state.role }
+    });
+    const result = await readJsonResponse(response, "File registry check failed");
+    if (!response.ok || !result.ok || !Array.isArray(result.files)) return false;
+    return result.files.some((file) => file.id === fileId);
+  } catch {
+    return false;
+  }
+}
+
 async function generateServiceDocument(id, options = {}) {
   const doc = documents.find((item) => item.id === id);
   const template = generationTemplateForDocument(doc);
@@ -1611,125 +1320,37 @@ function openDocumentPrintPreview(id) {
   addDocumentDeliveryAudit(doc, "Preview opened", documentFileAuditNote(generatedFile, "Preview opened before service file generation"), generatedFile);
   saveDemoState();
   renderAppCallback();
-}
-
-async function openDocumentCollaboraView(id) {
-  const doc = documents.find((item) => item.id === id);
-  if (!doc) return;
-
-  state.selectedDocumentId = doc.id;
-  state.documentViewOpen = true;
-  state.documentViewDocumentId = doc.id;
-  state.documentViewCollaboraSession = null;
-  state.documentViewStatus = "Preparing generated document preview...";
-  state.documentViewError = "";
-  state.printPreviewOpen = false;
-  suppressCollaboraWelcomeDialog();
-  renderAppCallback();
-
-  let generatedFile = documentHasGeneratedFile(doc) ? doc.generatedFile : null;
-  if (!generatedFile) {
-    state.documentViewStatus = "Generating document before Collabora view...";
-    renderAppCallback();
-    await generateServiceDocument(doc.id, {
-      format: "pdf",
-      silent: true,
-      reason: "Generated for Collabora view"
-    });
-    generatedFile = documentHasGeneratedFile(doc) ? doc.generatedFile : null;
-  }
-
-  if (!generatedFile) {
-    state.documentViewStatus = "";
-    state.documentViewError = "Generated file is not ready yet. Try View again after generation finishes.";
-    renderAppCallback();
-    return;
-  }
-
-  const payload = buildDocumentCollaboraViewPayload(doc, generatedFile);
-  state.documentViewStatus = "Opening Collabora view mode...";
-  renderAppCallback();
-
-  try {
-    const response = await fetch("/api/documents/collabora/sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const result = await readJsonResponse(response, "Could not open Collabora view.");
-    if (!response.ok || !result.ok) {
-      throw new Error(result.error || "Could not open Collabora view.");
-    }
-
-    state.documentViewCollaboraSession = result.session || null;
-    state.documentViewStatus = result.session?.fileName
-      ? `Collabora view ready: ${result.session.fileName}`
-      : "Collabora view ready.";
-    doc.deliveryStatus = "Preview opened";
-    addDocumentDeliveryAudit(doc, "Collabora view opened", documentFileAuditNote(generatedFile, "Generated document opened in view mode"), generatedFile);
-    saveDemoState();
-  } catch (error) {
-    state.documentViewCollaboraSession = null;
-    state.documentViewStatus = "";
-    state.documentViewError = error.message || "Could not open Collabora view.";
-  }
-
-  renderAppCallback();
-}
-
-function buildDocumentCollaboraViewPayload(doc, generatedFile) {
-  const fileId = generatedFile.fileId || generatedFile.id || generatedFile.fileRecord?.id || "";
-  return {
-    sourceType: "document-generated-preview",
-    sourceId: doc.id,
-    ownerId: doc.id,
-    documentId: doc.id,
-    fileId,
-    generatedFileName: generatedFile.fileName || "",
-    mode: "view",
-    permission: "view",
-    readOnly: true,
-    disableExport: true,
-    userId: "local-owner",
-    userName: currentUserName(),
-    title: `${doc.jobId || doc.quotationId || doc.id} ${doc.type || "Document"}`.trim(),
-    meta: {
-      documentId: doc.id,
-      documentType: doc.type || "",
-      jobId: doc.jobId || "",
-      quotationId: doc.quotationId || "",
-      customer: doc.customer || "",
-      generatedFileName: generatedFile.fileName || "",
-      generatedFileVersion: generatedFile.versionLabel || generatedFile.version || ""
-    }
-  };
-}
-
-function suppressCollaboraWelcomeDialog() {
-  try {
-    const today = new Date().toDateString().replaceAll(" ", "-");
-    window.localStorage.setItem("WSDWelcomeDisabled", "true");
-    window.localStorage.setItem("WSDWelcomeDisabledDate", today);
-  } catch {
-    // Collabora still opens if browser storage is unavailable.
-  }
-}
-
-function closeDocumentCollaboraView() {
-  state.documentViewOpen = false;
-  state.documentViewDocumentId = null;
-  state.documentViewCollaboraSession = null;
-  state.documentViewStatus = "";
-  state.documentViewError = "";
-  renderAppCallback();
+  window.setTimeout(() => {
+    document.querySelector("[data-doc-preview-close]")?.focus();
+  }, 0);
 }
 
 function closeDocumentPrintPreview() {
+  const previousDocId = state.printPreviewDocumentId;
   state.printPreviewOpen = false;
   state.printPreviewExportOpen = false;
   state.printPreviewEmailOpen = false;
   state.printPreviewEmailStatus = "";
   renderAppCallback();
+  window.setTimeout(() => {
+    if (previousDocId) document.querySelector(`[data-doc-view="${escapeCssValue(previousDocId)}"]`)?.focus();
+  }, 0);
+}
+
+function closeDocumentUploadDialog() {
+  state.documentUploadOpen = false;
+  state.documentUploadTargetId = null;
+  state.documentUploadDefaultType = "";
+  state.documentUploadError = "";
+  renderAppCallback();
+  window.setTimeout(() => {
+    document.querySelector("[data-doc-upload-open]")?.focus();
+  }, 0);
+}
+
+function escapeCssValue(value = "") {
+  if (window.CSS?.escape) return window.CSS.escape(String(value));
+  return String(value).replace(/["\\]/g, "\\$&");
 }
 
 function moveDocumentPrintPreviewPage(direction) {

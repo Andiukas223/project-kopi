@@ -16,7 +16,7 @@ The module exists so daily service work has a clear home:
 - select a source Service job;
 - create or open the one Work Act linked to that job;
 - choose equipment serviced in that act;
-- choose a reusable Template and copy its rows into the Work Act;
+- choose a reusable Template and apply its reusable context/body into the Work Act;
 - edit the concrete Work Act rows, work description, options, and report settings;
 - create/generate the printable PDF draft;
 - hand the generated/signed document lifecycle to `Documents`.
@@ -39,21 +39,24 @@ Workspace:
 
 Current implementation status:
 
-- A first `Work Acts` sidebar route exists.
-- It reuses the existing Work Act workspace renderer and handlers that were originally inside `Template Generation`.
-- Remaining legacy code names can be renamed gradually when safe; user-facing copy should say `Work Act`.
+- The active `Work Acts` sidebar route is rendered by Vue 3 components in `src/modules/workActs/`.
+- The Vue route still uses delegated Work Act handlers for source mutations, but Work Act PDF generation now uses the template-generation endpoint with the selected or derived reusable Template.
+- Remaining legacy code/state names can be renamed gradually when safe; user-facing copy should say `Work Act`.
 
 Implementation entry points:
 
-- `src/index.html` - sidebar item `Work Acts`.
-- `src/js/render.js` - `workActsPage()`, `workActsWorkspace()`, Work Act panels, list/table rendering, generated file actions.
-- `src/js/interactions.js` - Work Act creation, selection, equipment/template/row updates, document draft creation.
-- `src/js/workActAdvancedEditor.js` - opens a specific Work Act document in Collabora edit mode and builds the Work Act-specific WOPI payload.
+- `src/app/App.vue` and `src/layouts/AppShell.vue` - Vue shell and sidebar item `Work Acts`.
+- `src/modules/workActs/WorkActsPage.vue` - active Vue 3 Work Acts workspace UI: source job selector, selected Work Act builder, equipment picker, Template picker, options, rows, PDF draft/generation actions, and grouped list.
+- `src/modules/workActs/workActsViewModel.js` - Vue-facing helper functions for selected source job, selected Work Act, filtering/grouping, template applicability, equipment options, report options, and generated-file display.
+- `src/modules/workActs/workActTemplateGeneration.js` - Work Act to reusable-template generation payload mapping and selected/derived Template resolution.
+- `src/js/render.js` - generated document print preview/output helpers still used by Work Act source preview flows. It no longer renders the active Work Acts route.
+- `src/js/interactions.js` - delegated Work Act creation, selection, equipment/template/row updates, report option updates, document draft creation, and template-based Work Act generation bridge.
+- `src/services/templateService.js` - calls `POST /api/documents/templates/:templateId/generate` for reusable-template generation.
+- `src/stores/documentStore.js` - upserts generated Work Act document records into the Documents collection while preserving signed upload state.
 - `src/js/state.js` - selected Work Act, source job id, filters, and Work Act errors.
 - `src/js/data.js` - `workActs` seed/prototype collection.
 - `src/js/documentPipeline.js` - Documents `Edit` route into Work Acts.
 - `document-service/src/server.js` - Work Act PDF generation through `tpl-service-act` / `work-act.fodt`.
-- `document-service/templates/viva-medical-logo.png` - Viva Medical logo embedded into the Collabora Work Act editing template.
 - `docs/modules/TEMPLATES_MODULE.md` - reusable template source.
 - `docs/modules/DOCUMENTS_MODULE.md` - generated/signed file custody.
 
@@ -70,7 +73,6 @@ Owns:
 - Report options / print settings.
 - Entry person and created/updated timestamps.
 - Generated document id and generated file metadata link.
-- Collabora advanced-editor session metadata for this Work Act document.
 - Source-side preview/download/email audit hints.
 
 Does not own:
@@ -124,11 +126,9 @@ Service job exists
   -> Add concrete Work Act rows/points for the real service visit
   -> Edit work description, row completion/comments, report options
   -> Create PDF draft
-  -> Generate PDF
+  -> Generate from template
   -> Linked Service job becomes Waiting signature
   -> Preview/download generated PDF
-  -> Optional: open exact Work Act document in Collabora advanced editor
-  -> Optional: preview exported PDF result from the edited Collabora source
   -> Collect signature outside app
   -> Documents module handles Upload signed
   -> User confirms whether the signed Work Act completes the job
@@ -153,19 +153,14 @@ The Work Acts page should show:
 - `Apply template`.
 - `Add row`.
 - `Create PDF draft` / `Update PDF draft`.
-- `Generate PDF`.
+- `Generate from template` / `Regenerate from template`.
 - `Preview`.
 - Work description textarea.
 - Work rows table with completion/comments.
 - Report options / print settings.
 - All Work Acts list with search/status/person filters.
 - Generated file metadata and actions once a document exists.
-- `Edit in advanced editor` for generated Work Act documents.
-- Same Work Act panel advanced-editor section with:
-  - Collabora iframe in `Editing` mode.
-  - exact linked document id.
-  - source `.fodt` download.
-  - exported PDF result preview.
+- Preview/download actions for the generated PDF.
 
 Daily UI principle:
 
@@ -186,7 +181,7 @@ Service:
 Templates:
 
 - Provides reusable work/procedure templates.
-- Work Act uses the selected template as context for the document body, service type, and applicability links.
+- Work Act uses the selected or derived template as context for the document body, service type, applicability links, and reusable merge-field definitions.
 - Concrete rows/points are created in `Work Acts` and appended to the generated Work Act document.
 - Work Act may show template name and link back to template configuration.
 
@@ -195,7 +190,7 @@ Documents:
 - Receives generated Work Act document record.
 - Owns signed upload/download status.
 - Documents `Edit` for Work Act should route back to `Work Acts`.
-- Documents `Edit` for Work Act opens the exact document row in the Work Acts configuration page and starts the Collabora advanced editor for that same `doc.id`.
+- Documents `Edit` for Work Act opens the exact document row in the Work Acts configuration page.
 - If a legacy/demo Service Act document has no Work Act source draft yet, the edit route may create a minimal Work Act configuration shell linked to that same document so the user is not left on an empty Work Acts page.
 - Documents signed upload asks for completion confirmation. `Done` is set only after that confirmation.
 
@@ -220,29 +215,19 @@ Output layout:
 - Template id: `tpl-service-act`.
 - Output format should default to PDF for daily users.
 
-Collabora advanced editor layout:
-
-- Work Act advanced edit sessions use `sourceType = work-act-document`.
-- The backend renders a Work Act-specific flat ODT source for Collabora, using the current Work Act config and the exact linked Documents record.
-- The Collabora Work Act source embeds the Viva Medical logo from `document-service/templates/viva-medical-logo.png`.
-- Example/customer screenshots from Tomis or other systems are visual references only; generated Work Act content must use Viva Medical branding, not Eminentis or any other vendor logo.
-- Saving in Collabora writes the edited `.fodt` back into local WOPI storage.
-- `Preview result PDF` exports the latest saved Collabora session to PDF and opens it inline.
-- The edited `.fodt` is not yet parsed back into structured Work Act rows/options. Structured fields remain canonical until a parser/promote flow is designed.
-
 Generation flow:
 
 - Work Act creates or updates a `Documents` draft record.
-- `document-service` generates the PDF.
+- `document-service` generates the PDF from `POST /api/documents/templates/:templateId/generate` using the saved reusable Template plus a structured Work Act payload.
 - Generated file metadata should be saved back to both the document record and the Work Act source record.
+- Generated PDF/preview is the review path. There is no Collabora/WOPI edit path.
 
 Do not:
 
 - Store signed PDF as Work Act source state.
-- Treat Collabora template sessions as signed customer documents.
 - Regenerate automatically over a signed/uploaded document without version review.
 
-## Documents Edit And Advanced Editor
+## Documents Edit Route
 
 Current implemented path:
 
@@ -252,19 +237,16 @@ Documents row
   -> route to Work Acts
   -> select or create the Work Act source record for that document
   -> show the Work Act configuration sections
-  -> POST /api/documents/collabora/sessions with sourceType=work-act-document
-  -> render Collabora iframe in Editing mode inside the Work Act panel
-  -> user saves in Collabora
-  -> user opens Preview result PDF
+  -> user edits structured fields/rows/options
+  -> user regenerates or previews the PDF draft
 ```
 
 Rules:
 
 - `View` in Documents remains read-only generated preview.
 - `Edit` for Work Act is the configurable/editable source path.
-- Only Work Act / Service Act currently gets the advanced-editor implementation.
-- Defect Act, Commercial Offer, Invoice, Parts, Acceptance Report, and future modules should get their own source-specific configuration pages before advanced edit is enabled for them.
-- The Work Act advanced editor must use the same Documents row the user clicked, not a generic template.
+- Defect Act, Commercial Offer, Invoice, Parts, Acceptance Report, and future modules should get their own source-specific configuration pages before edit routing is enabled for them.
+- The Work Act edit route must use the same Documents row the user clicked, not a generic template.
 
 ## Status Model
 
@@ -307,7 +289,8 @@ Current split:
 
 Migration tasks for the next implementation pass:
 
-- Keep `workActsWorkspace()` behavior but make `workacts` the canonical route.
+- Move Work Act delegated mutations from `src/js/interactions.js` into Vue services/actions after the Vue UI has parity.
+- Keep the removed legacy `workActsWorkspace()` / `workActsPage()` renderer out of the compatibility layer; future Work Act UI changes should happen in `src/modules/workActs/`.
 - Rename UI copy from `Template Generation / Work Acts` to `Work Acts`.
 - Rename remaining state names only when safe:
   - `templateGenWorkActJobId` can become `workActSourceJobId`.
@@ -326,14 +309,12 @@ After implementation changes:
 - Template can be applied into Work Act rows.
 - Work Act rows can be edited independently after apply.
 - `Create PDF draft` creates/updates a Documents record.
-- `Generate PDF` produces a PDF through `document-service`.
+- `Generate from template` produces a PDF through `document-service` using the selected or derived reusable Template.
 - Generating a Work Act PDF changes the linked Service job to `Waiting signature`.
 - Documents `Edit` on Work Act routes back to `Work Acts`.
 - Documents `Edit` on a Service Act with no existing Work Act source creates a linked Work Act shell for that same document.
-- Work Act advanced editor opens Collabora in `Editing` mode, not `Viewing`.
-- Work Act advanced editor shows the exact linked document id and a `Preview result PDF` action.
-- Preview result PDF returns `Content-Type: application/pdf` and inline content disposition.
-- The Collabora Work Act source contains the Viva Medical logo and does not contain external/example branding.
+- Work Act editing remains available through structured fields, rows, equipment, and report options.
+- Work Act generated preview opens inline through the PDF/preview path.
 - Signed upload remains in Documents.
 - Signed Work Act upload opens completion confirmation.
 - Confirming completion marks the linked Service job `Done`.

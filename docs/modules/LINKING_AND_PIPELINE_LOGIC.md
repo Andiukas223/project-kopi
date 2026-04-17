@@ -177,7 +177,7 @@ Document record
   -> Generated file record
   -> Signed/uploaded file record
   -> Source workspace via Edit route
-  -> Work Act advanced edit session when the document is a Work Act or legacy Service Act
+  -> Work Acts structured edit route when the document is a Work Act or legacy Service Act
 ```
 
 ## Legacy Expanded Pipeline Notes
@@ -360,7 +360,7 @@ Source record exists
   -> Source record stores same generated file/version metadata
   -> If source is Work Act, linked Service job becomes Waiting signature
   -> Documents index shows yellow `Upload signed`
-  -> Documents `View` opens the generated file through Collabora read-only view mode
+  -> Documents `View` opens the generated PDF/preview URL
   -> Documents `Edit` opens the owning source workspace for configuration/editing
 ```
 
@@ -378,17 +378,16 @@ Documents Work Act or legacy Service Act row
   -> Work Acts module
   -> select source by doc.workActId / generatedDocumentId / jobId
   -> if missing, create a minimal Work Act shell linked to the same doc.id
-  -> open Collabora advanced editor with sourceType=work-act-document
-  -> save edited .fodt in local WOPI storage
-  -> Preview result PDF exports latest saved Collabora source
+  -> edit structured Work Act fields/rows/options
+  -> regenerate or preview PDF
 ```
 
 Rules:
 
 - `View` is generated-output review and stays read-only.
-- `Edit` is source-workspace configuration and advanced editing.
-- The Work Act advanced editor uses the exact Documents row clicked by the user.
-- Only Work Act / legacy Service Act has this advanced edit path right now.
+- `Edit` is source-workspace configuration.
+- The Work Act edit route uses the exact Documents row clicked by the user.
+- Only Work Act / legacy Service Act has this structured edit route right now.
 
 Fields to sync to document:
 
@@ -424,11 +423,11 @@ Use this when a source draft needs reusable work instructions or a printable lay
 
 ```text
 Procedure/checklist template exists in Templates
-  -> Work Act selects an applicable active template
-  -> Template rows are copied into the Work Act
+  -> Work Act selects an applicable active template, or derives one from Work Act context
+  -> Template reusable body/merge fields provide generation context
   -> User edits the concrete Work Act as needed
   -> Output Layout is selected from document type / template mapping
-  -> document-service renders generated file
+  -> document-service renders generated file from template + structured Work Act payload
   -> Documents receives generated file custody
 ```
 
@@ -441,6 +440,7 @@ Procedure template rules:
 - Exact tool serial/calibration tracking belongs to the future `Work Equipment` module, not Templates.
 - Archived templates should not be offered for new active work.
 - Concrete rows/points belong to Work Acts. Later template edits should not silently mutate existing Work Act rows.
+- Template-based Work Act generation must upsert the generated document record into Documents and sync only the generated-file reference back to the Work Act source.
 
 Output layout rules:
 

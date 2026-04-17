@@ -20,7 +20,7 @@ Before changing a module, read in this order:
 3. `docs/modules/README.md`.
 4. The relevant module document in `docs/modules/`.
 5. `docs/modules/LINKING_AND_PIPELINE_LOGIC.md` if records cross module boundaries.
-6. `docs/PRODUCTION_DEPLOYMENT.md` if Docker, server, storage, reverse proxy, Collabora, WOPI, ports, TLS, backups, or env vars are touched.
+6. `docs/PRODUCTION_DEPLOYMENT.md` if Docker, server, storage, reverse proxy, ports, TLS, backups, env vars, or any proposed editor runtime is touched.
 7. `docs/CHANGELOG.md` to understand recent uncommitted decisions.
 
 If the task is about a future module, also search for `*_FUTURE_MODULE.md`.
@@ -54,7 +54,7 @@ Use this map:
 - Documents repository/file custody: `docs/modules/DOCUMENTS_MODULE.md`.
 - Work Act concrete source drafts and Work Act rows: `docs/modules/WORK_ACTS_MODULE.md`.
 - Reusable Templates and Output Layouts: `docs/modules/TEMPLATES_MODULE.md`.
-- Collabora/WOPI advanced editor integration: `docs/modules/COLLABORA_WOPI_INTEGRATION.md`.
+- Historical/decommissioned Collabora/WOPI decision record: `docs/modules/COLLABORA_WOPI_INTEGRATION.md`.
 - Future service/metrology tool registry: `docs/modules/WORK_EQUIPMENT_FUTURE_MODULE.md`.
 - Production/private server runbook: `docs/PRODUCTION_DEPLOYMENT.md`.
 - Web control scripts: `docs/VM_WEB_CONTROL.md`.
@@ -132,7 +132,7 @@ Current locked terms:
 - `Work Equipment` means service/metrology tools used by engineers, for example multimeter, oscilloscope, safety analyzer, pressure gauge, thermometer, flow meter, load-test set.
 - `searchable combobox` or `autocomplete dropdown` for a field where the main input is also the search field.
 - `checkbox list` only when actual checkboxes are visible.
-- `Advanced editor` means Collabora CODE through the local WOPI integration.
+- `Advanced editor` is no longer an active UI/runtime concept. Use `Umo editor`, `structured Work Act fields`, or `PDF preview` depending on the module.
 - `Documents` owns document/file custody.
 
 If the user uses an imprecise term, correct the naming gently in the implementation and docs.
@@ -245,31 +245,26 @@ This includes:
 - Health checks.
 - Deployment commands.
 - Migration steps.
-- Collabora/WOPI host allowlists.
+- editor runtime host allowlists, if a future editor runtime is explicitly approved.
 - Anything that must be different between local/dev and production/private server.
 
 For this project, production/private server docs are important even if the app is currently personal/private use.
 Do not assume a local-only decision is safe for production.
 
-## Collabora And Advanced Editor Rules
+## Editor Runtime Rules
 
-If advanced editor behavior changes, update `docs/modules/COLLABORA_WOPI_INTEGRATION.md`.
+Collabora/WOPI is decommissioned. Umo Editor is the approved browser editor target for reusable template content. Do not reintroduce Collabora/WOPI as an implied requirement from old docs, screenshots, or changelog entries.
 
-Document:
+If a future browser-based document editor other than Umo is proposed, update `docs/modules/COLLABORA_WOPI_INTEGRATION.md` with a new decision record before implementation. Document:
 
-- Which module opens the editor.
-- Session creation endpoint.
-- WOPI source type.
-- Payload contract.
-- File format.
-- Save behavior.
+- Why Umo editing and structured source fields are not enough.
+- Which module owns the editor.
+- Which backend API is required.
+- File format and save behavior.
 - PDF export behavior.
-- iframe/proxy path.
-- Storage path.
-- Known Collabora limitations.
-- Local-only vs production assumptions.
-
-If the UI button changes from FODT download to PDF download, say so explicitly.
+- iframe/proxy paths, if any.
+- Storage path and file custody boundary.
+- Local-only vs production/private-server assumptions.
 
 ## Changelog Rules
 
@@ -346,7 +341,7 @@ Examples:
 
 - Templates no longer owns Work rows.
 - Work Equipment means service/metrology tools, not customer devices.
-- Collabora CODE is acceptable for local/personal/private prototype use, not a support/SLA promise.
+- Collabora/WOPI is decommissioned; active editing uses structured source screens and Umo for reusable template content.
 
 ## Regression Checklist Rules
 
@@ -357,7 +352,7 @@ Checklist items should be concrete:
 - "Opening sidebar `Templates` renders the configurator."
 - "`Equipment` searchable combobox filters by equipment name, serial, or hospital."
 - "`Work rows` are not visible in Templates."
-- "`Download PDF` exports current Collabora session as PDF."
+- "`Documents -> View` opens the generated PDF/preview URL inline."
 
 Avoid vague checklist items:
 
@@ -439,4 +434,3 @@ Documentation is done when:
 - Server/runtime impact is documented when relevant.
 - Regression checklist exists or was updated.
 - Changelog has an entry.
-

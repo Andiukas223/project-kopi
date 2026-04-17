@@ -22,18 +22,20 @@ The app currently runs as:
 
 - `web`: nginx static frontend, served on `http://localhost:8080`.
 - `document-service`: Node.js + Carbone + LibreOffice service, served behind nginx under `/api/documents/`.
-- `collabora`: Collabora Online Development Edition (`CODE`) container for LibreOffice-like advanced template editing. It has no public host port and is attached only to the internal `collabora-net` Docker network; browser access is through the `web` nginx proxy, while WOPI file access goes to `document-service` on the same internal network.
 - `document-service/generated`: generated document output.
-- `document-service/storage`: persistent local runtime storage for uploaded files, feedback screenshots, WOPI Collabora `.fodt` sessions, and file registry JSON. Runtime contents are ignored by git; only `.gitkeep` is tracked.
+- `document-service/storage`: persistent local runtime storage for uploaded files, feedback screenshots, and file registry JSON. Runtime contents are ignored by git; only `.gitkeep` is tracked.
 
 Server deployment is now documented separately in `docs/PRODUCTION_DEPLOYMENT.md`. Treat the current compose setup as local/private-server prototype baseline until a production override, HTTPS reverse proxy, secrets, backups, and backend auth/storage blockers are completed.
 
-Frontend is still vanilla JavaScript modules. Backend is still a prototype document/feedback service, not the final app API.
+Frontend now has a Vue 3/Vite app shell with a compatibility layer that hosts the existing vanilla JavaScript module renderer. Backend is still a prototype document/feedback service, not the final app API.
+
+Collabora/WOPI was removed on 2026-04-16. Do not preserve or reintroduce Collabora editor behavior during the Vue migration unless there is a new explicit product decision.
 
 Key project/runbook docs:
 
 - `docs/DOCUMENTATION_RULES.md` - mandatory documentation method for future chats/agents: reading order, source-of-truth rules, module doc structure, UI terminology, ownership, production notes, changelog, and definition of done for docs.
-- `docs/PRODUCTION_DEPLOYMENT.md` - server configuration, launch, backup/restore, health checks, Collabora/WOPI production notes, and go-live checklist.
+- `docs/FRONTEND_ARCHITECTURE.md` - current Vue 3/Vite frontend architecture, legacy compatibility boundary, and migration rules.
+- `docs/PRODUCTION_DEPLOYMENT.md` - server configuration, launch, backup/restore, health checks, no-Collabora runtime notes, and go-live checklist.
 
 ## Implemented Modules
 
@@ -44,12 +46,23 @@ Detailed module documentation now lives in `docs/modules/`:
 - `docs/modules/WORK_ACTS_MODULE.md` - detailed Work Acts behavior, one-job-one-Work-Act rule, and Work Act/Templates/Documents boundary.
 - `docs/modules/TEMPLATES_MODULE.md` - detailed Templates and Output Layouts behavior.
 - `docs/modules/WORK_EQUIPMENT_FUTURE_MODULE.md` - future Work Equipment/metrology tool module context.
-- `docs/modules/COLLABORA_WOPI_INTEGRATION.md` - shared Collabora CODE/WOPI runtime and module adoption playbook.
+- `docs/modules/COLLABORA_WOPI_INTEGRATION.md` - historical/decommissioned Collabora/WOPI decision record.
 - `docs/modules/LINKING_AND_PIPELINE_LOGIC.md` - cross-module linking and pipeline logic.
 
 ### App Shell
 
 - Fixed topbar, sidebar, main workspace, and role switcher.
+- Topbar, sidebar navigation, theme toggle, language toggle, and active module highlighting are Vue-owned shell components.
+- Major active modules now have Vue Router routes (`/service`, `/work-acts`, `/contracts`, `/documents`, `/templates`, `/customers`, `/equipment`, `/calendar`, `/admin`). Vue-owned routes render their module components directly; non-migrated routes still host the legacy module renderer.
+- Shell state is managed through a small Vue shell store that syncs router state with the existing legacy `state.page` during gradual migration.
+- `Documents` is now a Vue-rendered module route. It still uses the existing document pipeline handlers for upload/generation/edit routing/preview actions until that business logic is moved behind Vue services.
+- The old legacy Documents page renderer in `src/js/render.js` has been removed. Legacy support for Documents is now limited to shared overlays and delegated document handlers.
+- `Templates` is now a Vue-rendered module route for the active Work List Template configurator. The old legacy Templates landing renderer and unused new/filter/archive/start-work-act handlers have been removed. The route still uses existing delegated `data-wlt-*` handlers for save/delete/cancel, combobox behavior, and visual editor commands until Template state/actions are moved into Vue services.
+- `Work Acts` is now a Vue-rendered module route for the active Work Act source workspace. It still uses delegated `data-work-act-*` handlers for create/open, equipment changes, template selection/application, row edits, report options, and PDF draft creation until Work Act actions are moved into Vue services.
+- Other feature module pages still render through the legacy compatibility host until each module is migrated.
+- Shared Vue UI primitives now exist for buttons, fields, form grids, panels, stat cards, status chips, table wrappers, modal shells, and wizard shells. They reuse existing CSS class names so module migration can be incremental.
+- Umo is the active browser editor integration for template content. The old disabled shell-level advanced editor boundary has been removed, and no Collabora/WOPI runtime behavior, endpoints, proxy paths, or UI launch buttons are active.
+- The unused `legacyStore` compatibility shim has been removed; active Vue/legacy synchronization is handled directly by `src/stores/shellStore.js`.
 - Topbar wordmark subtitle is `Informational system` in EN and `Informacine sistema` in LT.
 - Light and dark mode with persisted theme state.
 - Theme toggle is fixed near the bottom-left and centered within the `Workspace` sidebar column, using `☀️` / `🌙` labels.
@@ -125,18 +138,23 @@ Current active sidebar modules are intentionally limited to the workflows that w
 
 Documents is now a repository and file custody module, not the main template editor.
 
+Current implementation:
+
+- The Documents route is rendered by Vue 3 components for filters, table, upload modal, and Work Act completion confirmation.
+- Existing `documentPipeline.js` behavior still owns document generation, signed/external upload mutation, file-registry API calls, source edit routing, print preview actions, warranty sync, and audit updates.
+- The generated document print preview and feedback overlays are still legacy-rendered overlays mounted beside the Vue Documents route during migration.
+
 Implemented behavior:
 
 - Search/filter table by text, type, customer, creator initials, and a single compact created-date query. The created-date filter accepts partial dates (`2026`, `2026-04`, `2026-04-15`) or a calendar picker selection. Queue and status filters were removed from the active UI to reduce clutter.
 - Table contains the important document custody fields directly; the old selected document side panel is no longer needed as the primary source of information. Documents index does not show delivery status; delivery belongs to Parts/Shipping flows. The table columns are `Reference`, `Type`, `Customer`, `Job status`, `Created`, `Status`, `Action`. The document register focuses on one upload `Status`: before signed/uploaded file exists it shows a yellow `Upload signed` action, and after upload it shows a green `Download signed` link. File names are not shown as a separate index column.
 - The repository table shows document `Created` date instead of `Due`; creation/upload date is the daily reference point. Internal due dates can still support SLA/overdue reminders.
 - Documents index rows no longer show the old red overdue stripe; overdue remains a reminder/overview concern, while the table focuses on upload status and actions.
-- `View` opens the generated document preview.
-- Documents index `View` opens the generated document through Collabora read-only view mode. The table `Status > Download signed` action is reserved for the uploaded signed copy.
+- `View` opens the generated document through PDF/print preview or the generated file `previewUrl`. The table `Status > Download signed` action is reserved for the uploaded signed copy.
 - `Edit` routes to the correct source workspace where possible:
   - Work Act -> `Work Acts`
 - Retired/inactive source modules stay in Documents until their source workspace is reactivated.
-- Work Act / legacy Service Act `Edit` opens the exact linked Work Act configuration page and starts a writable Collabora advanced editor session for that same document. Legacy/demo Service Act rows without a Work Act source create a minimal linked Work Act shell instead of landing on an empty Work Acts page.
+- Work Act / legacy Service Act `Edit` opens the exact linked Work Act configuration page. Legacy/demo Service Act rows without a Work Act source create a minimal linked Work Act shell instead of landing on an empty Work Acts page. It does not open a Collabora editor.
 - `Download signed` appears in the table `Status` column when a signed/uploaded file is available. Generated-file download remains available from preview/source contexts rather than as a separate Documents index action.
 - `Reject` is not exposed in the Documents index action column.
 - The generic `Advance` button was removed.
@@ -189,13 +207,15 @@ Templates is the reusable Work List Template configuration workspace. It is sepa
 Current landing screen:
 
 - Work List Template configurator.
+- The active route is rendered by Vue 3 components in `src/modules/templates/`.
 - Fields: Company, Entry person, Template name, Service type.
 - Link configuration: searchable combobox/autocomplete dropdowns for Equipment, Hospitals, and Work Equipment. The field itself acts as the search input; options are clicked in the dropdown rows, not selected through a checkbox list.
-- Actions: Open in advanced editor, Save, Delete, Cancel.
-- Same-page advanced-editor document preview.
-- `Open in advanced editor` now creates a local Collabora WOPI session, renders the generated `.fodt` in a same-page iframe, opens in `Editing` mode, and saves back into `document-service/storage/collabora-wopi`.
-- Edited Collabora `.fodt` source is kept in the session, and the user-facing download exports the latest saved version as PDF. Edited files are not yet parsed back into template links/body fields.
+- Actions: Save, Delete, Cancel.
+- Same-page Umo editor for template content.
+- Collabora/WOPI advanced editor actions were removed. Template editing stays in structured fields plus Umo.
 - Work rows are no longer edited in Templates. Concrete Work Act points/rows belong to the `Work Acts` module and are appended to generated Work Act documents.
+- Output layout metadata, merge fields, and FODT/template-file concerns remain separate from the Work List Template landing and are preserved as existing data/helper behavior until a dedicated Vue admin surface is planned.
+- Template applicability options are now owned by the Vue Work Acts route/view model; the old matching legacy helper in `src/js/render.js` has been removed.
 
 ### Work Acts
 
@@ -205,7 +225,8 @@ Current state:
 
 - Sidebar module `Work Acts` exists.
 - Internal route/page id is `workacts`.
-- The page is the concrete Work Act workspace for the selected Service job.
+- The page is rendered by Vue 3 components in `src/modules/workActs/` and remains the concrete Work Act workspace for the selected Service job.
+- The old legacy Work Acts route renderer in `src/js/render.js` has been removed. Compatibility now means delegated Work Act handlers, preview/output helpers, and document pipeline integration only.
 - One Service job has exactly one Work Act.
 - `Documents -> Edit` for Work Act routes to `Work Acts`.
 - Detailed implementation handoff lives in `docs/modules/WORK_ACTS_MODULE.md`.
@@ -220,10 +241,10 @@ Work Acts implemented:
 - Work Description field.
 - Work rows/checklist editing.
 - Report options/print settings, including equipment working, ready for use, hygiene, signature, working hours, travel hours, started/completed time, system identity/name.
-- `Create PDF draft` / `Update PDF draft`, then direct `Generate PDF`.
+- `Create PDF draft` / `Update PDF draft`, then `Generate from template`.
 - Generated Work Act PDF sets the linked Service job to `Waiting signature`.
-- Direct `Edit in advanced editor` for Work Act documents, using a Work Act-specific Collabora `.fodt` source with the Viva Medical logo embedded.
-- `Preview result PDF` exports the latest saved Collabora Work Act source inline for review.
+- Work Act edits stay in structured Work Act fields and rows.
+- Generated PDF/preview remains the review path for Work Act documents.
 - Generated file version metadata (`fileId`, `version`, `versionLabel`, `downloadUrl`, `previewUrl`).
 - Source-aware preview/download/email audit.
 
@@ -262,23 +283,21 @@ Templates implemented:
 - Work equipment now means service/metrology tools such as digital multimeter, oscilloscope, safety analyzer, pressure gauge, thermometer, flow meter, or load-test set. It is seed data for a future `Work Equipment` module.
 - Applicability logic for Work Act template selection.
 - Delete action for prototype template records.
-- Visual/rich editor MVP:
-  - same-page document-like preview
-  - contenteditable rich editing
-  - basic formatting/list toolbar
-  - checklist row insertion
+- Umo editor MVP:
+  - same-page document editor
+  - HTML/text/json editor snapshots
+  - merge-field insertion
   - visual HTML persistence
-  - bug/workaround note field
+  - save/load through `document-service`
 - Template applicability metadata remains a reusable source. Concrete Work Act rows now belong to Work Acts. The visual editor is for controlled template body/layout micro edits, not for forcing daily users to lay out documents from scratch.
 
-Output Layouts implemented:
+Output Layouts current state:
 
-- Structured section editor with merge field hints.
-- `Export sections as .fodt`.
-- `Upload .fodt template`.
-- Carbone template map for Work Act, Commercial Offer, Defect Act, and generic documents.
-- Conditional `.fodt` rendering for Work Act report options, Commercial Offer sections, and Defect Act visits/findings/correction/risk.
-- This is an advanced/admin-oriented printable layout workspace, not the normal daily template picker.
+- Output template seed data and blueprint metadata remain in `src/js/data.js`.
+- Carbone template mapping and `.fodt` files remain in `document-service`.
+- Conditional `.fodt` rendering remains for Work Act report options, Commercial Offer sections, and Defect Act visits/findings/correction/risk.
+- The old frontend Documents-side output-layout editor/mock panel has been removed as dead legacy code after the Vue migration.
+- A future output-layout editor should be rebuilt as a dedicated Vue/admin surface, not restored as the old `Generate mock` / `Edit template` panel.
 
 ### Generated Document Preview And Delivery
 
@@ -345,7 +364,7 @@ Not implemented yet:
 - User-facing equipment/procedure checklists are called `Templates` in the web UI. Internal notes may still refer to Tomis `Work List Templates` when describing the old system.
 - `Output Layouts` are advanced/admin printable form layouts for Carbone/LibreOffice generation; they should not dominate the daily document creation flow and may later move under Admin/settings.
 - Daily users should normally generate documents from structured records and prepared templates, not design each document from scratch.
-- Daily users still need access to a controlled visual/rich editor for micro edits, user-specific templates, and production bug/workaround capture.
+- Daily users still need access to the controlled Umo editor for micro edits, user-specific templates, and production bug/workaround capture.
 - Admin is an overseer for users, roles, permissions, pipeline progress, and exception queues, not just a final approver.
 - Archive in Documents is deferred.
 - The main document return path is: generate -> preview/download generated file -> collect signature -> upload signed copy -> green Download signed in Status.
@@ -404,18 +423,15 @@ Plan:
 4. Add paid/signed invoice upload flow if needed.
 5. Add tests for document upload -> invoice register -> payment status.
 
-### B-41 - Visual Template Editor V2
+### B-41 - Umo Template Editor V2
 
-Goal: move from MVP contenteditable to a stronger LibreOffice-like editor experience while keeping structured generation safe.
+Goal: harden the Umo-based editor experience while keeping structured generation safe.
 
 Plan:
 
 1. Continue Tomis crawl focused on editor behavior and save/copy semantics.
-2. Decide editor engine:
-   - improved custom HTML editor for MVP
-   - ProseMirror/Tiptap style editor later
-   - only-office/libreoffice online style integration later if needed
-3. Add table editing, merge fields, image/logo placeholders, page breaks, signature placeholders.
+2. Keep Umo as the primary browser editor target unless a new explicit product/runtime decision replaces it.
+3. Add table editing, stronger merge fields, image/logo placeholders, page breaks, signature placeholders.
 4. Add autosave draft, dirty-state warning, revert, duplicate as personal template.
 5. Add version history and compare/diff.
 6. Keep concrete Work Act rows canonical in Work Acts for automated generation.

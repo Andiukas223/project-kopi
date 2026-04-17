@@ -1,14 +1,23 @@
 import crypto from "node:crypto";
-import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import carbone from "carbone";
 import cors from "cors";
 import express from "express";
+import {
+  TEMPLATE_KIND,
+  TEMPLATE_STATUSES,
+  defaultProcedureTemplateHtml,
+  defaultTemplateMergeFields,
+  normaliseTemplateApplicability,
+  normaliseTemplateEditorContent,
+  normaliseTemplateMergeFields,
+  normaliseTemplateOutput,
+  resolveTemplateGenerationFields,
+  stripHtmlToText
+} from "./templateModel.js";
 
-const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, "..");
 const templatesDir = path.join(appRoot, "templates");
@@ -18,17 +27,12 @@ const storageDir = process.env.STORAGE_DIR || path.join(appRoot, "storage");
 const feedbackAttachmentDir = path.join(storageDir, "attachments", "bug-reports");
 const feedbackReportsPath = path.join(storageDir, "feedback-reports.json");
 const fileIndexPath = path.join(storageDir, "files.json");
-const wopiStorageDir = path.join(storageDir, "collabora-wopi");
-const wopiSessionsPath = path.join(wopiStorageDir, "sessions.json");
+const templateRecordsPath = path.join(storageDir, "templates.json");
+const generatedDocumentRecordsPath = path.join(storageDir, "generated-document-records.json");
 const app = express();
 const port = Number(process.env.PORT || 3001);
 const maxFeedbackAttachmentBytes = Number(process.env.FEEDBACK_ATTACHMENT_MAX_BYTES || 5 * 1024 * 1024);
 const maxUploadedFileBytes = Number(process.env.UPLOAD_MAX_BYTES || 7 * 1024 * 1024);
-const maxWopiFileBytes = Number(process.env.WOPI_FILE_MAX_BYTES || 30 * 1024 * 1024);
-const collaboraInternalUrl = String(process.env.COLLABORA_INTERNAL_URL || "http://collabora:9980").replace(/\/$/, "");
-const collaboraPublicUrl = String(process.env.COLLABORA_PUBLIC_URL || "http://localhost:8080").replace(/\/$/, "");
-const wopiInternalBaseUrl = String(process.env.WOPI_INTERNAL_BASE_URL || `http://document-service:${port}`).replace(/\/$/, "");
-const libreOfficeBinary = process.env.LIBREOFFICE_BIN || "soffice";
 
 const templateMap = {
   "tpl-service-act": "work-act.fodt",
@@ -45,7 +49,6 @@ const allowedTemplateIds = new Set(Object.keys(templateMap));
 const feedbackStatuses = new Set(["New", "Assigned", "In progress", "Fixed", "Reviewed", "Closed"]);
 
 app.use(cors());
-app.post("/wopi/files/:fileId/contents", express.raw({ type: "*/*", limit: `${Math.ceil(maxWopiFileBytes / 1024 / 1024)}mb` }), handleWopiPutFile);
 app.use(express.json({ limit: "10mb" }));
 app.use((error, _req, res, next) => {
   if (!error) {
@@ -71,64 +74,6 @@ app.use((error, _req, res, next) => {
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "document-service", engine: "carbone+libreoffice" });
 });
-
-app.post("/collabora/sessions", async (req, res) => {
-  try {
-    const session = await createCollaboraSession(req.body || {});
-    res.status(201).json({ ok: true, session });
-  } catch (error) {
-    console.error(error);
-    res.status(400).json({ ok: false, error: error.message || "Could not create Collabora session." });
-  }
-});
-
-app.get("/collabora/sessions/:sessionId", async (req, res) => {
-  const session = await findWopiSessionById(req.params.sessionId);
-  if (!session) {
-    res.status(404).json({ ok: false, error: "Collabora session not found." });
-    return;
-  }
-
-  res.json({ ok: true, session: publicWopiSession(session) });
-});
-
-app.get("/collabora/sessions/:sessionId/download", async (req, res) => {
-  try {
-    const session = await findWopiSessionById(req.params.sessionId);
-    if (!session) {
-      res.status(404).json({ ok: false, error: "Collabora session not found." });
-      return;
-    }
-
-    const format = String(req.query.format || "fodt").toLowerCase();
-    if (format === "pdf") {
-      const pdf = await exportWopiSessionPdf(session);
-      res.setHeader("Content-Type", "application/pdf");
-      if (String(req.query.inline || "") === "1") {
-        res.setHeader("Content-Disposition", `inline; filename="${pdf.fileName.replace(/"/g, "")}"`);
-        res.sendFile(pdf.filePath);
-        return;
-      }
-      res.download(pdf.filePath, pdf.fileName);
-      return;
-    }
-    if (format && format !== "fodt") {
-      res.status(400).json({ ok: false, error: `Unsupported Collabora download format: ${format}.` });
-      return;
-    }
-
-    const filePath = resolveStoredFilePath(session.storagePath);
-    res.setHeader("Content-Type", contentTypeForFile(session.fileName));
-    res.download(filePath, session.fileName);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ ok: false, error: error.message || "Collabora session download failed." });
-  }
-});
-
-app.get("/wopi/files/:fileId", handleWopiCheckFileInfo);
-app.get("/wopi/files/:fileId/contents", handleWopiGetFile);
-app.post("/wopi/files/:fileId", handleWopiFileOperation);
 
 app.post("/preview", async (req, res) => {
   const payload = normalisePayload(req.body);
@@ -158,6 +103,147 @@ app.post("/generate", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ ok: false, error: error.message || "Document generation failed." });
+  }
+});
+
+app.get("/generated-records", async (req, res) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit || 1000), 1), 1000);
+    const records = await readGeneratedDocumentRecords();
+    res.json({
+      ok: true,
+      contractVersion: "generated-document-records.v1",
+      count: records.length,
+      documents: records.slice(0, limit)
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ ok: false, error: error.message || "Generated documents could not be loaded." });
+  }
+});
+
+app.get("/templates", async (req, res) => {
+  try {
+    const includeArchived = req.query.includeArchived === "1" || req.query.status === "all";
+    const records = await readTemplateRecords();
+    res.json({
+      ok: true,
+      templates: includeArchived
+        ? records
+        : records.filter((record) => record.metadata.status !== "Archived")
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ ok: false, error: error.message || "Templates could not be loaded." });
+  }
+});
+
+app.get("/templates/:templateId", async (req, res) => {
+  try {
+    const record = await findTemplateRecord(req.params.templateId);
+    if (!record) {
+      res.status(404).json({ ok: false, error: "Template not found." });
+      return;
+    }
+    res.json({ ok: true, template: record });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ ok: false, error: error.message || "Template could not be loaded." });
+  }
+});
+
+app.post("/templates", async (req, res) => {
+  try {
+    const records = await readTemplateRecords();
+    const record = normaliseTemplateRecord(req.body || {});
+    if (records.some((item) => item.id === record.id)) {
+      res.status(409).json({ ok: false, error: `Template already exists: ${record.id}` });
+      return;
+    }
+    records.unshift(record);
+    await writeJsonArray(templateRecordsPath, records);
+    res.status(201).json({ ok: true, template: record });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ ok: false, error: error.message || "Template could not be created." });
+  }
+});
+
+app.put("/templates/:templateId", async (req, res) => {
+  try {
+    const records = await readTemplateRecords();
+    const index = records.findIndex((record) => record.id === req.params.templateId);
+    if (index < 0) {
+      res.status(404).json({ ok: false, error: "Template not found." });
+      return;
+    }
+
+    const record = normaliseTemplateRecord({
+      ...(req.body || {}),
+      id: req.params.templateId
+    }, records[index]);
+    records[index] = record;
+    await writeJsonArray(templateRecordsPath, records);
+    res.json({ ok: true, template: record });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ ok: false, error: error.message || "Template could not be saved." });
+  }
+});
+
+app.patch("/templates/:templateId/archive", async (req, res) => {
+  try {
+    const records = await readTemplateRecords();
+    const index = records.findIndex((record) => record.id === req.params.templateId);
+    if (index < 0) {
+      res.status(404).json({ ok: false, error: "Template not found." });
+      return;
+    }
+
+    const record = normaliseTemplateRecord({
+      ...records[index],
+      metadata: {
+        ...records[index].metadata,
+        status: "Archived"
+      },
+      audit: {
+        ...records[index].audit,
+        archivedAt: new Date().toISOString()
+      }
+    }, records[index]);
+    records[index] = record;
+    await writeJsonArray(templateRecordsPath, records);
+    res.json({ ok: true, template: record });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ ok: false, error: error.message || "Template could not be archived." });
+  }
+});
+
+app.post("/templates/:templateId/generate", async (req, res) => {
+  try {
+    const template = await findTemplateRecord(req.params.templateId);
+    if (!template) {
+      res.status(404).json({ ok: false, error: "Template not found." });
+      return;
+    }
+    if (template.metadata.status === "Archived") {
+      res.status(400).json({ ok: false, error: "Archived templates cannot generate documents." });
+      return;
+    }
+
+    const result = await generateDocumentFromTemplate(template, req.body || {});
+    res.status(201).json({
+      ok: true,
+      contractVersion: "template-generation.v1",
+      documentRecord: result.documentRecord,
+      fileRecord: result.fileRecord,
+      downloadUrl: result.fileRecord.downloadUrl,
+      previewUrl: result.fileRecord.previewUrl
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ ok: false, error: error.message || "Template document generation failed." });
   }
 });
 
@@ -284,648 +370,439 @@ app.listen(port, () => {
   console.log(`Document service listening on ${port}`);
 });
 
-async function createCollaboraSession(body = {}) {
-  await fs.mkdir(wopiStorageDir, { recursive: true });
-  const sessionId = `wopi-${crypto.randomUUID().slice(0, 12)}`;
-  const fileId = `wopi-file-${crypto.randomUUID().slice(0, 12)}`;
-  const accessToken = crypto.randomBytes(32).toString("base64url");
-  const sourceFile = await collaboraSourceFileFromBody(body);
-  const mode = normaliseCollaboraMode(body, sourceFile);
-  const readOnly = mode === "view" || body.readOnly === true;
-  const title = String(body.title || body.name || (sourceFile ? "Generated document" : "Work List Template")).slice(0, 180);
-  const sourceType = String(body.sourceType || "work-list-template").slice(0, 80);
-  const sourceId = String(body.sourceId || body.templateId || sessionId).slice(0, 120);
-  const extension = sourceFile?.extension || "fodt";
-  const fileName = `${safeFilePart(sourceId)}-${safeFilePart(title)}-${sessionId}.${extension}`;
-  const filePath = path.join(wopiStorageDir, fileName);
+async function readTemplateRecords() {
+  const records = await readJsonArray(templateRecordsPath);
+  if (records.length) {
+    return records.map((record) => normaliseTemplateRecord(record, record, { touch: false }));
+  }
+
+  const seededRecords = defaultTemplateRecords();
+  await writeJsonArray(templateRecordsPath, seededRecords);
+  return seededRecords;
+}
+
+async function findTemplateRecord(templateId) {
+  const records = await readTemplateRecords();
+  return records.find((record) => record.id === templateId) || null;
+}
+
+function defaultTemplateRecords() {
   const now = new Date().toISOString();
-  const buffer = sourceFile?.buffer || Buffer.from(await renderCollaboraSessionFodt({ ...body, title }), "utf8");
-
-  await fs.writeFile(filePath, buffer);
-
-  const wopiSrc = `${wopiInternalBaseUrl}/wopi/files/${encodeURIComponent(fileId)}`;
-  const editorUrl = await buildCollaboraEditorUrl({ wopiSrc, accessToken, extension, mode });
-  const session = {
-    id: sessionId,
-    fileId,
-    accessToken,
-    mode,
-    readOnly,
-    sourceType,
-    sourceId,
-    ownerId: String(body.ownerId || "local-owner").slice(0, 120),
-    userId: String(body.userId || "local-owner").slice(0, 120),
-    userName: String(body.userName || body.entryPerson || "Local owner").slice(0, 180),
-    title,
-    fileName,
-    storagePath: path.relative(appRoot, filePath).replaceAll("\\", "/"),
-    mimeType: contentTypeForFile(fileName),
-    sizeBytes: buffer.length,
-    sha256: crypto.createHash("sha256").update(buffer).digest("hex"),
-    version: 1,
-    lock: "",
-    createdAt: now,
-    updatedAt: now,
-    lastAccessedAt: "",
-    lastSavedAt: "",
-    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    wopiSrc,
-    editorUrl,
-    downloadUrl: `/api/documents/collabora/sessions/${sessionId}/download`,
-    pdfDownloadUrl: `/api/documents/collabora/sessions/${sessionId}/download?format=pdf`,
-    sourceFileId: sourceFile?.fileRecord?.id || "",
-    disablePrint: body.disablePrint === true,
-    disableExport: body.disableExport === true || readOnly,
-    disableCopy: body.disableCopy === true,
-    meta: {
-      company: String(body.company || "").slice(0, 180),
-      entryPerson: String(body.entryPerson || "").slice(0, 180),
-      serviceType: String(body.serviceType || "").slice(0, 80),
-      ...(body.meta && typeof body.meta === "object" ? body.meta : {}),
-      sourceFileName: sourceFile?.fileRecord?.fileName || ""
+  return [
+    {
+      id: "wlt-ultrasound-pm",
+      name: "Ultrasound PM / technine prieziura",
+      equipmentCategory: "Ultrasound",
+      serviceType: "PM",
+      linkedServiceTypes: ["PM"],
+      linkedEquipmentIds: ["EQ-501", "EQ-505"],
+      linkedHospitalIds: ["CUST-01"],
+      linkedWorkEquipmentIds: ["digital-multimeter", "electrical-safety-analyzer"],
+      entryPerson: "Rokas Petrauskas",
+      entryDate: "2026-04-13",
+      language: "lt",
+      bodyText: "Technines prieziuros metu atlikti ultragarso sistemos patikrinimai.",
+      workRows: [
+        "Vizualiai patikrintas aparatas, laidai, davikliai ir maitinimo kabeliai.",
+        "Isvalytas aparatas, oro filtrai ir isoriniai pavirsiai.",
+        "Patikrintas sistemos uzsikrovimas, data/laikas ir klaidu pranesimai.",
+        "Patikrintas vaizdo gavimas su turimais davikliais.",
+        "Patikrintas spausdintuvas / eksportas, jeigu taikoma.",
+        "Aparatas paliktas veikiantis ir tinkamas naudojimui."
+      ]
+    },
+    {
+      id: "wlt-endoscopy-pm",
+      name: "Endoscope washer PM / technine prieziura",
+      equipmentCategory: "Endoscopy",
+      serviceType: "PM",
+      linkedServiceTypes: ["PM"],
+      linkedEquipmentIds: ["EQ-502"],
+      linkedHospitalIds: ["CUST-03"],
+      linkedWorkEquipmentIds: ["pressure-gauge", "thermometer"],
+      entryPerson: "Marius Vaitkus",
+      entryDate: "2026-04-13",
+      language: "lt",
+      bodyText: "Technines prieziuros metu atlikti endoskopu plovyklos patikrinimai.",
+      workRows: [
+        "Vizualiai patikrinta irangos bukle, pajungimai ir saugumo zymejimai.",
+        "Patikrinti filtrai, vandens padavimas ir drenazo sistema.",
+        "Patikrintas ciklo paleidimas ir ciklo pabaigos registravimas.",
+        "Patikrinti chemijos lygiai ir dozavimo grandine.",
+        "Patikrinti klaidu pranesimai ir sistemos zurnalas.",
+        "Iranga palikta veikianti ir tinkama naudojimui."
+      ]
+    },
+    {
+      id: "wlt-patient-lift-check",
+      name: "Patient lift safety check",
+      equipmentCategory: "Patient Handling",
+      serviceType: "Service",
+      linkedServiceTypes: ["Service", "Repair"],
+      linkedEquipmentIds: ["EQ-503"],
+      linkedHospitalIds: ["CUST-04"],
+      linkedWorkEquipmentIds: ["load-cell-tester", "digital-multimeter"],
+      entryPerson: "Aurelija Jankauske",
+      entryDate: "2026-04-12",
+      language: "lt",
+      bodyText: "Atliktas paciento keltuvo funkciniu ir saugos tasku patikrinimas.",
+      workRows: [
+        "Vizualiai patikrinta konstrukcija, ratai, stabdziai ir dirzai.",
+        "Patikrintas valdymo pultas ir avarinis sustabdymas.",
+        "Patikrintas akumuliatoriaus ikrovimas ir kroviklio veikimas.",
+        "Atliktas pakelimo / nuleidimo funkcijos bandymas be apkrovos.",
+        "Patikrinti saugos lipdukai ir identifikaciniai duomenys.",
+        "Iranga palikta saugi naudojimui arba pazymeti apribojimai komentaruose."
+      ]
+    },
+    {
+      id: "wlt-generic-service",
+      name: "Bendrinis serviso darbu sarasas",
+      equipmentCategory: "General",
+      serviceType: "Service",
+      linkedServiceTypes: ["Service", "Repair", "Installation"],
+      linkedEquipmentIds: [],
+      linkedHospitalIds: [],
+      linkedWorkEquipmentIds: [],
+      entryPerson: "Marius Vaitkus",
+      entryDate: "2026-04-12",
+      language: "lt",
+      bodyText: "Atlikti bendriniai serviso darbai pagal registruota gedima.",
+      workRows: [
+        "Isklausytas vartotojo gedimo aprasymas ir patikrinta registruota problema.",
+        "Atlikta irangos apziura ir funkcine diagnostika.",
+        "Atlikti korekciniai darbai arba pateiktos rekomendacijos.",
+        "Patikrintas irangos veikimas po atliktu darbu.",
+        "Klientas informuotas apie atliktus darbus ir tolimesnius veiksmus."
+      ]
     }
-  };
-
-  await upsertWopiSession(session);
-  return publicWopiSession(session);
+  ].map((template) => normaliseTemplateRecord({
+    id: template.id,
+    kind: "procedure-template",
+    metadata: {
+      name: template.name,
+      company: "Viva Medical, UAB",
+      equipmentCategory: template.equipmentCategory,
+      serviceType: template.serviceType,
+      language: template.language,
+      description: template.bodyText,
+      entryPerson: template.entryPerson,
+      entryDate: template.entryDate,
+      status: "Active",
+      applicability: {
+        serviceTypes: template.linkedServiceTypes,
+        equipmentIds: template.linkedEquipmentIds,
+        hospitalIds: template.linkedHospitalIds,
+        workEquipmentIds: template.linkedWorkEquipmentIds
+      }
+    },
+    mergeFields: defaultTemplateMergeFields(),
+    editorContent: {
+      format: "umo-html",
+      html: defaultProcedureTemplateHtml(template.name, template.bodyText, template.workRows),
+      text: [template.bodyText, ...template.workRows].filter(Boolean).join("\n"),
+      json: null,
+      updatedAt: now
+    },
+    output: {
+      defaultFormat: "pdf",
+      outputTemplateId: "tpl-service-act"
+    },
+    audit: {
+      createdAt: now,
+      updatedAt: now,
+      version: 1
+    }
+  }, null, { touch: false }));
 }
 
-function normaliseCollaboraMode(body = {}, sourceFile = null) {
-  const requested = String(body.mode || body.permission || body.viewMode || "").toLowerCase();
-  if (requested === "view" || requested === "readonly" || requested === "read-only") return "view";
-  if (requested === "edit") return "edit";
-  return sourceFile ? "view" : "edit";
-}
+function normaliseTemplateRecord(input = {}, existing = null, options = {}) {
+  const { touch = true } = options;
+  const now = new Date().toISOString();
+  const metadataInput = input.metadata && typeof input.metadata === "object" ? input.metadata : input;
+  const outputInput = input.output && typeof input.output === "object" ? input.output : {};
+  const auditInput = input.audit && typeof input.audit === "object" ? input.audit : {};
+  const id = safeTemplateRecordId(existing?.id || input.id || metadataInput.id || metadataInput.name || "");
+  const name = String(metadataInput.name || existing?.metadata?.name || "Untitled template").trim().slice(0, 160);
+  const description = String(metadataInput.description || metadataInput.bodyText || existing?.metadata?.description || "").slice(0, 1000);
+  const statusInput = String(metadataInput.status || existing?.metadata?.status || "").slice(0, 40);
+  const status = TEMPLATE_STATUSES.includes(statusInput) ? statusInput : "Active";
+  const outputTemplateId = allowedTemplateIds.has(outputInput.outputTemplateId)
+    ? outputInput.outputTemplateId
+    : existing?.output?.outputTemplateId || "tpl-service-act";
+  const defaultFormat = allowedFormats.has(String(outputInput.defaultFormat || "").toLowerCase())
+    ? String(outputInput.defaultFormat).toLowerCase()
+    : existing?.output?.defaultFormat || "pdf";
+  const currentVersion = Number(existing?.audit?.version || auditInput.version || 0);
+  const createdAt = existing?.audit?.createdAt || auditInput.createdAt || now;
+  const updatedAt = touch ? now : auditInput.updatedAt || existing?.audit?.updatedAt || now;
 
-async function collaboraSourceFileFromBody(body = {}) {
-  const sourceFileId = String(
-    body.fileId ||
-    body.sourceFileId ||
-    body.generatedFileId ||
-    body.generatedFile?.fileId ||
-    body.generatedFile?.id ||
-    ""
-  ).trim();
-  const expectedOwnerId = String(body.documentId || body.ownerId || "").trim();
-
-  if (sourceFileId) {
-    const files = await readJsonArray(fileIndexPath);
-    const fileRecord = files.find((file) => file.id === sourceFileId);
-    if (!fileRecord) {
-      throw new Error(`Generated file not found in registry: ${sourceFileId}.`);
-    }
-    if (expectedOwnerId && fileRecord.ownerId && fileRecord.ownerId !== expectedOwnerId) {
-      throw new Error("Generated file does not belong to this document.");
-    }
-    return collaboraSourceFromFileRecord(fileRecord);
+  if (!id) {
+    throw new Error("Template id is required.");
+  }
+  if (!name) {
+    throw new Error("Template name is required.");
   }
 
-  const fallbackFileName = path.basename(String(body.fileName || body.generatedFileName || ""));
-  if (!fallbackFileName) return null;
-
-  const filePath = path.join(generatedDir, fallbackFileName);
-  const buffer = await fs.readFile(filePath);
   return {
-    buffer,
-    extension: extensionForFileName(fallbackFileName),
-    fileRecord: {
-      id: "",
-      fileName: fallbackFileName,
-      mimeType: contentTypeForFile(fallbackFileName)
+    id,
+    kind: TEMPLATE_KIND,
+    metadata: {
+      name,
+      company: String(metadataInput.company || existing?.metadata?.company || "Viva Medical, UAB").slice(0, 160),
+      equipmentCategory: String(metadataInput.equipmentCategory || existing?.metadata?.equipmentCategory || "General").slice(0, 120),
+      serviceType: String(metadataInput.serviceType || existing?.metadata?.serviceType || "Service").slice(0, 80),
+      language: String(metadataInput.language || existing?.metadata?.language || "lt").slice(0, 20),
+      description,
+      entryPerson: String(metadataInput.entryPerson || existing?.metadata?.entryPerson || "").slice(0, 160),
+      entryDate: String(metadataInput.entryDate || existing?.metadata?.entryDate || now.slice(0, 10)).slice(0, 20),
+      status,
+      applicability: normaliseTemplateApplicability(metadataInput.applicability || existing?.metadata?.applicability || {})
+    },
+    mergeFields: normaliseTemplateMergeFields(input.mergeFields || existing?.mergeFields || defaultTemplateMergeFields()),
+    editorContent: normaliseTemplateEditorContent(input.editorContent || existing?.editorContent || {}, { name, description, updatedAt }),
+    output: normaliseTemplateOutput({ defaultFormat, outputTemplateId }, existing?.output || {}, { allowedFormats, allowedTemplateIds }),
+    audit: {
+      createdAt,
+      updatedAt,
+      version: touch ? currentVersion + 1 : currentVersion || 1,
+      archivedAt: auditInput.archivedAt || existing?.audit?.archivedAt || ""
     }
   };
 }
 
-async function collaboraSourceFromFileRecord(fileRecord = {}) {
-  const filePath = resolveStoredFilePath(fileRecord.storagePath);
-  const buffer = await fs.readFile(filePath);
-  return {
-    buffer,
-    extension: extensionForFileName(fileRecord.fileName),
-    fileRecord
-  };
+function safeTemplateRecordId(value = "") {
+  const id = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 100);
+  return id || `template-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-function extensionForFileName(fileName = "") {
-  return (path.extname(fileName).replace(/^\./, "").toLowerCase() || "fodt").replace(/[^a-z0-9]/g, "") || "fodt";
-}
-
-async function buildCollaboraEditorUrl({ wopiSrc, accessToken, extension, mode = "edit" }) {
-  const actionName = mode === "view" ? "view" : "edit";
-  const actionUrl = await collaboraActionUrlForExtension(extension, actionName);
-  const joiner = actionUrl.endsWith("?") || actionUrl.endsWith("&")
-    ? ""
-    : actionUrl.includes("?") ? "&" : "?";
-  const accessTokenTtl = Date.now() + 24 * 60 * 60 * 1000;
-  const permission = mode === "view" ? "view" : "edit";
-  return `${actionUrl}${joiner}WOPISrc=${encodeURIComponent(wopiSrc)}&access_token=${encodeURIComponent(accessToken)}&access_token_ttl=${accessTokenTtl}&permission=${permission}`;
-}
-
-async function collaboraActionUrlForExtension(extension = "fodt", actionName = "edit") {
-  const response = await fetch(`${collaboraInternalUrl}/hosting/discovery`);
-  if (!response.ok) {
-    throw new Error(`Collabora discovery failed with HTTP ${response.status}.`);
-  }
-
-  const discovery = await response.text();
-  const ext = String(extension || "fodt").replace(/^\./, "").toLowerCase();
-  const actionTags = discovery.match(/<action\b[^>]*>/g) || [];
-  const actionTag = actionTags.find((tag) =>
-    xmlAttr(tag, "ext") === ext &&
-    xmlAttr(tag, "name") === actionName
-  ) || actionTags.find((tag) =>
-    xmlAttr(tag, "ext") === ext &&
-    xmlAttr(tag, "name") === "edit"
-  ) || actionTags.find((tag) => xmlAttr(tag, "ext") === ext);
-  const urlsrc = xmlAttr(actionTag || "", "urlsrc");
-  if (!urlsrc) {
-    throw new Error(`Collabora does not advertise a ${actionName} action for .${ext}.`);
-  }
-
-  const parsed = new URL(xmlUnescape(urlsrc));
-  return `${collaboraPublicUrl}${parsed.pathname}${parsed.search}`;
-}
-
-function xmlAttr(tag = "", name = "") {
-  const match = tag.match(new RegExp(`${name}="([^"]*)"`));
-  return match ? xmlUnescape(match[1]) : "";
-}
-
-function xmlUnescape(value = "") {
-  return String(value)
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, "\"")
-    .replace(/&apos;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
-}
-
-async function renderCollaboraSessionFodt(body = {}) {
-  if (String(body.sourceType || "") === "work-act-document") {
-    return renderWorkActDocumentFodt(body, await vivaMedicalLogoBase64());
-  }
-  return renderWorkListTemplateFodt(body);
-}
-
-function renderWorkListTemplateFodt(body = {}) {
-  const title = body.title || body.name || "Work List Template";
-  const bodyText = body.bodyText || body.description || "";
-  const metadataRows = [
-    ["Company", body.company || ""],
-    ["Entry person", body.entryPerson || ""],
-    ["Template name", title],
-    ["Service type", body.serviceType || ""],
-    ["Equipment", asLabelText(body.equipmentLabels || body.linkedEquipment || body.equipment)],
-    ["Hospitals", asLabelText(body.hospitalLabels || body.linkedHospitals || body.hospitals)],
-    ["Work equipment", asLabelText(body.workEquipmentLabels || body.linkedWorkEquipment || body.workEquipment)]
-  ];
-  const workRows = Array.isArray(body.workRows) ? body.workRows : [];
-  const richParagraphs = stripHtmlToLines(body.richBodyHtml || "");
-  const workRowsSection = workRows.length ? `
-      <text:p text:style-name="Heading">Work Act additional rows</text:p>
-      ${wopiTableXml(["No.", "Work description", "Expected / measured value", "Notes"], workRows.map((row, index) => [String(index + 1), row, "Check / fill", ""]))}` : "";
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" office:version="1.2" office:mimetype="application/vnd.oasis.opendocument.text">
-  <office:styles>
-    <style:style style:name="Standard" style:family="paragraph"><style:text-properties fo:font-size="10pt"/></style:style>
-    <style:style style:name="Title" style:family="paragraph"><style:text-properties fo:font-size="16pt" fo:font-weight="bold"/></style:style>
-    <style:style style:name="Heading" style:family="paragraph"><style:text-properties fo:font-size="12pt" fo:font-weight="bold"/></style:style>
-  </office:styles>
-  <office:automatic-styles>
-    <style:style style:name="TableCell" style:family="table-cell"><style:table-cell-properties fo:border="0.5pt solid #000000" fo:padding="0.05in"/></style:style>
-  </office:automatic-styles>
-  <office:body>
-    <office:text>
-      <text:p text:style-name="Title">${escapeXml(title)}</text:p>
-      <text:p>${escapeXml(bodyText)}</text:p>
-      <text:p text:style-name="Heading">Template configuration</text:p>
-      ${wopiTableXml(["Field", "Value"], metadataRows)}
-      <text:p text:style-name="Heading">Advanced editor body</text:p>
-      ${(richParagraphs.length ? richParagraphs : [bodyText || ""]).map((line) => `<text:p>${escapeXml(line)}</text:p>`).join("\n      ")}
-      ${workRowsSection}
-    </office:text>
-  </office:body>
-</office:document>`;
-}
-
-function asLabelText(value) {
-  if (Array.isArray(value)) return value.filter(Boolean).join(", ");
-  return String(value || "");
-}
-
-function stripHtmlToLines(html = "") {
-  const normalized = String(html)
-    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, "\n")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, "\"")
-    .replace(/&#39;/g, "'");
-  return normalized
-    .split(/\n+/)
-    .map((line) => line.replace(/\s+/g, " ").trim())
-    .filter(Boolean)
-    .slice(0, 200);
-}
-
-function wopiTableXml(headers = [], rows = []) {
-  const safeRows = rows.length ? rows : [["", ""]];
-  return `<table:table table:name="Table${crypto.randomUUID().slice(0, 8)}">
-        ${headers.map(() => `<table:table-column/>`).join("")}
-        <table:table-row>${headers.map((header) => wopiCellXml(header)).join("")}</table:table-row>
-        ${safeRows.map((row) => `<table:table-row>${row.map((cell) => wopiCellXml(cell)).join("")}</table:table-row>`).join("\n        ")}
-      </table:table>`;
-}
-
-function wopiCellXml(value = "") {
-  return `<table:table-cell table:style-name="TableCell" office:value-type="string"><text:p>${escapeXml(value)}</text:p></table:table-cell>`;
-}
-
-let cachedVivaMedicalLogoBase64 = null;
-
-async function vivaMedicalLogoBase64() {
-  if (cachedVivaMedicalLogoBase64 !== null) return cachedVivaMedicalLogoBase64;
-  try {
-    const buffer = await fs.readFile(path.join(templatesDir, "viva-medical-logo.png"));
-    cachedVivaMedicalLogoBase64 = buffer.toString("base64");
-  } catch {
-    cachedVivaMedicalLogoBase64 = "";
-  }
-  return cachedVivaMedicalLogoBase64;
-}
-
-function renderWorkActDocumentFodt(body = {}, logoBase64 = "") {
-  const title = body.title || body.workActNumber || body.documentId || "Work Act";
-  const documentDate = body.documentDate || new Date().toISOString().slice(0, 10);
-  const sellerRows = [
-    body.sellerName || body.sellerDisplayName || body.company || "Viva Medical",
-    body.sellerAddress,
-    [body.sellerPhone ? `Tel. ${body.sellerPhone}` : "", body.sellerWebsite].filter(Boolean).join(", "),
-    [
-      body.sellerCompanyCode ? `Imones kodas: ${body.sellerCompanyCode}` : "",
-      body.sellerVatCode ? `PVM kodas: ${body.sellerVatCode}` : ""
-    ].filter(Boolean).join(", "),
-    [
-      body.sellerBankAccount ? `a.s.: ${body.sellerBankAccount}` : "",
-      body.sellerBankName ? `bankas ${body.sellerBankName}` : ""
-    ].filter(Boolean).join(", ")
-  ].filter(Boolean);
-  const equipmentRows = Array.isArray(body.equipmentItems) && body.equipmentItems.length
-    ? body.equipmentItems.map((item) => [
-      item.name || "",
-      item.serial || "",
-      item.location || item.category || "",
-      body.jobId || ""
-    ])
-    : [["Equipment", "", body.workLocation || "", body.jobId || ""]];
-  const workRows = Array.isArray(body.workRows) && body.workRows.length
-    ? body.workRows.map((row) => [
-      String(row.number || ""),
-      row.description || "",
-      row.completed ? "Yes" : "",
-      row.comments || ""
-    ])
-    : [["1", body.workText || body.workDescription || "Service work performed.", "", ""]];
-  const reportRows = Object.entries(body.reportOptions || {})
-    .filter(([key]) => !["entryPerson"].includes(key))
-    .map(([key, value]) => [workActOptionLabel(key), value ? "Yes" : "No"]);
-  const logoXml = logoBase64 ? `
-        <text:p text:style-name="LogoLine">
-          <draw:frame draw:name="VivaMedicalLogo" text:anchor-type="as-char" svg:width="2.75in" svg:height="0.76in">
-            <draw:image xlink:href="Pictures/viva-medical-logo.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad">
-              <office:binary-data>${logoBase64}</office:binary-data>
-            </draw:image>
-          </draw:frame>
-        </text:p>` : `<text:p text:style-name="LogoText">${escapeXml(body.sellerDisplayName || "Viva Medical")}</text:p>`;
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" office:version="1.2" office:mimetype="application/vnd.oasis.opendocument.text">
-  <office:styles>
-    <style:style style:name="Standard" style:family="paragraph"><style:text-properties fo:font-size="10pt"/></style:style>
-    <style:style style:name="LogoLine" style:family="paragraph"><style:paragraph-properties fo:text-align="end"/></style:style>
-    <style:style style:name="LogoText" style:family="paragraph"><style:paragraph-properties fo:text-align="end"/><style:text-properties fo:font-size="18pt" fo:font-weight="bold"/></style:style>
-    <style:style style:name="SellerSmall" style:family="paragraph"><style:paragraph-properties fo:text-align="end"/><style:text-properties fo:font-size="8pt"/></style:style>
-    <style:style style:name="Title" style:family="paragraph"><style:paragraph-properties fo:text-align="center"/><style:text-properties fo:font-size="13pt" fo:font-weight="bold"/></style:style>
-    <style:style style:name="Heading" style:family="paragraph"><style:text-properties fo:font-size="11pt" fo:font-weight="bold"/></style:style>
-    <style:style style:name="Small" style:family="paragraph"><style:text-properties fo:font-size="8pt"/></style:style>
-  </office:styles>
-  <office:automatic-styles>
-    <style:style style:name="TableCell" style:family="table-cell"><style:table-cell-properties fo:border="0.5pt solid #000000" fo:padding="0.04in"/></style:style>
-  </office:automatic-styles>
-  <office:body>
-    <office:text>
-      ${logoXml}
-      ${sellerRows.map((line) => `<text:p text:style-name="SellerSmall">${escapeXml(line)}</text:p>`).join("\n      ")}
-      <text:p text:style-name="Heading">UZSAKOVAS: ${escapeXml(body.buyerName || "")}</text:p>
-      <text:p>Im. kodas: ${escapeXml(body.buyerCompanyCode || "")}</text:p>
-      <text:p>PVM kodas: ${escapeXml(body.buyerVatCode || "")}</text:p>
-      <text:p>Darbu atlikimo vieta: ${escapeXml(body.workLocation || body.buyerAddress || "")}</text:p>
-      <text:p>Kontaktas: ${escapeXml(body.contact || "")}</text:p>
-      <text:p text:style-name="Title">ATLIKTU DARBU AKTAS Nr. ${escapeXml(body.workActNumber || body.documentId || title)}</text:p>
-      <text:p text:style-name="Title">${escapeXml(documentDate)}</text:p>
-      <text:p>Darbo / case Nr.: ${escapeXml(body.jobId || "")}</text:p>
-      <text:p text:style-name="Heading">Prietaiso duomenys</text:p>
-      ${wopiTableXml(["Prietaiso pavadinimas", "Serijos Nr.", "Vieta / kategorija", "Darbo Nr."], equipmentRows)}
-      <text:p text:style-name="Heading">Atliktu darbu tekstas</text:p>
-      <text:p>${escapeXml(body.workText || body.workDescription || "")}</text:p>
-      <text:p text:style-name="Heading">Darbu sarasas</text:p>
-      ${wopiTableXml(["Nr.", "Darbo aprasymas", "Atlikta", "Pastabos"], workRows)}
-      ${reportRows.length ? `<text:p text:style-name="Heading">Spausdinimo nustatymai</text:p>${wopiTableXml(["Nustatymas", "Reiksme"], reportRows)}` : ""}
-      <text:p text:style-name="Heading">Vykdytojo patvirtinimas</text:p>
-      <text:p>Vykdytojas patvirtina, kad darbai atlikti pagal nurodyta uzduoti ir perduoti uzsakovui.</text:p>
-      <text:p text:style-name="Small">Uzsakovas ________________________________        Vykdytojas ________________________________</text:p>
-      <text:p text:style-name="Small">Vardas, pavarde, pareigos                         Vardas, pavarde, pareigos</text:p>
-      <text:p text:style-name="Small">Parasas                                           Parasas</text:p>
-    </office:text>
-  </office:body>
-</office:document>`;
-}
-
-function workActOptionLabel(key = "") {
-  return String(key)
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-async function handleWopiCheckFileInfo(req, res) {
-  const session = await authorizeWopiRequest(req, res);
-  if (!session) return;
-
-  const filePath = resolveStoredFilePath(session.storagePath);
-  const stat = await fs.stat(filePath);
-  const readOnly = isReadOnlyWopiSession(session);
-  session.lastAccessedAt = new Date().toISOString();
-  session.sizeBytes = stat.size;
-  await upsertWopiSession(session);
-
-  res.setHeader("X-WOPI-ItemVersion", String(session.version || 1));
-  res.json({
-    BaseFileName: session.fileName,
-    OwnerId: session.ownerId || "local-owner",
-    Size: stat.size,
-    UserId: session.userId || "local-owner",
-    UserFriendlyName: session.userName || "Local owner",
-    UserCanWrite: !readOnly,
-    ReadOnly: readOnly,
-    SupportsUpdate: !readOnly,
-    SupportsLocks: !readOnly,
-    SupportsGetLock: !readOnly,
-    SupportsExtendedLockLength: !readOnly,
-    SupportsRename: false,
-    SupportsUserInfo: false,
-    Version: String(session.version || 1),
-    LastModifiedTime: stat.mtime.toISOString(),
-    PostMessageOrigin: collaboraPublicUrl,
-    DisablePrint: session.disablePrint === true,
-    DisableExport: session.disableExport === true,
-    DisableCopy: session.disableCopy === true
+async function generateDocumentFromTemplate(template, body = {}) {
+  const records = await readJsonArray(generatedDocumentRecordsPath);
+  const initialFields = resolveTemplateGenerationFields(template.mergeFields, body).values;
+  const documentId = String(body.documentId || initialFields.documentId || nextGeneratedTemplateDocumentId(records)).slice(0, 120);
+  const generatedAt = new Date().toISOString();
+  const fieldResolution = resolveTemplateGenerationFields(template.mergeFields, body, {
+    documentId,
+    documentDateLt: formatLithuanianDate(new Date(generatedAt)),
+    documentType: body.documentType || "Template document",
+    templateRecordId: template.id,
+    templateName: template.metadata.name,
+    owner: body.owner || initialFields.owner || template.metadata.entryPerson || ""
   });
-}
-
-async function handleWopiGetFile(req, res) {
-  const session = await authorizeWopiRequest(req, res);
-  if (!session) return;
-
-  const filePath = resolveStoredFilePath(session.storagePath);
-  res.setHeader("Content-Type", contentTypeForFile(session.fileName));
-  res.setHeader("X-WOPI-ItemVersion", String(session.version || 1));
-  res.sendFile(filePath);
-}
-
-async function handleWopiPutFile(req, res) {
-  const session = await authorizeWopiRequest(req, res);
-  if (!session) return;
-
-  if (isReadOnlyWopiSession(session)) {
-    res.status(403).json({ ok: false, error: "This Collabora session is read-only." });
-    return;
-  }
-
-  const requestLock = String(req.header("X-WOPI-Lock") || "");
-  if (session.lock && session.lock !== requestLock) {
-    sendWopiLockConflict(res, session.lock, "File is locked by another Collabora session.");
-    return;
-  }
-
-  const buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || "");
-  if (buffer.length > maxWopiFileBytes) {
-    res.status(413).json({ ok: false, error: "WOPI file is too large." });
-    return;
-  }
-
-  const filePath = resolveStoredFilePath(session.storagePath);
-  await fs.writeFile(filePath, buffer);
-  const now = new Date().toISOString();
-  session.version = (Number(session.version) || 1) + 1;
-  session.sizeBytes = buffer.length;
-  session.sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
-  session.updatedAt = now;
-  session.lastSavedAt = now;
-  await upsertWopiSession(session);
-
-  res.setHeader("X-WOPI-ItemVersion", String(session.version));
-  res.status(200).json({ LastModifiedTime: now });
-}
-
-async function handleWopiFileOperation(req, res) {
-  const session = await authorizeWopiRequest(req, res);
-  if (!session) return;
-
-  const override = String(req.header("X-WOPI-Override") || "").toUpperCase();
-  const requestLock = String(req.header("X-WOPI-Lock") || "");
-
-  if (isReadOnlyWopiSession(session)) {
-    if (override === "GET_LOCK") {
-      res.setHeader("X-WOPI-Lock", "");
-      res.status(200).end();
-      return;
+  const fields = fieldResolution.values;
+  const outputTemplateId = template.output?.outputTemplateId || "tpl-service-act";
+  const format = allowedFormats.has(String(body.format || template.output?.defaultFormat || "").toLowerCase())
+    ? String(body.format || template.output?.defaultFormat).toLowerCase()
+    : "pdf";
+  const fieldData = {
+    ...fields,
+    documentId,
+    documentType: body.documentType || "Template document",
+    templateRecordId: template.id,
+    templateName: template.metadata.name,
+    owner: fields.owner || body.owner || template.metadata.entryPerson || "",
+    mergeFields: fieldResolution.definitions,
+    missingRequiredFields: fieldResolution.missingRequiredFields
+  };
+  const templateContentText = renderTemplateText(
+    stripHtmlToText(template.editorContent?.html || template.editorContent?.text || ""),
+    fieldData,
+    fieldResolution.definitions
+  );
+  const payload = normalisePayload({
+    ...body,
+    documentId,
+    documentType: fieldData.documentType,
+    sourceType: body.sourceType || fields.sourceType || "template",
+    sourceId: body.sourceId || fields.sourceId || template.id,
+    workActId: body.workActId || fields.workActId || "",
+    templateId: outputTemplateId,
+    templateName: template.metadata.name,
+    templateBody: templateContentText,
+    templateSections: [
+      {
+        id: "template-content",
+        label: template.metadata.name,
+        value: templateContentText
+      }
+    ],
+    format,
+    customer: fields.customer || body.customer || "",
+    jobId: fields.jobId || body.jobId || "",
+    equipmentItems: Array.isArray(fields.equipmentItems) ? fields.equipmentItems : [],
+    workActRows: Array.isArray(fields.workActRows) ? fields.workActRows : [],
+    reportOptions: fields.reportOptions || {},
+    equipment: fields.equipment || body.equipment || "",
+    serial: fields.serial || body.serial || "",
+    owner: fieldData.owner,
+    notes: fields.notes || body.notes || templateContentText,
+    fields: {
+      ...fields,
+      ...fieldData,
+      templateContentText
     }
-    if (["LOCK", "REFRESH_LOCK", "UNLOCK"].includes(override)) {
-      res.status(200).end();
-      return;
-    }
-  }
+  });
+  const rendered = await renderDocument(payload);
+  const fileRecord = rendered.fileRecord;
+  const generatedFile = {
+    id: rendered.id,
+    fileId: fileRecord.id,
+    fileName: rendered.fileName,
+    format,
+    generatedAt,
+    downloadUrl: fileRecord.downloadUrl,
+    previewUrl: fileRecord.previewUrl,
+    version: fileRecord.version || null,
+    versionLabel: fileRecord.versionLabel || "",
+    fileRecord,
+    source: "document-service",
+    sourceType: payload.source?.sourceType || "",
+    sourceId: payload.source?.sourceId || ""
+  };
+  const documentRecord = {
+    id: documentId,
+    type: fieldData.documentType,
+    jobId: fields.jobId || body.jobId || "",
+    quotationId: fields.quotationId || body.quotationId || "",
+    customer: fields.customer || body.customer || "",
+    owner: fieldData.owner || template.metadata.entryPerson || "",
+    createdBy: body.createdBy || template.metadata.entryPerson || "Template generator",
+    createdByInitials: initialsFromName(body.createdBy || template.metadata.entryPerson || "Template generator"),
+    created: generatedAt.slice(0, 10),
+    createdAt: generatedAt,
+    status: "Signature",
+    pipelineStep: "Signature",
+    deliveryStatus: "Needs signed upload",
+    description: body.description || `Generated from template ${template.metadata.name}.`,
+    templateRecordId: template.id,
+    templateId: outputTemplateId,
+    sourceType: payload.source?.sourceType || "template",
+    sourceId: payload.source?.sourceId || template.id,
+    workActId: payload.source?.workActId || "",
+    generatedFile,
+    generatedFileVersions: [generatedFile],
+    deliveryAudit: [
+      {
+        action: "Generated",
+        note: `PDF generated from template ${template.metadata.name}.`,
+        at: generatedAt,
+        fileId: fileRecord.id,
+        fileName: fileRecord.fileName,
+        fileVersion: fileRecord.version || null,
+        fileVersionLabel: fileRecord.versionLabel || "",
+        sourceType: payload.source?.sourceType || "",
+        sourceId: payload.source?.sourceId || ""
+      }
+    ]
+  };
 
-  if (override === "LOCK") {
-    if (!requestLock) {
-      res.status(400).json({ ok: false, error: "X-WOPI-Lock header is required." });
-      return;
-    }
-    if (session.lock && session.lock !== requestLock) {
-      sendWopiLockConflict(res, session.lock, "File already has a different lock.");
-      return;
-    }
-    session.lock = requestLock;
-    session.updatedAt = new Date().toISOString();
-    await upsertWopiSession(session);
-    res.status(200).end();
-    return;
-  }
-
-  if (override === "GET_LOCK") {
-    res.setHeader("X-WOPI-Lock", session.lock || "");
-    res.status(200).end();
-    return;
-  }
-
-  if (override === "REFRESH_LOCK") {
-    if (session.lock && session.lock !== requestLock) {
-      sendWopiLockConflict(res, session.lock, "Cannot refresh a different lock.");
-      return;
-    }
-    session.lock = requestLock || session.lock;
-    session.updatedAt = new Date().toISOString();
-    await upsertWopiSession(session);
-    res.status(200).end();
-    return;
-  }
-
-  if (override === "UNLOCK") {
-    if (session.lock && session.lock !== requestLock) {
-      sendWopiLockConflict(res, session.lock, "Cannot unlock a different lock.");
-      return;
-    }
-    session.lock = "";
-    session.updatedAt = new Date().toISOString();
-    await upsertWopiSession(session);
-    res.status(200).end();
-    return;
-  }
-
-  res.status(501).json({ ok: false, error: `Unsupported WOPI operation: ${override || "none"}.` });
+  await upsertGeneratedDocumentRecord(documentRecord);
+  return { documentRecord, fileRecord };
 }
 
-async function authorizeWopiRequest(req, res) {
-  const session = await findWopiSessionByFileId(req.params.fileId);
-  if (!session) {
-    res.status(404).json({ ok: false, error: "WOPI file not found." });
-    return null;
-  }
-
-  const token = String(req.query.access_token || "").trim();
-  if (!token || token !== session.accessToken) {
-    res.status(401).json({ ok: false, error: "Invalid WOPI access token." });
-    return null;
-  }
-
-  return session;
+async function upsertGeneratedDocumentRecord(documentRecord) {
+  const records = await readGeneratedDocumentRecords();
+  const nextRecords = [
+    normaliseStoredGeneratedDocumentRecord(documentRecord),
+    ...records.filter((record) => record.id !== documentRecord.id)
+  ].slice(0, 1000);
+  await writeJsonArray(generatedDocumentRecordsPath, nextRecords);
 }
 
-function sendWopiLockConflict(res, lock, reason) {
-  res.setHeader("X-WOPI-Lock", lock || "");
-  res.setHeader("X-WOPI-LockFailureReason", reason);
-  res.status(409).end();
+async function readGeneratedDocumentRecords() {
+  const records = await readJsonArray(generatedDocumentRecordsPath);
+  return records.map(normaliseStoredGeneratedDocumentRecord).filter((record) => record.id);
 }
 
-function isReadOnlyWopiSession(session = {}) {
-  return session.readOnly === true || session.mode === "view";
-}
+function normaliseStoredGeneratedDocumentRecord(record = {}) {
+  const generatedFile = record.generatedFile && typeof record.generatedFile === "object"
+    ? record.generatedFile
+    : {};
+  const fileRecord = generatedFile.fileRecord && typeof generatedFile.fileRecord === "object"
+    ? generatedFile.fileRecord
+    : {};
+  const downloadUrl = generatedFile.downloadUrl || fileRecord.downloadUrl || "";
+  const previewUrl = generatedFile.previewUrl || fileRecord.previewUrl || "";
+  const fileId = generatedFile.fileId || generatedFile.id || fileRecord.id || "";
 
-function publicWopiSession(session = {}) {
   return {
-    id: session.id,
-    fileId: session.fileId,
-    mode: session.mode || "edit",
-    readOnly: isReadOnlyWopiSession(session),
-    sourceType: session.sourceType,
-    sourceId: session.sourceId,
-    sourceFileId: session.sourceFileId || "",
-    title: session.title,
-    fileName: session.fileName,
-    mimeType: session.mimeType,
-    sizeBytes: session.sizeBytes,
-    version: session.version,
-    createdAt: session.createdAt,
-    updatedAt: session.updatedAt,
-    lastSavedAt: session.lastSavedAt,
-    expiresAt: session.expiresAt,
-    editorUrl: session.editorUrl,
-    downloadUrl: session.downloadUrl,
-    fodtDownloadUrl: session.downloadUrl,
-    pdfDownloadUrl: session.pdfDownloadUrl || `${session.downloadUrl}?format=pdf`,
-    meta: session.meta || {}
+    ...record,
+    id: String(record.id || "").slice(0, 120),
+    type: String(record.type || "Template document").slice(0, 120),
+    jobId: String(record.jobId || "").slice(0, 120),
+    quotationId: String(record.quotationId || "").slice(0, 120),
+    customer: String(record.customer || "").slice(0, 180),
+    owner: String(record.owner || "").slice(0, 160),
+    createdBy: String(record.createdBy || "Template generator").slice(0, 160),
+    createdByInitials: String(record.createdByInitials || initialsFromName(record.createdBy || "Template generator")).slice(0, 12),
+    created: String(record.created || record.createdAt || new Date().toISOString()).slice(0, 10),
+    createdAt: String(record.createdAt || new Date().toISOString()).slice(0, 40),
+    status: String(record.status || "Signature").slice(0, 80),
+    pipelineStep: String(record.pipelineStep || "Signature").slice(0, 80),
+    deliveryStatus: String(record.deliveryStatus || "Needs signed upload").slice(0, 120),
+    description: String(record.description || "").slice(0, 1000),
+    sourceType: String(record.sourceType || generatedFile.sourceType || "template").slice(0, 80),
+    sourceId: String(record.sourceId || generatedFile.sourceId || record.templateRecordId || "").slice(0, 120),
+    workActId: String(record.workActId || "").slice(0, 120),
+    generatedFile: {
+      ...generatedFile,
+      id: fileId,
+      fileId,
+      downloadUrl,
+      previewUrl,
+      source: generatedFile.source || "document-service",
+      fileRecord
+    },
+    generatedFileVersions: normaliseGeneratedFileVersions(record.generatedFileVersions, {
+      ...generatedFile,
+      id: fileId,
+      fileId,
+      downloadUrl,
+      previewUrl,
+      source: generatedFile.source || "document-service",
+      fileRecord
+    }),
+    deliveryAudit: Array.isArray(record.deliveryAudit) ? record.deliveryAudit : []
   };
 }
 
-async function exportWopiSessionPdf(session = {}) {
-  const sourcePath = resolveStoredFilePath(session.storagePath);
-  if (path.extname(session.fileName).toLowerCase() === ".pdf") {
-    return { filePath: sourcePath, fileName: session.fileName };
-  }
-
-  const sourceStat = await fs.stat(sourcePath);
-  const baseName = path.basename(session.fileName, path.extname(session.fileName));
-  const pdfFileName = `${baseName}-v${Number(session.version) || 1}.pdf`;
-  const exportDir = path.join(wopiStorageDir, "exports");
-  const pdfPath = path.join(exportDir, pdfFileName);
-
-  try {
-    const pdfStat = await fs.stat(pdfPath);
-    if (pdfStat.mtimeMs >= sourceStat.mtimeMs) {
-      return { filePath: pdfPath, fileName: pdfFileName };
-    }
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
-
-  await fs.mkdir(exportDir, { recursive: true });
-  const tempDir = path.join(exportDir, `tmp-${crypto.randomUUID()}`);
-  const tempProfileDir = path.join(tempDir, "lo-profile");
-  const tempSourceName = `${baseName}-v${Number(session.version) || 1}.fodt`;
-  const tempSourcePath = path.join(tempDir, tempSourceName);
-  const tempPdfPath = path.join(tempDir, tempSourceName.replace(/\.fodt$/i, ".pdf"));
-
-  try {
-    await fs.mkdir(tempProfileDir, { recursive: true });
-    await fs.copyFile(sourcePath, tempSourcePath);
-    await execFileAsync(libreOfficeBinary, [
-      "--headless",
-      "--nologo",
-      "--nofirststartwizard",
-      `-env:UserInstallation=${pathToFileURL(tempProfileDir).href}`,
-      "--convert-to",
-      "pdf",
-      "--outdir",
-      tempDir,
-      tempSourcePath
-    ], { timeout: 60000, maxBuffer: 1024 * 1024 });
-    await fs.rm(pdfPath, { force: true });
-    await fs.rename(tempPdfPath, pdfPath);
-    return { filePath: pdfPath, fileName: pdfFileName };
-  } catch (error) {
-    const detail = [error.message, error.stderr, error.stdout].filter(Boolean).join(" ");
-    throw new Error(`PDF export failed. Make sure LibreOffice/soffice is available. ${detail}`.trim());
-  } finally {
-    await fs.rm(tempDir, { recursive: true, force: true });
-  }
+function normaliseGeneratedFileVersions(versions = [], generatedFile = {}) {
+  const fileKey = generatedFile.fileId || generatedFile.id || generatedFile.fileName;
+  const safeVersions = Array.isArray(versions) ? versions.filter(Boolean) : [];
+  if (!fileKey) return safeVersions.slice(0, 12);
+  return [
+    generatedFile,
+    ...safeVersions.filter((item) => (item.fileId || item.id || item.fileName) !== fileKey)
+  ].slice(0, 12);
 }
 
-async function readWopiSessions() {
-  return readJsonArray(wopiSessionsPath);
+function nextGeneratedTemplateDocumentId(records = []) {
+  const today = new Date().toISOString().slice(0, 10).replaceAll("-", "");
+  const prefix = `DOC-TPL-${today}`;
+  const next = records
+    .map((record) => String(record.id || ""))
+    .filter((id) => id.startsWith(prefix))
+    .map((id) => Number(id.split("-").at(-1)))
+    .filter(Number.isFinite)
+    .reduce((max, value) => Math.max(max, value), 0) + 1;
+  return `${prefix}-${String(next).padStart(3, "0")}`;
 }
 
-async function upsertWopiSession(session) {
-  const sessions = await readWopiSessions();
-  const nextSessions = [
-    session,
-    ...sessions.filter((item) => item.id !== session.id && item.fileId !== session.fileId)
-  ].slice(0, 200);
-  await writeJsonArray(wopiSessionsPath, nextSessions);
-}
-
-async function findWopiSessionById(sessionId) {
-  const sessions = await readWopiSessions();
-  return sessions.find((session) => session.id === sessionId) || null;
-}
-
-async function findWopiSessionByFileId(fileId) {
-  const sessions = await readWopiSessions();
-  return sessions.find((session) => session.fileId === fileId) || null;
+function initialsFromName(value = "") {
+  const initials = String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("");
+  return initials || "VM";
 }
 
 async function saveTemplateUpload(body = {}) {
@@ -1182,8 +1059,12 @@ function formatLithuanianDate(date) {
   return `${date.getFullYear()} m. ${months[date.getMonth()]} ${date.getDate()} d.`;
 }
 
-function renderTemplateText(text = "", data = {}) {
+function renderTemplateText(text = "", data = {}, mergeFields = []) {
+  const allowedKeys = Array.isArray(mergeFields) && mergeFields.length
+    ? new Set(normaliseTemplateMergeFields(mergeFields).map((field) => field.key))
+    : null;
   return String(text).replace(/\{d\.([A-Za-z0-9_]+)\}/g, (_, key) => {
+    if (allowedKeys && !allowedKeys.has(key)) return "";
     const value = data[key];
     if (Array.isArray(value)) return value.join("\n");
     if (value === null || value === undefined) return "";

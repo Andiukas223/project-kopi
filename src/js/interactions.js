@@ -10,7 +10,9 @@ import { saveDemoState } from "./persistence.js";
 import { renderSupportPortalPreview } from "./render.js";
 import { state } from "./state.js";
 import { creatorMeta, currentUserName, initialsFromName } from "./userIdentity.js";
-import { openWorkActAdvancedEditorForAct } from "./workActAdvancedEditor.js";
+import { backendTemplateId, buildWorkActTemplateGenerationPayload, resolveTemplateForWorkAct } from "../modules/workActs/workActTemplateGeneration.js";
+import { generateTemplateDocument } from "../services/templateService.js";
+import { upsertGeneratedDocumentRecord } from "../stores/documentStore.js";
 
 let renderAppCallback = null;
 
@@ -131,68 +133,10 @@ function handleClick(event) {
     return;
   }
 
-  // Templates CRUD
-  const wltNewOpen = event.target.closest("[data-wlt-new-open]");
-  if (wltNewOpen) {
-    state.wltNewOpen = true;
-    state.wltNewError = "";
-    renderAppCallback();
-    return;
-  }
-
-  const wltNewCancel = event.target.closest("[data-wlt-new-cancel]");
-  if (wltNewCancel) {
-    state.wltNewOpen = false;
-    state.wltNewError = "";
-    renderAppCallback();
-    return;
-  }
-
-  const wltNewSave = event.target.closest("[data-wlt-new-save]");
-  if (wltNewSave) {
-    saveNewWlt();
-    return;
-  }
-
-  const wltClearFilters = event.target.closest("[data-wlt-clear-filters]");
-  if (wltClearFilters) {
-    state.wltSearchQuery = "";
-    state.wltStatusFilter = "all";
-    state.wltServiceTypeFilter = "all";
-    state.wltEntryPersonFilter = "all";
-    renderAppCallback();
-    return;
-  }
-
-  const wltFind = event.target.closest("[data-wlt-find]");
-  if (wltFind) {
-    renderAppCallback();
-    return;
-  }
-
-  const wltSelect = event.target.closest("[data-wlt-select]");
-  if (wltSelect) {
-    state.selectedWltId = wltSelect.dataset.wltSelect;
-    state.wltEditMode = false;
-    state.wltError = "";
-    state.wltCollaboraStatus = "";
-    state.wltCollaboraError = "";
-    renderAppCallback();
-    return;
-  }
-
-  const wltEditOpen = event.target.closest("[data-wlt-edit-open]");
-  if (wltEditOpen) {
-    openWltAdvancedEditor(wltEditOpen.dataset.wltEditOpen);
-    return;
-  }
-
   const wltEditCancel = event.target.closest("[data-wlt-edit-cancel]");
   if (wltEditCancel) {
     state.wltEditMode = false;
     state.wltError = "";
-    state.wltCollaboraStatus = "";
-    state.wltCollaboraError = "";
     renderAppCallback();
     return;
   }
@@ -206,31 +150,6 @@ function handleClick(event) {
   const wltDelete = event.target.closest("[data-wlt-delete]");
   if (wltDelete) {
     deleteWlt(wltDelete.dataset.wltDelete);
-    return;
-  }
-
-  const wltDuplicate = event.target.closest("[data-wlt-duplicate]");
-  if (wltDuplicate) {
-    duplicateWlt(wltDuplicate.dataset.wltDuplicate);
-    return;
-  }
-
-  const wltArchive = event.target.closest("[data-wlt-archive]");
-  if (wltArchive) {
-    toggleWltArchive(wltArchive.dataset.wltArchive);
-    return;
-  }
-
-  const wltStartWorkAct = event.target.closest("[data-wlt-start-work-act]");
-  if (wltStartWorkAct) {
-    const [tplId, jobId] = wltStartWorkAct.dataset.wltStartWorkAct.split(":");
-    startWorkActFromTemplate(tplId, jobId);
-    return;
-  }
-
-  const wltRichCommand = event.target.closest("[data-wlt-rich-command]");
-  if (wltRichCommand) {
-    applyWltRichCommand(wltRichCommand.dataset.wltRichTarget, wltRichCommand.dataset.wltRichCommand);
     return;
   }
 
@@ -339,9 +258,9 @@ function handleClick(event) {
     return;
   }
 
-  const workActAdvancedEditor = event.target.closest("[data-work-act-open-advanced]");
-  if (workActAdvancedEditor) {
-    void openWorkActAdvancedEditorForAct(workActAdvancedEditor.dataset.workActOpenAdvanced, renderAppCallback);
+  const workActGenerateTemplate = event.target.closest("[data-work-act-generate-template]");
+  if (workActGenerateTemplate) {
+    generateWorkActFromTemplate(workActGenerateTemplate.dataset.workActGenerateTemplate);
     return;
   }
 
@@ -723,12 +642,6 @@ function handleChange(event) {
     return;
   }
 
-  if (event.target.matches("[data-work-act-equipment]")) {
-    const [actId, eqId] = event.target.dataset.workActEquipment.split(":");
-    toggleWorkActEquipment(actId, eqId, event.target.checked);
-    return;
-  }
-
   if (event.target.matches("[data-work-act-template]")) {
     const act = workActs.find((item) => item.id === event.target.dataset.workActTemplate);
     if (act) {
@@ -764,42 +677,16 @@ function handleChange(event) {
     return;
   }
 
-  if (event.target.matches("[data-wlt-status-filter]")) {
-    state.wltStatusFilter = event.target.value;
-    renderAppCallback();
-    return;
-  }
-
-  if (event.target.matches("[data-wlt-service-type-filter]")) {
-    state.wltServiceTypeFilter = event.target.value;
-    renderAppCallback();
-    return;
-  }
-
-  if (event.target.matches("[data-wlt-entry-person-filter]")) {
-    state.wltEntryPersonFilter = event.target.value;
-    renderAppCallback();
-    return;
-  }
-
   if (event.target.matches("[data-wlt-template-select]")) {
     state.selectedWltId = event.target.value;
     state.wltEditMode = false;
     state.wltError = "";
-    state.wltCollaboraStatus = "";
-    state.wltCollaboraError = "";
     renderAppCallback();
     return;
   }
 
-  if (event.target.matches("[data-wlt-edit-equipment], [data-wlt-edit-hospital], [data-wlt-edit-work-equipment], [data-wlt-new-equipment], [data-wlt-new-hospital], [data-wlt-new-work-equipment]")) {
+  if (event.target.matches("[data-wlt-edit-equipment], [data-wlt-edit-hospital], [data-wlt-edit-work-equipment]")) {
     updateWltPickerSummary(event.target);
-    return;
-  }
-
-  if (event.target.matches("[data-wlt-search]")) {
-    state.wltSearchQuery = event.target.value;
-    renderAppCallback();
     return;
   }
 
@@ -892,12 +779,7 @@ function handleInput(event) {
     return;
   }
 
-  if (event.target.matches("[data-wlt-search]")) {
-    state.wltSearchQuery = event.target.value;
-    return;
-  }
-
-  if (event.target.matches("[data-wlt-combobox-search], [data-wlt-picker-search]")) {
+  if (event.target.matches("[data-wlt-combobox-search]")) {
     filterWltPicker(event.target);
     return;
   }
@@ -954,10 +836,6 @@ function handleInput(event) {
 
   if (event.target.matches("[data-commercial-offer-search]")) {
     state.commercialOfferSearchQuery = event.target.value;
-    return;
-  }
-
-  if (event.target.matches("[data-wlt-rich-editor]")) {
     return;
   }
 
@@ -1389,23 +1267,6 @@ function applyWorkListTemplate(actId) {
   renderAppCallback();
 }
 
-function startWorkActFromTemplate(tplId, jobId) {
-  const template = workListTemplates.find((item) => item.id === tplId);
-  const act = ensureWorkActDraft(jobId);
-  if (!template || !act) return;
-
-  act.workTemplateId = template.id;
-  copyTemplateToWorkAct(act, template);
-  state.page = "workacts";
-  state.templateGenTab = "work-acts";
-  state.selectedWltId = template.id;
-  selectWorkActContext(act);
-  state.workActError = "";
-  state.wltError = "";
-  saveDemoState();
-  renderAppCallback();
-}
-
 function copyTemplateToWorkAct(act, template) {
   act.workText = template.bodyText || act.workText || "";
   act.workRows = act.workRows || [];
@@ -1493,24 +1354,94 @@ function updateWorkActReportOption(actId, optionKey, value) {
 function createWorkActDocumentDraft(actId) {
   const act = workActs.find((item) => item.id === actId);
   if (!act) return;
+  if (!validateWorkActReadyForDocument(act)) return;
+
+  const doc = ensureWorkActDocumentDraftFromAct(act, { queueLegacyGeneration: !act.workTemplateId });
+  if (!doc) return;
+
+  act.status = "Document draft";
+  act.updatedAt = new Date().toISOString();
+  state.selectedDocumentId = doc.id;
+  state.selectedTemplateId = "tpl-service-act";
+  state.documentOutputFormat = "pdf";
+  state.selectedWorkActId = act.id;
+  state.workActError = "";
+  saveDemoState();
+  renderAppCallback();
+}
+
+async function generateWorkActFromTemplate(actId) {
+  const act = workActs.find((item) => item.id === actId);
+  if (!act) return;
+  if (!validateWorkActReadyForDocument(act)) return;
+
+  const { template, derived } = resolveTemplateForWorkAct(act);
+  const templateId = backendTemplateId(template);
+  if (!template || !templateId) {
+    state.selectedWorkActId = act.id;
+    state.workActError = "Select or create an active Template before generating this Work Act.";
+    renderAppCallback();
+    return;
+  }
+
+  if (derived && !act.workTemplateId) {
+    act.workTemplateId = template.id;
+  }
+
+  const doc = ensureWorkActDocumentDraftFromAct(act, { queueLegacyGeneration: false });
+  if (!doc) return;
+
+  state.selectedWorkActId = act.id;
+  state.selectedDocumentId = doc.id;
+  state.selectedTemplateId = "tpl-service-act";
+  state.documentOutputFormat = "pdf";
+  state.workActError = "";
+  state.generationStatus = `Generating ${act.number || "Work Act"} from ${template.name}.`;
+  saveDemoState();
+  renderAppCallback();
+
+  try {
+    const payload = buildWorkActTemplateGenerationPayload(act, template, { documentId: doc.id });
+    const result = await generateTemplateDocument(templateId, payload);
+    const generatedRecord = normaliseGeneratedWorkActRecord(result.documentRecord, result.fileRecord, act, templateId);
+    const syncedDocument = upsertGeneratedDocumentRecord(generatedRecord);
+    syncGeneratedTemplateDocumentToWorkAct(act, syncedDocument || generatedRecord);
+    state.selectedDocumentId = generatedRecord.id;
+    state.generationStatus = `Generated ${generatedRecord.id} from ${template.name}.`;
+    state.workActError = "";
+  } catch (error) {
+    state.workActError = error.message || "Could not generate this Work Act from the selected Template.";
+    state.generationStatus = "Work Act template generation failed.";
+  }
+
+  saveDemoState();
+  renderAppCallback();
+}
+
+function validateWorkActReadyForDocument(act) {
   if (!act.equipmentItems?.length) {
     state.selectedWorkActId = act.id;
     state.workActError = "Select at least one equipment item.";
     renderAppCallback();
-    return;
+    return false;
   }
   if (!act.workRows?.length && !act.workText) {
     state.selectedWorkActId = act.id;
     state.workActError = "Apply a template or add work text / rows before creating the document draft.";
     renderAppCallback();
-    return;
+    return false;
   }
+  return true;
+}
 
-  if (!act.generatedDocumentId) {
-    const docId = `DOC-${3108 + documents.length}`;
-    const createdAt = new Date().toISOString();
-    documents.unshift({
-      id: docId,
+function ensureWorkActDocumentDraftFromAct(act, options = {}) {
+  let doc = documents.find((item) => item.id === act.generatedDocumentId)
+    || documents.find((item) => item.workActId === act.id);
+  const createdAt = new Date().toISOString();
+
+  if (!doc) {
+    doc = {
+      id: nextDocumentId(),
       type: "Work Act",
       jobId: act.jobId,
       customer: act.customer,
@@ -1522,20 +1453,108 @@ function createWorkActDocumentDraft(actId) {
       status: "Draft",
       due: act.date,
       pipelineStep: "Draft",
-      workActId: act.id
-    });
-    act.generatedDocumentId = docId;
-    queueAutoGenerateDocument(docId);
+      workActId: act.id,
+      sourceType: "work-act",
+      sourceId: act.id
+    };
+    documents.unshift(doc);
+  } else {
+    doc.type = "Work Act";
+    doc.jobId = doc.jobId || act.jobId;
+    doc.customer = doc.customer || act.customer;
+    doc.owner = doc.owner || "Service";
+    doc.createdBy = doc.createdBy || act.createdBy || currentUserName();
+    doc.createdByInitials = doc.createdByInitials || initialsFromName(doc.createdBy);
+    doc.created = doc.created || act.date || createdAt.slice(0, 10);
+    doc.createdAt = doc.createdAt || createdAt;
+    doc.due = doc.due || act.date;
+    doc.workActId = act.id;
+    doc.sourceType = "work-act";
+    doc.sourceId = act.id;
   }
-  act.status = "Document draft";
+
+  act.generatedDocumentId = doc.id;
+  if (options.queueLegacyGeneration !== false && !act.workTemplateId && !doc.generatedFile) {
+    queueAutoGenerateDocument(doc.id);
+  }
+  return doc;
+}
+
+function normaliseGeneratedWorkActRecord(record, fileRecord, act, templateRecordId) {
+  const generatedFile = {
+    ...(record?.generatedFile || {}),
+    id: record?.generatedFile?.id || record?.generatedFile?.fileId || fileRecord?.id || "",
+    fileId: record?.generatedFile?.fileId || fileRecord?.id || record?.generatedFile?.id || "",
+    fileName: record?.generatedFile?.fileName || fileRecord?.fileName || "",
+    fileRecord: fileRecord || record?.generatedFile?.fileRecord || {},
+    downloadUrl: record?.generatedFile?.downloadUrl || fileRecord?.downloadUrl || "",
+    previewUrl: record?.generatedFile?.previewUrl || fileRecord?.previewUrl || "",
+    sourceType: "work-act",
+    sourceId: act.id
+  };
+
+  return {
+    ...(record || {}),
+    id: record?.id || act.generatedDocumentId || nextDocumentId(),
+    type: "Work Act",
+    jobId: act.jobId || record?.jobId || "",
+    customer: act.customer || record?.customer || "",
+    owner: record?.owner || "Service",
+    createdBy: record?.createdBy || act.createdBy || currentUserName(),
+    createdByInitials: record?.createdByInitials || act.createdByInitials || initialsFromName(act.createdBy || currentUserName()),
+    status: "Signature",
+    pipelineStep: "Signature",
+    deliveryStatus: "Needs signed upload",
+    workActId: act.id,
+    sourceType: "work-act",
+    sourceId: act.id,
+    templateRecordId,
+    generatedFile,
+    generatedFileVersions: record?.generatedFileVersions?.length ? record.generatedFileVersions : [generatedFile]
+  };
+}
+
+function syncGeneratedTemplateDocumentToWorkAct(act, doc) {
+  const generatedFile = doc?.generatedFile || null;
+  act.generatedDocumentId = doc.id;
+  act.generatedFile = generatedFile;
+  act.generatedFileVersions = upsertGeneratedFileVersion(act.generatedFileVersions, generatedFile);
+  act.generatedFileId = generatedFile?.fileId || generatedFile?.id || "";
+  act.generatedFileVersion = generatedFile?.version || null;
+  act.generatedAt = generatedFile?.generatedAt || doc.createdAt || new Date().toISOString();
+  act.status = "Generated";
+  act.deliveryStatus = doc.deliveryStatus || "Needs signed upload";
   act.updatedAt = new Date().toISOString();
-  state.selectedDocumentId = act.generatedDocumentId;
-  state.selectedTemplateId = "tpl-service-act";
-  state.documentOutputFormat = "pdf";
-  state.selectedWorkActId = act.id;
-  state.workActError = "";
-  saveDemoState();
-  renderAppCallback();
+  markWorkActJobWaitingSignature(act, doc);
+}
+
+function markWorkActJobWaitingSignature(act, doc) {
+  const job = jobs.find((item) => item.id === (act?.jobId || doc?.jobId));
+  if (!job || ["Done", "Cancelled"].includes(job.status)) return;
+  job.status = "Waiting signature";
+  job.stage = "Waiting signature";
+  job.documentStatus = "Waiting signature";
+  job.generatedWorkActDocumentId = doc.id;
+}
+
+function upsertGeneratedFileVersion(existingVersions = [], generatedFile = null) {
+  if (!generatedFile) return Array.isArray(existingVersions) ? existingVersions : [];
+  const fileKey = generatedFile.fileId || generatedFile.id || generatedFile.fileName;
+  const versions = Array.isArray(existingVersions) ? existingVersions : [];
+  return [
+    generatedFile,
+    ...versions.filter((item) => (item.fileId || item.id || item.fileName) !== fileKey)
+  ].slice(0, 12);
+}
+
+function nextDocumentId() {
+  let seed = 3108 + documents.length;
+  let id = `DOC-${seed}`;
+  while (documents.some((doc) => doc.id === id)) {
+    seed += 1;
+    id = `DOC-${seed}`;
+  }
+  return id;
 }
 
 function equipmentSnapshot(eq) {
@@ -1947,139 +1966,6 @@ function commercialOfferTotal(draft) {
   return (draft?.lineItems || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 }
 
-// ---------------------------------------------------------------------------
-// Template CRUD helpers
-// ---------------------------------------------------------------------------
-async function openWltAdvancedEditor(tplId) {
-  const tpl = workListTemplates.find((t) => t.id === tplId);
-  if (!tpl) return;
-
-  const payload = buildWltCollaboraPayload(tpl);
-  state.selectedWltId = tplId;
-  state.wltEditMode = true;
-  state.wltError = "";
-  state.wltCollaboraError = "";
-  state.wltCollaboraStatus = "Preparing Collabora editor...";
-  state.wltCollaboraSession = null;
-  suppressCollaboraWelcomeDialog();
-  renderAppCallback();
-
-  try {
-    const response = await fetch("/api/documents/collabora/sessions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const result = await readWltJsonResponse(response, "Could not open Collabora editor.");
-    state.wltCollaboraSession = result.session || null;
-    state.wltCollaboraStatus = result.session?.fileName
-      ? `Collabora editor ready: ${result.session.fileName}`
-      : "Collabora editor ready.";
-  } catch (error) {
-    state.wltCollaboraSession = null;
-    state.wltCollaboraStatus = "";
-    state.wltCollaboraError = error.message || "Could not open Collabora editor.";
-  }
-
-  renderAppCallback();
-}
-
-function suppressCollaboraWelcomeDialog() {
-  try {
-    const today = new Date().toDateString().replaceAll(" ", "-");
-    window.localStorage.setItem("WSDWelcomeDisabled", "true");
-    window.localStorage.setItem("WSDWelcomeDisabledDate", today);
-  } catch {
-    // Collabora still works if browser storage is unavailable.
-  }
-}
-
-function buildWltCollaboraPayload(tpl) {
-  const tplId = tpl.id;
-  const richEditor = document.querySelector(`[data-wlt-rich-editor="${cssEscape(tplId)}"]`);
-  const preview = document.querySelector(".wlt-document-preview");
-
-  return {
-    sourceType: "work-list-template",
-    sourceId: tplId,
-    ownerId: tplId,
-    userId: "local-owner",
-    userName: currentUserName(),
-    title: document.getElementById("wlt-edit-name")?.value.trim() || tpl.name,
-    company: document.getElementById("wlt-edit-company")?.value || tpl.company || "",
-    entryPerson: document.getElementById("wlt-edit-entry-person")?.value || tpl.entryPerson || "",
-    serviceType: document.getElementById("wlt-edit-service-type")?.value || tpl.serviceType || "",
-    bodyText: document.getElementById("wlt-edit-body")?.value.trim() || tpl.bodyText || "",
-    equipmentLabels: checkedLabelValues("[data-wlt-edit-equipment]"),
-    hospitalLabels: checkedLabelValues("[data-wlt-edit-hospital]"),
-    workEquipmentLabels: checkedLabelValues("[data-wlt-edit-work-equipment]"),
-    richBodyHtml: sanitizeWltRichHtml(richEditor?.innerHTML || preview?.innerHTML || tpl.richBodyHtml || "")
-  };
-}
-
-function checkedLabelValues(selector) {
-  return Array.from(document.querySelectorAll(selector))
-    .filter((input) => (input.type === "checkbox" || input.type === "radio") ? input.checked : Boolean(input.value))
-    .map((input) => input.dataset.wltLabel || input.closest("label")?.querySelector("strong")?.innerText.trim() || input.closest("label")?.innerText.trim() || input.value)
-    .filter(Boolean);
-}
-
-async function readWltJsonResponse(response, fallbackMessage) {
-  let result = null;
-  try {
-    result = await response.json();
-  } catch {
-    result = null;
-  }
-  if (!response.ok || result?.ok === false) {
-    throw new Error(result?.error || fallbackMessage);
-  }
-  return result || {};
-}
-
-function saveNewWlt() {
-  const name = document.getElementById("wlt-new-name")?.value.trim() || "";
-  const category = document.getElementById("wlt-new-category")?.value.trim() || "";
-  const serviceType = document.getElementById("wlt-new-service-type")?.value || "Service";
-  const language = document.getElementById("wlt-new-language")?.value || "lt";
-  const entryPerson = document.getElementById("wlt-new-entry-person")?.value || "";
-  const entryDate = document.getElementById("wlt-new-entry-date")?.value || new Date().toISOString().slice(0, 10);
-  const bodyText = document.getElementById("wlt-new-body")?.value.trim() || "";
-
-  if (!name) {
-    state.wltNewError = "Template name is required.";
-    renderAppCallback();
-    return;
-  }
-
-  const newId = `wlt-${Date.now()}`;
-  workListTemplates.unshift({
-    id: newId,
-    name,
-    equipmentCategory: category || "General",
-    serviceType,
-    linkedServiceTypes: [serviceType],
-    linkedEquipmentIds: checkedValues("[data-wlt-new-equipment]"),
-    linkedHospitalIds: checkedValues("[data-wlt-new-hospital]"),
-    linkedWorkEquipmentIds: checkedValues("[data-wlt-new-work-equipment]"),
-    entryPerson,
-    entryDate,
-    language,
-    bodyText,
-    workRows: [],
-    richBodyHtml: defaultWltRichHtml(name, bodyText),
-    editorNote: "",
-    isActive: true
-  });
-
-  state.selectedWltId = newId;
-  state.wltNewOpen = false;
-  state.wltNewError = "";
-  state.wltEditMode = false;
-  saveDemoState();
-  renderAppCallback();
-}
-
 function saveWltEdits(tplId) {
   const tpl = workListTemplates.find((t) => t.id === tplId);
   if (!tpl) return;
@@ -2092,7 +1978,6 @@ function saveWltEdits(tplId) {
   const entryDate = document.getElementById("wlt-edit-entry-date")?.value || tpl.entryDate || new Date().toISOString().slice(0, 10);
   const bodyText = document.getElementById("wlt-edit-body")?.value.trim() || tpl.bodyText || "";
   const company = document.getElementById("wlt-edit-company")?.value || tpl.company || "";
-  const richEditor = document.querySelector(`[data-wlt-rich-editor="${cssEscape(tplId)}"]`);
   const editorNote = document.getElementById("wlt-edit-note")?.value || "";
 
   if (!name) {
@@ -2114,18 +1999,8 @@ function saveWltEdits(tplId) {
   tpl.entryDate = entryDate;
   tpl.language = language;
   tpl.bodyText = bodyText;
-  tpl.richBodyHtml = sanitizeWltRichHtml(richEditor?.innerHTML || tpl.richBodyHtml || defaultWltRichHtml(name, bodyText));
+  tpl.richBodyHtml = sanitizeWltRichHtml(tpl.editorContent?.html || tpl.richBodyHtml || defaultWltRichHtml(name, bodyText));
   tpl.editorNote = editorNote;
-  if (state.wltCollaboraSession?.sourceId === tplId) {
-    const pdfDownloadUrl = state.wltCollaboraSession.pdfDownloadUrl || (state.wltCollaboraSession.downloadUrl
-      ? `${state.wltCollaboraSession.downloadUrl}${state.wltCollaboraSession.downloadUrl.includes("?") ? "&" : "?"}format=pdf`
-      : "");
-    tpl.collaboraSessionId = state.wltCollaboraSession.id;
-    tpl.collaboraFileName = state.wltCollaboraSession.fileName;
-    tpl.collaboraDownloadUrl = state.wltCollaboraSession.downloadUrl;
-    tpl.collaboraPdfDownloadUrl = pdfDownloadUrl;
-    tpl.collaboraUpdatedAt = state.wltCollaboraSession.lastSavedAt || state.wltCollaboraSession.updatedAt || new Date().toISOString();
-  }
 
   state.wltEditMode = false;
   state.wltError = "";
@@ -2144,50 +2019,6 @@ function deleteWlt(tplId) {
   state.wltError = "";
   saveDemoState();
   renderAppCallback();
-}
-
-function duplicateWlt(tplId) {
-  const tpl = workListTemplates.find((t) => t.id === tplId);
-  if (!tpl) return;
-
-  const newId = `wlt-${Date.now()}`;
-  workListTemplates.splice(workListTemplates.indexOf(tpl) + 1, 0, {
-    ...JSON.parse(JSON.stringify(tpl)),
-    id: newId,
-    name: `${tpl.name} (copy)`,
-    isActive: true
-  });
-
-  state.selectedWltId = newId;
-  state.wltEditMode = false;
-  state.wltError = "";
-  saveDemoState();
-  renderAppCallback();
-}
-
-function toggleWltArchive(tplId) {
-  const tpl = workListTemplates.find((t) => t.id === tplId);
-  if (!tpl) return;
-  tpl.isActive = tpl.isActive === false ? true : false;
-  state.selectedWltId = tplId;
-  state.wltEditMode = false;
-  state.wltError = "";
-  saveDemoState();
-  renderAppCallback();
-}
-
-function applyWltRichCommand(tplId, command) {
-  const editor = document.querySelector(`[data-wlt-rich-editor="${cssEscape(tplId)}"]`);
-  if (!editor) return;
-  editor.focus();
-  document.execCommand(command, false, null);
-}
-
-function storeWltRichHtml(tplId, html) {
-  const tpl = workListTemplates.find((t) => t.id === tplId);
-  if (!tpl) return;
-  tpl.richBodyHtml = sanitizeWltRichHtml(html);
-  saveDemoState();
 }
 
 function sanitizeWltRichHtml(html = "") {

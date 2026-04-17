@@ -53,6 +53,13 @@ export function loadPersistedDemoState() {
       state.documentUploadDefaultType = "";
       state.documentUploadError = "";
       state.jobCompletionConfirmDocId = null;
+      state.printPreviewOpen = false;
+      state.printPreviewDocumentId = null;
+      state.printPreviewPage = 1;
+      state.printPreviewZoom = 100;
+      state.printPreviewExportOpen = false;
+      state.printPreviewEmailOpen = false;
+      state.printPreviewEmailStatus = "";
     }
 
     if (snapshot?.collections && typeof snapshot.collections === "object") {

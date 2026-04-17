@@ -167,7 +167,7 @@ Does not own:
 
 Purpose:
 
-- Own the concrete Work Act for a Service job: document content, configuration, preview, advanced edit, and generated PDF handoff.
+- Own the concrete Work Act for a Service job: document content, configuration, preview, structured editing, and generated PDF handoff.
 - One Service job has exactly one Work Act.
 
 UI naming:
@@ -189,7 +189,6 @@ Owns:
 - Concrete work rows/points for the specific act.
 - Work description, report options, and entry person.
 - Generated document/file metadata link.
-- Work Act-specific Collabora advanced editor session for the exact generated document.
 
 Shows:
 
@@ -200,14 +199,12 @@ Shows:
 - Template picker.
 - Work rows/points and comments.
 - Generated PDF actions when available.
-- Advanced editor section with Collabora `Editing`, source `.fodt` download, and inline PDF result preview.
 
 Creates/updates:
 
 - Work Act from a Service job.
 - Work Act-specific equipment/work row data.
 - Generated document draft link.
-- Advanced edited `.fodt` session state for the linked Work Act document.
 - Service job status to `Waiting signature` after generated PDF exists.
 
 Links to:
@@ -308,7 +305,7 @@ Does not own:
 
 Purpose:
 
-- Own reusable Work List Template configuration and advanced document template/output layout metadata.
+- Own reusable Work List Template configuration, Umo-based content editing, and advanced document template/output layout metadata.
 
 UI naming:
 
@@ -331,15 +328,14 @@ Current landing screen:
 
 - Work List Template configurator.
 - Fields: `Company`, `Entry person`, `Template name`, `Service type`, searchable linked `Equipment`, searchable linked `Hospitals`, searchable linked `Work equipment`.
-- Actions: `Open in advanced editor`, `Save`, `Delete`, `Cancel`.
-- Preview: same-page advanced editor document preview.
-- Future advanced editor runtime: Collabora Online Development Edition (`CODE`) for personal/development use only; production/company use must revisit paid support/subscription.
-- Collabora runtime is local/server-side only: the `collabora` Docker service has no public host port and is reachable by the browser only through the app nginx proxy.
+- Actions: `Save`, `Delete`, `Cancel`.
+- Preview/editor: same-page Umo editor for reusable template content.
+- Collabora/WOPI advanced editor runtime is decommissioned; reusable template content editing uses Umo.
 
 Creates/updates:
 
 - Reusable template metadata.
-- Advanced-editor HTML preview/source.
+- Umo editor HTML/text/JSON content snapshots.
 - Applicability links used when a Work Act chooses a template.
 
 Links to:

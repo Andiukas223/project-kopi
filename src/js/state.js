@@ -14,18 +14,11 @@ export const state = {
   documentTypeFilter: "All",
   documentCustomerFilter: "All",
   documentDateQuery: "",
-  documentDateFrom: "",
-  documentDateTo: "",
   selectedDocumentId: "DOC-3108",
   selectedTemplateId: "tpl-service-act",
   documentOutputFormat: "pdf",
   generationStatus: "Ready",
   generatedDocPreview: null,   // { docId, templateId, format, generatedAt } | null
-  templateEditorOpen: false,
-  templateEditorError: "",
-  templateEditorSavedAt: "",
-  templateFileStatus: "",
-  templateFileError: "",
   templateGenTab: "work-acts", // legacy source-flow hint; Templates landing uses the configurator
   rejectingDocumentId: null,
   documentRejectError: "",
@@ -41,11 +34,6 @@ export const state = {
   printPreviewExportOpen: false,
   printPreviewEmailOpen: false,
   printPreviewEmailStatus: "",
-  documentViewOpen: false,
-  documentViewDocumentId: null,
-  documentViewCollaboraSession: null,
-  documentViewStatus: "",
-  documentViewError: "",
 
   // Equipment module
   selectedEquipmentId: "EQ-501",
@@ -102,9 +90,6 @@ export const state = {
   selectedDefectActId: null,
   templateGenDefectActJobId: "VM-SV-1024",
   workActError: "",
-  workActCollaboraSession: null,
-  workActCollaboraStatus: "",
-  workActCollaboraError: "",
   workActEditorDocumentId: null,
   defectActError: "",
   selectedCommercialOfferDraftId: null,
@@ -117,16 +102,7 @@ export const state = {
   // Templates CRUD
   selectedWltId: null,
   wltEditMode: false,
-  wltNewOpen: false,
   wltError: "",
-  wltNewError: "",
-  wltSearchQuery: "",
-  wltStatusFilter: "all",
-  wltServiceTypeFilter: "all",
-  wltEntryPersonFilter: "all",
-  wltCollaboraSession: null,
-  wltCollaboraStatus: "",
-  wltCollaboraError: "",
 
   // Sales module
   selectedQuotationId: "QTE-501",

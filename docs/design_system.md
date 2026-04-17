@@ -165,14 +165,13 @@ The Documents module is a repository and work queue, not a template editor.
 
 - Do not show large pipeline summary counters when the user is trying to search or act on documents.
 - Do not show a separate selected document side panel if the same information can be shown directly in the list.
-- Table rows should carry the key operational signals: generated file, signed file, delivery status, due date, last activity, and next action.
-- Primary row actions should be concrete verbs: `View`, `Edit`, `Download`, `Upload signed`, `Finish`, `DONE`, `Reject`.
+- Table rows should carry the key operational signals currently used by the Documents repository: source reference, type, customer, linked job status, created date, signed-file upload/download status, and source/preview actions.
+- Primary Documents row actions are currently limited to `View` and `Edit`; signed-file custody lives in the `Status` column as `Upload signed` or green `Download signed`.
 - Do not use a generic `Advance` button. It hides the real task and makes the workflow harder to understand.
 - Do not expose document archive controls until retention and file custody rules are designed.
 - Use status colours only for operational state:
-  - amber for needs signed upload / finish needed
-  - blue or teal for signed upload present
-  - green for DONE
+  - amber for needs signed upload
+  - green for signed/uploaded file download
   - red for overdue/rejected/problem
 - Keep generated document preview surfaces white in both light and dark mode.
 - Feedback capture should stay visually separate from normal document work: screenshot and red-pencil annotation are admin-supporting evidence, not part of the document form itself.

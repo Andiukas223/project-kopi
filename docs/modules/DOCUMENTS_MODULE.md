@@ -15,6 +15,14 @@ Documents answers these daily questions:
 - Can the user search old and current documents quickly by reference, customer, owner initials, type, and created date?
 - Can the user open the source workspace to edit the business record that produced the document?
 
+## Current Implementation Entry Points
+
+- `src/modules/documents/DocumentsPage.vue` renders the active Vue 3 Documents page: filters, table, upload modal, and Work Act completion confirmation.
+- `src/modules/documents/documentViewModel.js` contains Vue-facing display/filter/status helpers copied from the documented Documents rules.
+- `src/js/documentPipeline.js` still owns business behavior during migration: document generation, signed/external upload, file registry API calls, source edit routing, warranty sync, and audit updates.
+- `src/js/render.js` still renders the generated document print preview and feedback overlays used beside the Vue route. It no longer renders the Documents index, selected-document side panel, old pipeline board, reject controls, or old Documents completion modal.
+- `document-service/src/server.js` remains the document generation/upload/download backend.
+
 ## Current UI Contract
 
 The Documents index is table-first.
@@ -26,14 +34,14 @@ Current columns:
 - `Customer`
 - `Job status`
 - `Created`
-- `Status`
-- `Action`
+- `Generated output`
+- `Signed return`
+- `Source`
 
 Columns intentionally removed from the index:
 
 - Old workflow `Status` stage column.
 - Delivery/Delivery Status.
-- File name/details.
 - Separate Uploaded/Signed column.
 - Due date.
 - Red overdue row stripe.
@@ -42,32 +50,61 @@ Reason:
 
 - The daily document register should be a simple custody queue.
 - Delivery/shipping belongs to Parts/Logistics/Warehouse.
-- File detail belongs in preview/detail/audit contexts, not the index row.
+- Generated-file detail is intentionally compact and limited to custody/action context.
 - Created/uploaded date is a better daily reference than due date for document lookup.
 
-## Status Column Logic
+## Generated Output Column Logic
 
-The `Status` column is the document upload/download action location.
+The `Generated output` column is the generated-file custody and generated-output action location.
+
+If a generated document exists with a usable preview or download URL:
+
+```text
+Generated output = Generated PDF + file/version detail + Open + Download + Export
+```
+
+If generated file metadata exists but no URL is usable:
+
+```text
+Generated output = Generated + disabled Download
+```
+
+If no generated file exists:
+
+```text
+Generated output = Not generated + Open
+```
+
+Rules:
+
+- `Open` reviews the generated output through the PDF/print preview flow.
+- `Download` downloads the generated file returned by `document-service`.
+- Export is available from the row and remains available inside the print preview ribbon.
+- Generated file actions must not use the signed/uploaded customer return file.
+
+## Signed Return Column Logic
+
+The `Signed return` column is the signed/uploaded customer-return action location.
 
 If no signed/uploaded file exists:
 
 ```text
-Status = yellow Upload signed button
+Signed return = yellow Upload signed button
 ```
 
 If a signed/uploaded file exists and has a download or preview URL:
 
 ```text
-Status = green Download signed link
+Signed return = green Download signed link
 ```
 
 If upload state exists but a usable URL is missing:
 
 ```text
-Status = disabled green Download signed button
+Signed return = disabled green Download signed button
 ```
 
-The `Status` column must not show:
+The `Signed return` column must not show:
 
 - Delivery/shipping status.
 - Generated file name.
@@ -75,14 +112,13 @@ The `Status` column must not show:
 - `Finish`.
 - Rejection workflow controls.
 
-## Action Column Logic
+## Source Column Logic
 
-The `Action` column is intentionally minimal.
+The `Source` column is intentionally minimal.
 
 Current actions:
 
-- `View`
-- `Edit`
+- `Edit source`
 
 ## Job Status Column Logic
 
@@ -101,18 +137,17 @@ Rules:
 - Documents must not use this column for shipping/delivery, invoice payment, or template status.
 - Uploading a signed Work Act does not silently close the job. The completion confirmation decides whether the job becomes `Done`.
 
-Not shown in the Documents index action column:
+Not shown in the Documents index source column:
 
-- `Download` for generated files.
 - `Reject`.
 - `Finish`.
 - `DONE`.
 - `Advance`.
 - Archive/restore.
 
-`Download signed` for signed/uploaded files lives in `Status`.
+`Download signed` for signed/uploaded files lives in `Signed return`.
 
-Generated-file download remains available from preview/source contexts, not as an index action.
+Generated-file open/download actions live in `Generated output`.
 
 ## Filters And Search
 
@@ -201,31 +236,29 @@ Source priority:
 
 `Due` remains available for reminders/SLA/overdue logic but is not the main index column.
 
-## View Behavior
+## Open Behavior
 
-`View` opens the generated document for review through Collabora view mode.
+`Open` opens the generated document for review through PDF/print preview or the generated file `previewUrl`.
 
 Current behavior:
 
 1. Use the real generated file from `generatedFile`.
-2. Create a read-only local WOPI session through `document-service`.
-3. Open Collabora in `view` permission mode inside a centered/full-window modal.
-4. If the document has no generated file yet, generate a PDF first and then open Collabora view mode.
-5. If Collabora cannot open, show the printable fallback preview instead of forcing a browser download.
+2. Prefer `generatedFile.previewUrl` when it exists.
+3. Otherwise show the printable preview fallback.
+4. If the document has no generated file yet, generate a PDF first and then open the preview path.
 
 Rules:
 
-- `View` is for reviewing what the system generated.
-- `View` must not download the signed/uploaded customer return.
-- `View` must not expose the signed/uploaded file as the primary preview.
-- Collabora sessions opened from Documents are read-only.
-- The WOPI source file is copied from the generated file registry entry; signed upload custody stays separate.
+- `Open` is for reviewing what the system generated.
+- `Open` must not download the signed/uploaded customer return.
+- `Open` must not expose the signed/uploaded file as the primary preview.
 - Viewing should not force a browser download.
+- Collabora/WOPI sessions are not used.
 
 Download separation:
 
-- Documents index `Status > Download signed` downloads the signed/uploaded file that the user uploaded.
-- Generated-file download can still exist in source/advanced contexts, but it must not return to the Documents index `Action` column.
+- Documents index `Signed return > Download signed` downloads the signed/uploaded file that the user uploaded.
+- Generated-file download lives in the `Generated output` column and must not download signed returns.
 
 ## Edit Behavior
 
@@ -254,22 +287,21 @@ Work Act / legacy Service Act current implementation:
 3. The exact linked Work Act source is selected when `doc.workActId`, `generatedDocumentId`, or `jobId` can resolve it.
 4. If the document is a legacy/demo Service Act and no Work Act source exists yet, the route creates a minimal Work Act configuration shell linked to that same `doc.id`.
 5. The Work Act configuration panel opens for that source record.
-6. The app creates a writable Collabora session with `sourceType = work-act-document`.
-7. Collabora opens in `Editing` mode inside the Work Act page.
-8. The user can save in Collabora and open `Preview result PDF` from the Work Act advanced-editor section.
+6. The user edits the structured Work Act fields, rows, equipment, and report options.
+7. The user regenerates/updates the PDF draft when needed.
 
 Rules:
 
-- Documents `View` is still generated-output review only.
+- Documents `Open` is still generated-output review only.
 - Documents `Edit` is source-workspace editing.
-- Work Act is the only implemented advanced-editor edit path for now.
-- Other document types should not reuse the Work Act editor; they need their own module/configuration page first.
+- Work Act editing is structured, not Collabora-based.
+- Other document types need their own module/configuration page first.
 
 ## Upload Signed Flow
 
 Trigger:
 
-- User clicks yellow `Upload signed` in the `Status` column.
+- User clicks yellow `Upload signed` in the `Signed return` column.
 
 UI:
 
@@ -297,7 +329,7 @@ On upload:
 7. Backend stores binary under runtime storage.
 8. Backend creates file registry record.
 9. Frontend stores returned `fileRecord` as signed/uploaded file metadata on the document.
-10. Row rerenders with green `Download signed` in `Status`.
+10. Row rerenders with green `Download signed` in `Signed return`.
 11. If the document is a Work Act, a completion confirmation opens.
 12. If the user confirms completion, the linked Service job and Work Act document become `Done`.
 13. If the user declines completion, the linked Service job remains `Waiting signature`.
@@ -475,23 +507,24 @@ Planned or expected later:
 
 When changing Documents, verify:
 
-- Table columns remain `Reference`, `Type`, `Customer`, `Job status`, `Created`, `Status`, `Action`.
+- Table columns remain `Reference`, `Type`, `Customer`, `Job status`, `Created`, `Generated output`, `Signed return`, `Source`.
 - `Job status` shows the linked Service job state.
-- `Status` shows yellow `Upload signed` when signed/uploaded file is missing.
-- `View` opens the generated file through Collabora read-only view mode.
-- If no generated file exists, `View` generates a PDF before opening Collabora.
-- Collabora Documents view does not reuse the signed/uploaded file as its source.
-- `Edit` on a Work Act routes to `Work Acts`, selects the exact document source, and opens a Collabora `Editing` session.
+- `Generated output` shows generated-file custody and Open/Download/Export actions.
+- `Signed return` shows yellow `Upload signed` when signed/uploaded file is missing.
+- `Open` opens the generated file through PDF/print preview or `generatedFile.previewUrl`.
+- If no generated file exists, `Open` generates a PDF before opening preview.
+- Documents view does not reuse the signed/uploaded file as its source.
+- `Edit` on a Work Act routes to `Work Acts` and selects the exact document source.
 - `Edit` on a legacy/demo Service Act without a source Work Act creates a linked Work Act shell for the same document id.
 - Clicking `Upload signed` opens centered modal.
 - Drag/drop or click file selection updates selected filename.
-- `Upload` stores a file and changes `Status` to green `Download signed`.
+- `Upload` stores a file and changes `Signed return` to green `Download signed`.
 - Work Act signed upload opens the job completion confirmation.
 - Confirming completion marks the linked Service job `Done`.
 - Declining completion leaves the linked Service job `Waiting signature`.
 - Green `Download signed` downloads the uploaded signed file, not the generated preview file.
-- `Action` remains only `View` and `Edit`.
-- Generated `Download` is not reintroduced into `Action`.
+- `Source` remains only source editing.
+- Generated `Download` stays in `Generated output`.
 - `Reject`, `Finish`, `DONE`, and delivery status are not reintroduced into Documents index.
 - Search works with `Enter`.
 - Created date partial search works.
