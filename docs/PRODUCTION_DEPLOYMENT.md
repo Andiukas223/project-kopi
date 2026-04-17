@@ -307,11 +307,13 @@ Useful commands:
 ```bash
 docker compose logs web --tail 100
 docker compose logs document-service --tail 100
+docker compose exec -T document-service npm run validate:template-generation
 ```
 
 Investigate repeated:
 
 - failed generation errors.
+- template-generation validation failures.
 - storage write errors.
 - upload size errors.
 - malformed file registry errors.

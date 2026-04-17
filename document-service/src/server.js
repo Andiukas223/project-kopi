@@ -648,6 +648,13 @@ async function generateDocumentFromTemplate(template, body = {}) {
       templateContentText
     }
   });
+  const editorHtml = String(template.editorContent?.html || "").trim();
+  if (editorHtml) {
+    payload.templatePath = await writeEditorHtmlTemplateFodt(template, editorHtml, {
+      ...payload.data,
+      notes: fields.notes || body.notes || ""
+    }, fieldResolution.definitions);
+  }
   const rendered = await renderDocument(payload);
   const fileRecord = rendered.fileRecord;
   const generatedFile = {
@@ -883,6 +890,187 @@ function renderSectionsAsFodt(body = {}) {
 </office:document>`;
 }
 
+async function writeEditorHtmlTemplateFodt(template, editorHtml, data, mergeFields = []) {
+  await fs.mkdir(customTemplatesDir, { recursive: true });
+  const templateId = safeFilePart(template.id || "template");
+  const fileName = `${templateId}-editor-${crypto.randomUUID().slice(0, 8)}.fodt`;
+  const filePath = path.join(customTemplatesDir, fileName);
+  const content = renderEditorHtmlAsFodt({
+    title: template.metadata?.name || template.name || "Template",
+    html: editorHtml,
+    data,
+    mergeFields
+  });
+  await fs.writeFile(filePath, content, "utf8");
+  return filePath;
+}
+
+function renderEditorHtmlAsFodt({ title, html, data, mergeFields }) {
+  const bodyXml = htmlBlocksToFodtXml(renderTemplateText(html || "", data, mergeFields));
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" office:version="1.2" office:mimetype="application/vnd.oasis.opendocument.text">
+  <office:styles>
+    <style:style style:name="Standard" style:family="paragraph"><style:text-properties fo:font-size="10pt"/></style:style>
+    <style:style style:name="EditorTitle" style:family="paragraph"><style:paragraph-properties fo:text-align="center" fo:margin-bottom="0.18in"/><style:text-properties fo:font-size="16pt" fo:font-weight="bold"/></style:style>
+    <style:style style:name="EditorHeading" style:family="paragraph"><style:paragraph-properties fo:margin-top="0.12in" fo:margin-bottom="0.06in"/><style:text-properties fo:font-size="11pt" fo:font-weight="bold"/></style:style>
+  </office:styles>
+  <office:automatic-styles>
+    <style:style style:name="EditorTable" style:family="table"><style:table-properties table:border-model="collapsing" style:width="100%" table:align="margins"/></style:style>
+    <style:style style:name="EditorColumn" style:family="table-column"><style:table-column-properties style:rel-column-width="1*"/></style:style>
+    <style:style style:name="EditorCell" style:family="table-cell"><style:table-cell-properties fo:border-left="0.75pt solid #000000" fo:border-right="0.75pt solid #000000" fo:border-top="0.75pt solid #000000" fo:border-bottom="0.75pt solid #000000" fo:padding="0.04in" style:vertical-align="middle"/></style:style>
+    <style:style style:name="EditorHeaderCell" style:family="table-cell"><style:table-cell-properties fo:border-left="0.75pt solid #000000" fo:border-right="0.75pt solid #000000" fo:border-top="0.75pt solid #000000" fo:border-bottom="0.75pt solid #000000" fo:padding="0.04in" fo:background-color="#f3f5f7" style:vertical-align="middle"/></style:style>
+    <style:style style:name="EditorHeaderParagraph" style:family="paragraph"><style:text-properties fo:font-weight="bold"/></style:style>
+  </office:automatic-styles>
+  <office:body>
+    <office:text>
+      ${bodyXml || `<text:p text:style-name="EditorTitle">${escapeXml(title || "Template")}</text:p>`}
+    </office:text>
+  </office:body>
+</office:document>`;
+}
+
+function htmlBlocksToFodtXml(html = "") {
+  const sanitized = stripUnsafeHtml(String(html));
+  const parts = [];
+  let cursor = 0;
+  const tableRegex = /<table\b[\s\S]*?<\/table>/gi;
+  let match;
+
+  while ((match = tableRegex.exec(sanitized))) {
+    parts.push(...paragraphHtmlToFodtBlocks(sanitized.slice(cursor, match.index)));
+    parts.push(tableHtmlToFodtBlock(match[0]));
+    cursor = match.index + match[0].length;
+  }
+
+  parts.push(...paragraphHtmlToFodtBlocks(sanitized.slice(cursor)));
+  return parts.filter(Boolean).join("\n      ");
+}
+
+function paragraphHtmlToFodtBlocks(html = "") {
+  const blocks = [];
+  const blockRegex = /<(h[1-6]|p|div|li)\b[^>]*>([\s\S]*?)<\/\1>/gi;
+  let match;
+
+  while ((match = blockRegex.exec(html))) {
+    const tag = match[1].toLowerCase();
+    const lines = inlineHtmlToText(match[2]).split("\n").map((line) => line.trim()).filter(Boolean);
+    lines.forEach((line) => {
+      const style = tag.startsWith("h") ? " text:style-name=\"EditorHeading\"" : "";
+      blocks.push(`<text:p${style}>${escapeXml(line)}</text:p>`);
+    });
+  }
+
+  if (!blocks.length) {
+    const lines = inlineHtmlToText(html).split("\n").map((line) => line.trim()).filter(Boolean);
+    lines.forEach((line) => blocks.push(`<text:p>${escapeXml(line)}</text:p>`));
+  }
+
+  return blocks;
+}
+
+function tableHtmlToFodtBlock(tableHtml = "") {
+  const rows = [];
+  const rowRegex = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
+  let rowMatch;
+  let columnCount = 0;
+  const pendingRowSpans = [];
+
+  while ((rowMatch = rowRegex.exec(tableHtml))) {
+    const rowCells = [];
+    const cellRegex = /<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi;
+    let cellMatch;
+    let columnIndex = 0;
+
+    while ((cellMatch = cellRegex.exec(rowMatch[1]))) {
+      while (pendingRowSpans[columnIndex] > 0) {
+        rowCells.push("<table:covered-table-cell/>");
+        pendingRowSpans[columnIndex] -= 1;
+        columnIndex += 1;
+      }
+
+      const cellTag = cellMatch[0].match(/^<t[dh]\b[^>]*>/i)?.[0] || "";
+      const isHeader = /^<th\b/i.test(cellTag);
+      const colSpan = htmlAttributeNumber(cellTag, "colspan", 1);
+      const rowSpan = htmlAttributeNumber(cellTag, "rowspan", 1);
+      const cellText = inlineHtmlToText(cellMatch[1]).trim();
+      const paragraphStyle = isHeader ? " text:style-name=\"EditorHeaderParagraph\"" : "";
+      const paragraphs = cellText
+        ? cellText.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => `<text:p${paragraphStyle}>${escapeXml(line)}</text:p>`).join("")
+        : "<text:p/>";
+      const spanAttrs = [
+        colSpan > 1 ? `table:number-columns-spanned="${colSpan}"` : "",
+        rowSpan > 1 ? `table:number-rows-spanned="${rowSpan}"` : ""
+      ].filter(Boolean).join(" ");
+      const cellStyle = isHeader ? "EditorHeaderCell" : "EditorCell";
+      rowCells.push(`<table:table-cell table:style-name="${cellStyle}" office:value-type="string"${spanAttrs ? ` ${spanAttrs}` : ""}>${paragraphs}</table:table-cell>`);
+
+      if (rowSpan > 1) {
+        for (let offset = 0; offset < colSpan; offset += 1) {
+          pendingRowSpans[columnIndex + offset] = Math.max(pendingRowSpans[columnIndex + offset] || 0, rowSpan - 1);
+        }
+      }
+
+      for (let offset = 1; offset < colSpan; offset += 1) {
+        rowCells.push("<table:covered-table-cell/>");
+      }
+
+      columnIndex += colSpan;
+    }
+
+    while (pendingRowSpans[columnIndex] > 0) {
+      rowCells.push("<table:covered-table-cell/>");
+      pendingRowSpans[columnIndex] -= 1;
+      columnIndex += 1;
+    }
+
+    if (rowCells.length) {
+      columnCount = Math.max(columnCount, columnIndex);
+      rows.push(`<table:table-row>${rowCells.join("")}</table:table-row>`);
+    }
+  }
+
+  if (!rows.length) return "";
+  const columns = Array.from({ length: columnCount }, () => "<table:table-column table:style-name=\"EditorColumn\"/>").join("");
+  return `<table:table table:name="TemplateTable" table:style-name="EditorTable">${columns}${rows.join("")}</table:table>`;
+}
+
+function htmlAttributeNumber(tag = "", name = "", fallback = 1) {
+  const pattern = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]+)"|'([^']+)'|([^\\s>]+))`, "i");
+  const value = String(tag || "").match(pattern)?.slice(1).find(Boolean);
+  const parsed = Number.parseInt(value || "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 100) : fallback;
+}
+
+function stripUnsafeHtml(html = "") {
+  return String(html)
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, "");
+}
+
+function inlineHtmlToText(html = "") {
+  return decodeHtmlEntities(String(html)
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|h[1-6])>/gi, "\n")
+    .replace(/<\/t[dh]>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n"));
+}
+
+function decodeHtmlEntities(value = "") {
+  return String(value)
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, decimal) => String.fromCodePoint(Number.parseInt(decimal, 10)))
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#039;|&apos;/g, "'");
+}
+
 function escapeXml(value = "") {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -920,12 +1108,14 @@ function normalisePayload(body = {}) {
   const source = normaliseGenerationSource(body, fields);
   const equipmentItems = body.equipmentItems || fields.equipmentItems || [];
   const workActRows = body.workActRows || fields.workActRows || [];
-  const equipmentItemsText = Array.isArray(equipmentItems)
+  const derivedEquipmentItemsText = Array.isArray(equipmentItems)
     ? equipmentItems.map((item) => `${item.name || ""}${item.serial ? ` / SN ${item.serial}` : ""}${item.location ? ` / ${item.location}` : ""}`).filter(Boolean).join("\n")
     : "";
-  const workActRowsText = Array.isArray(workActRows)
+  const equipmentItemsText = fields.equipmentItemsText || body.equipmentItemsText || derivedEquipmentItemsText;
+  const derivedWorkActRowsText = Array.isArray(workActRows)
     ? workActRows.map((row) => `${row.number || ""}. ${row.completed ? "[x]" : "[ ]"} ${row.description || ""}${row.comments ? ` - ${row.comments}` : ""}`).join("\n")
     : "";
+  const workActRowsText = fields.workActRowsText || body.workActRowsText || derivedWorkActRowsText;
   const templateSections = Array.isArray(body.templateSections) ? body.templateSections : [];
   const reportOptions = body.reportOptions || fields.reportOptions || {};
   const reportOptionsText = fields.reportOptionsText || Object.entries(reportOptions)

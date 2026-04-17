@@ -8,6 +8,7 @@ Formatas laisvai remiasi "Keep a Changelog" principu, bet rasomas praktiskai ir 
 
 ### Added
 
+- Template generation now renders saved Umo editor HTML through a generated FODT source, including ODF table columns, covered cells for merged table spans, automatic table-cell border styles, header-cell styling, and merge-field replacement, so advanced-editor PM protocol tables appear in generated PDFs instead of being flattened into plain text. Added `document-service` runtime validation for a real saved template -> generated PDF path, including bordered/header/merged tables, multiline table cells, placeholders inside cells, and notes fallback leakage checks.
 - Cleanup pass: pasalintas neberenderinamas legacy Documents `Generate mock` / output-layout editor frontend kodas, jo state laukai ir CSS; dokumentacija atnaujinta, kad ateities Output Layouts editorius butu daromas kaip atskiras Vue/admin pavirsius.
 - Pradeta Vue 3 migracija: prideti `package.json`, `vite.config.js`, root `index.html`, Vue app shell/layout komponentai ir legacy renderer compatibility layer, kad esami moduliai veiktu per nauja Vue/Vite bootstrap'a.
 - Vue shell migracija patikslinta: topbar ir sidebar navigacija perkelta i atskirus Vue komponentus, o senas vanilla `navigation.js` pasalintas kaip nebenaudojamas app shell valdiklis.

@@ -12,6 +12,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 COPY src ./src
+COPY scripts ./scripts
 COPY templates ./templates
 RUN mkdir -p generated
 

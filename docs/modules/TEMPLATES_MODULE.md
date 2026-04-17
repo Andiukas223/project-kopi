@@ -180,6 +180,9 @@ Active editor:
 - Umo is the current same-page template body editing path.
 - Structured fields remain the source of truth for company, entry person, template name, service type, and applicability links.
 - `editorContent` persists the Umo editor HTML/text/json snapshot, with `richBodyHtml` retained only for compatibility.
+- Template document generation converts saved Umo HTML into a temporary FODT source before rendering. The converter preserves editor-authored paragraphs, merge fields, bordered tables with generated ODF table columns/cell styles, header cells, multiline table-cell text, and basic merged-cell spans; it must not fall back to copying `editorContent.text` when a visual template PDF is requested.
+- Validate this path with `docker compose exec -T document-service npm run validate:template-generation` after generation changes. The smoke test creates a temporary saved Umo template, generates a PDF through the backend endpoint, checks the temporary FODT structure, converts the PDF to PNG, inspects table border pixels, and removes its temporary artifacts when it passes.
+- Strict proof passes should verify that an HTML-only marker from `editorContent.html` appears in the generated FODT, fallback text/body markers do not appear, placeholders inside normal and merged table cells resolve, `{d.notes}` appears only where explicitly placed, the generated PDF exposes visible table border runs after PNG conversion, and the generated document/file records are accessible through the normal Documents download/preview URLs.
 - PDF generation remains handled through source modules and `document-service`.
 
 Removed behavior:
@@ -402,6 +405,7 @@ When changing Templates, verify:
 - Cancel leaves persisted data untouched.
 - Umo editor remains usable on the same page.
 - Visual editor Save persists expected HTML and structured metadata.
+- Template generation from saved Umo HTML preserves visible table borders, a distinct header row, placeholders inside table cells, multiline table-cell content, and does not inject the flattened template body through `{d.notes}`.
 - No `Open in advanced editor` or Collabora iframe action is visible.
 - Work rows are not visible in Templates and are handled in `Work Acts`.
 - Work Act template selection offers applicable active templates first.
