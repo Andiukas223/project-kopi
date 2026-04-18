@@ -17,6 +17,15 @@ const routes = [
       title: module.label
     }
   })),
+  {
+    path: "/templates/:templateId",
+    name: "template-detail",
+    component: AppShell,
+    meta: {
+      pageId: "templates",
+      title: "Template"
+    }
+  },
   { path: "/:pathMatch(.*)*", redirect: "/service" }
 ];
 

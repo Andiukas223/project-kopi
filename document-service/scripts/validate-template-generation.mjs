@@ -16,7 +16,8 @@ const filesPath = path.join(storageDir, "files.json");
 
 const runId = crypto.randomUUID().slice(0, 8);
 const templateId = `validation-template-${runId}`;
-const documentId = `DOC-TPL-VALIDATION-${runId}`;
+const documentId = `DOC-WA-VALIDATION-${runId}`;
+const workActId = `WA-VALIDATION-${runId}`;
 const previewDir = path.join(generatedDir, `template-validation-${runId}`);
 const createdPaths = [];
 let generatedRecord = null;
@@ -141,7 +142,10 @@ async function generateValidationDocument() {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       documentId,
-      documentType: "Validation template document",
+      documentType: "Work Act",
+      sourceType: "work-act",
+      sourceId: workActId,
+      workActId,
       format: "pdf",
       customer: "Validation Hospital",
       equipmentItemsText: "Validation Ultrasound / SN VAL-001",

@@ -24,7 +24,7 @@ export function sourceJobOptions() {
 }
 
 export function selectedSourceJob() {
-  return jobs.find((job) => job.id === state.templateGenWorkActJobId)
+  return jobs.find((job) => job.id === state.workActSourceJobId)
     || jobs.find((job) => job.id === state.selectedServiceJobId)
     || jobs[0]
     || null;
@@ -98,7 +98,15 @@ export function workActCandidateEquipment(job) {
   const byCustomer = equipment.filter((eq) => eq.customer === job.customer || eq.customerId === job.customerId);
   const fromJob = equipment.find((eq) => eq.name === job.equipment || eq.serial === job.serial || eq.id === job.equipmentId);
   const merged = [...(fromJob ? [fromJob] : []), ...byCustomer];
-  return merged.filter((eq, index, list) => list.findIndex((item) => item.id === eq.id) === index);
+  const uniqueRows = merged.filter((eq, index, list) => list.findIndex((item) => item.id === eq.id) === index);
+  const source = uniqueRows.length ? uniqueRows : equipment;
+  return [...source].sort((a, b) => {
+    const customerDiff = String(a.customer || "").localeCompare(String(b.customer || ""));
+    if (customerDiff !== 0) return customerDiff;
+    const nameDiff = String(a.name || "").localeCompare(String(b.name || ""));
+    if (nameDiff !== 0) return nameDiff;
+    return String(a.serial || "").localeCompare(String(b.serial || ""));
+  });
 }
 
 export function workActEquipmentOptionLabel(eq) {

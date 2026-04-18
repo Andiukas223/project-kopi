@@ -24,7 +24,7 @@ The web app itself does not contain a control button for this, because a stopped
 | `vm-web-control.cmd` | Windows launcher that opens PowerShell and passes arguments. |
 | `vm-web-control.ps1` | Main PowerShell control script. |
 | `Dockerfile` | Multi-stage build: Vue 3/Vite frontend build, then nginx serves `dist/`. |
-| `nginx.conf` | Proxies `/api/documents/` to `document-service:3001`; serves the frontend for all other paths. |
+| `nginx.conf` | Proxies `/api/documents/` to `document-service:3001`, proxies `/api/templates/` to `document-service:3001/templates/`, blocks old `/api/documents/templates*`, and serves the frontend for all other paths. |
 | `docker-compose.yml` | Runs `web` on `8080:80` and `document-service` on `3001:3001`. |
 | `document-service/` | Node.js + Carbone + LibreOffice document generation/file storage/feedback service. |
 
@@ -128,7 +128,8 @@ networks:
 ```
 
 - App URL: `http://localhost:8080/`.
-- Frontend API calls use `/api/documents/*` through nginx.
+- Frontend document API calls use `/api/documents/*` through nginx.
+- Frontend reusable Template API calls use `/api/templates/*` through nginx.
 - `document-service` is directly published on `3001` for local development only.
 - In production/private-server deployment, `document-service:3001` must not be public.
 

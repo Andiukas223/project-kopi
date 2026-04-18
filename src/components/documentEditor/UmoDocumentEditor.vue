@@ -394,8 +394,8 @@ defineExpose({
       <VmButton compact variant="ghost" :disabled="readonly" @click="requestSave">Save content</VmButton>
     </div>
 
-    <div v-if="fieldsForInsertion.length" class="umo-merge-toolbar" role="toolbar" aria-label="Insert merge field">
-      <span>Insert field</span>
+    <div v-if="fieldsForInsertion.length" class="umo-merge-toolbar" role="toolbar" aria-label="Insert template data field">
+      <span>Insert data field</span>
       <button
         v-for="field in fieldsForInsertion"
         :key="field.key"
@@ -434,7 +434,7 @@ defineExpose({
     </div>
 
     <div :id="`${editorId}-keyboard-hint`" class="umo-editor-keyboard-hint">
-      Ctrl+S saves. Tab exits the document body; use the toolbar buttons above to insert merge fields.
+      Ctrl+S saves. Tab exits the document body; use the toolbar buttons above to insert template data fields.
     </div>
 
     <div v-if="runtimeMessage" class="form-error">{{ runtimeMessage }}</div>

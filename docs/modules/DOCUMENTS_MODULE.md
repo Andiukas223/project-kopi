@@ -15,6 +15,8 @@ Documents answers these daily questions:
 - Can the user search old and current documents quickly by reference, customer, owner initials, type, and created date?
 - Can the user open the source workspace to edit the business record that produced the document?
 
+Documents must not list reusable Templates as document rows. A Template is a reusable source asset owned by `Templates`; a Document is a generated or uploaded output owned by `Documents`.
+
 ## Current Implementation Entry Points
 
 - `src/modules/documents/DocumentsPage.vue` renders the active Vue 3 Documents page: filters, table, upload modal, and Work Act completion confirmation.
@@ -36,7 +38,7 @@ Current columns:
 - `Created`
 - `Generated output`
 - `Signed return`
-- `Source`
+- `Actions`
 
 Columns intentionally removed from the index:
 
@@ -112,13 +114,31 @@ The `Signed return` column must not show:
 - `Finish`.
 - Rejection workflow controls.
 
-## Source Column Logic
+## Actions Column Logic
 
-The `Source` column is intentionally minimal.
+The `Actions` column is intentionally minimal.
 
 Current actions:
 
 - `Edit source`
+- `Delete`
+
+`Delete` behavior:
+
+1. User clicks `Delete` on the matching row.
+2. Browser confirmation explains that the Documents custody row and document-service custody records will be removed.
+3. Frontend calls `DELETE /api/documents/documents/:documentId`.
+4. `document-service` removes the matching generated document record from `generated-document-records.json`.
+5. `document-service` removes file registry rows where `ownerType = document` and `ownerId = documentId`, and deletes the matching generated/signed/uploaded binary files when they are inside the service storage root.
+6. Frontend removes the document from the in-browser `documents` collection and persists the change to `localStorage`.
+7. Linked source records such as Work Acts, Defect Acts, and Commercial Offer drafts keep their source data but have generated document/file pointers cleared so the user can regenerate.
+8. If the deleted document was the one that marked a Service job done, the explicit document link is cleared and the job returns to an open/waiting-signature style state.
+
+Rules:
+
+- Delete is not archive/restore and does not implement a retention policy.
+- Source records are not deleted from `Work Acts`, Defect Acts, Commercial Offer drafts, Service jobs, Customers, or Equipment.
+- Production delete must later become permissioned, audited, and retention-aware.
 
 ## Job Status Column Logic
 
@@ -137,7 +157,7 @@ Rules:
 - Documents must not use this column for shipping/delivery, invoice payment, or template status.
 - Uploading a signed Work Act does not silently close the job. The completion confirmation decides whether the job becomes `Done`.
 
-Not shown in the Documents index source column:
+Not shown in the Documents index actions column:
 
 - `Reject`.
 - `Finish`.
@@ -389,7 +409,7 @@ On upload:
 
 ## Generated Document Flow
 
-Generated documents are usually created from their owning source module, not directly from Documents.
+Generated documents are created from their owning source module, not directly from Documents or Templates. The active source module for this flow is currently `Work Acts`.
 
 Flow:
 
@@ -401,6 +421,12 @@ Flow:
 6. Source record gets the same generated file/version metadata.
 7. Documents index sees generated file as valid only when it has a real `document-service` download/preview URL.
 8. If no signed file exists, Documents index shows yellow `Upload signed`.
+
+Rules:
+
+- Direct template-source generated records, for example records with `sourceType = template` or `type = Template document` and no Work Act/source context, are not valid Documents rows.
+- Documents generated-record sync must ignore old template-source artifacts so reusable Templates never appear as normal documents.
+- A Work Act generated from a Template remains a `Work Act` document because the source owner is `Work Acts`; the Template id is only input metadata.
 
 Mock file rule:
 
@@ -490,6 +516,7 @@ Not part of the current Documents index:
 - Archive/restore.
 - Final legal retention management.
 - File version history expansion in the index row.
+- Source record deletion.
 
 ## Future Improvements
 
@@ -507,7 +534,7 @@ Planned or expected later:
 
 When changing Documents, verify:
 
-- Table columns remain `Reference`, `Type`, `Customer`, `Job status`, `Created`, `Generated output`, `Signed return`, `Source`.
+- Table columns remain `Reference`, `Type`, `Customer`, `Job status`, `Created`, `Generated output`, `Signed return`, `Actions`.
 - `Job status` shows the linked Service job state.
 - `Generated output` shows generated-file custody and Open/Download/Export actions.
 - `Signed return` shows yellow `Upload signed` when signed/uploaded file is missing.
@@ -523,7 +550,10 @@ When changing Documents, verify:
 - Confirming completion marks the linked Service job `Done`.
 - Declining completion leaves the linked Service job `Waiting signature`.
 - Green `Download signed` downloads the uploaded signed file, not the generated preview file.
-- `Source` remains only source editing.
+- `Actions` contains `Edit source` and `Delete`.
+- `Delete` asks for confirmation before changing state.
+- Deleting a generated/signed/uploaded document removes the row from Documents and calls the document-service delete endpoint so backend-generated records do not reappear on reload.
+- Deleting a Work Act document clears the generated document/file link on the Work Act source without deleting the Work Act itself.
 - Generated `Download` stays in `Generated output`.
 - `Reject`, `Finish`, `DONE`, and delivery status are not reintroduced into Documents index.
 - Search works with `Enter`.

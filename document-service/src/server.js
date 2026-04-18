@@ -109,7 +109,7 @@ app.post("/generate", async (req, res) => {
 app.get("/generated-records", async (req, res) => {
   try {
     const limit = Math.min(Math.max(Number(req.query.limit || 1000), 1), 1000);
-    const records = await readGeneratedDocumentRecords();
+    const records = (await readGeneratedDocumentRecords()).filter(isDocumentRepositoryRecord);
     res.json({
       ok: true,
       contractVersion: "generated-document-records.v1",
@@ -119,6 +119,16 @@ app.get("/generated-records", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ ok: false, error: error.message || "Generated documents could not be loaded." });
+  }
+});
+
+app.delete("/documents/:documentId", async (req, res) => {
+  try {
+    const result = await deleteDocumentCustodyRecord(req.params.documentId);
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ ok: false, error: error.message || "Document could not be deleted." });
   }
 });
 
@@ -232,6 +242,7 @@ app.post("/templates/:templateId/generate", async (req, res) => {
       return;
     }
 
+    assertWorkActTemplateGenerationRequest(req.body || {});
     const result = await generateDocumentFromTemplate(template, req.body || {});
     res.status(201).json({
       ok: true,
@@ -242,8 +253,9 @@ app.post("/templates/:templateId/generate", async (req, res) => {
       previewUrl: result.fileRecord.previewUrl
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ ok: false, error: error.message || "Template document generation failed." });
+    const status = error.statusCode || 500;
+    if (status >= 500) console.error(error);
+    res.status(status).json({ ok: false, error: error.message || "Template-based document generation failed." });
   }
 });
 
@@ -582,15 +594,39 @@ function safeTemplateRecordId(value = "") {
   return id || `template-${crypto.randomUUID().slice(0, 8)}`;
 }
 
+function assertWorkActTemplateGenerationRequest(body = {}) {
+  const fields = body.fields && typeof body.fields === "object" ? body.fields : {};
+  const documentId = String(body.documentId || fields.documentId || "").slice(0, 120);
+  const sourceType = String(body.sourceType || fields.sourceType || "").slice(0, 80).toLowerCase();
+  const workActId = String(body.workActId || fields.workActId || "").slice(0, 120);
+
+  if (!documentId) {
+    const error = new Error("Work Act document draft id is required before generating a document from a template.");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (sourceType !== "work-act" || !workActId) {
+    const error = new Error("Templates can generate persisted documents only from a Work Act source.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    documentId,
+    sourceType: "work-act",
+    workActId
+  };
+}
+
 async function generateDocumentFromTemplate(template, body = {}) {
-  const records = await readJsonArray(generatedDocumentRecordsPath);
+  const sourceContext = assertWorkActTemplateGenerationRequest(body);
   const initialFields = resolveTemplateGenerationFields(template.mergeFields, body).values;
-  const documentId = String(body.documentId || initialFields.documentId || nextGeneratedTemplateDocumentId(records)).slice(0, 120);
+  const documentId = sourceContext.documentId;
   const generatedAt = new Date().toISOString();
   const fieldResolution = resolveTemplateGenerationFields(template.mergeFields, body, {
     documentId,
     documentDateLt: formatLithuanianDate(new Date(generatedAt)),
-    documentType: body.documentType || "Template document",
+    documentType: body.documentType || "Work Act",
     templateRecordId: template.id,
     templateName: template.metadata.name,
     owner: body.owner || initialFields.owner || template.metadata.entryPerson || ""
@@ -603,7 +639,7 @@ async function generateDocumentFromTemplate(template, body = {}) {
   const fieldData = {
     ...fields,
     documentId,
-    documentType: body.documentType || "Template document",
+    documentType: body.documentType || "Work Act",
     templateRecordId: template.id,
     templateName: template.metadata.name,
     owner: fields.owner || body.owner || template.metadata.entryPerson || "",
@@ -619,9 +655,9 @@ async function generateDocumentFromTemplate(template, body = {}) {
     ...body,
     documentId,
     documentType: fieldData.documentType,
-    sourceType: body.sourceType || fields.sourceType || "template",
-    sourceId: body.sourceId || fields.sourceId || template.id,
-    workActId: body.workActId || fields.workActId || "",
+    sourceType: sourceContext.sourceType,
+    sourceId: body.sourceId || fields.sourceId || sourceContext.workActId,
+    workActId: sourceContext.workActId,
     templateId: outputTemplateId,
     templateName: template.metadata.name,
     templateBody: templateContentText,
@@ -679,8 +715,8 @@ async function generateDocumentFromTemplate(template, body = {}) {
     quotationId: fields.quotationId || body.quotationId || "",
     customer: fields.customer || body.customer || "",
     owner: fieldData.owner || template.metadata.entryPerson || "",
-    createdBy: body.createdBy || template.metadata.entryPerson || "Template generator",
-    createdByInitials: initialsFromName(body.createdBy || template.metadata.entryPerson || "Template generator"),
+    createdBy: body.createdBy || template.metadata.entryPerson || "Work Act generation",
+    createdByInitials: initialsFromName(body.createdBy || template.metadata.entryPerson || "Work Act generation"),
     created: generatedAt.slice(0, 10),
     createdAt: generatedAt,
     status: "Signature",
@@ -689,8 +725,8 @@ async function generateDocumentFromTemplate(template, body = {}) {
     description: body.description || `Generated from template ${template.metadata.name}.`,
     templateRecordId: template.id,
     templateId: outputTemplateId,
-    sourceType: payload.source?.sourceType || "template",
-    sourceId: payload.source?.sourceId || template.id,
+    sourceType: payload.source?.sourceType || sourceContext.sourceType,
+    sourceId: payload.source?.sourceId || sourceContext.workActId,
     workActId: payload.source?.workActId || "",
     generatedFile,
     generatedFileVersions: [generatedFile],
@@ -727,6 +763,36 @@ async function readGeneratedDocumentRecords() {
   return records.map(normaliseStoredGeneratedDocumentRecord).filter((record) => record.id);
 }
 
+async function deleteDocumentCustodyRecord(documentId) {
+  const id = String(documentId || "").slice(0, 120);
+  if (!id) {
+    throw new Error("Document id is required.");
+  }
+
+  const generatedRecords = await readGeneratedDocumentRecords();
+  const nextGeneratedRecords = generatedRecords.filter((record) => record.id !== id);
+  const removedGeneratedRecords = generatedRecords.length - nextGeneratedRecords.length;
+  if (removedGeneratedRecords) {
+    await writeJsonArray(generatedDocumentRecordsPath, nextGeneratedRecords);
+  }
+
+  const files = await readJsonArray(fileIndexPath);
+  const matchingFiles = files.filter((file) => file.ownerType === "document" && file.ownerId === id);
+  await Promise.all(matchingFiles.map(deleteStoredFile));
+  if (matchingFiles.length) {
+    await writeJsonArray(
+      fileIndexPath,
+      files.filter((file) => !(file.ownerType === "document" && file.ownerId === id))
+    );
+  }
+
+  return {
+    documentId: id,
+    removedGeneratedRecords,
+    removedFileRecords: matchingFiles.length
+  };
+}
+
 function normaliseStoredGeneratedDocumentRecord(record = {}) {
   const generatedFile = record.generatedFile && typeof record.generatedFile === "object"
     ? record.generatedFile
@@ -741,21 +807,21 @@ function normaliseStoredGeneratedDocumentRecord(record = {}) {
   return {
     ...record,
     id: String(record.id || "").slice(0, 120),
-    type: String(record.type || "Template document").slice(0, 120),
+    type: String(record.type || "Document").slice(0, 120),
     jobId: String(record.jobId || "").slice(0, 120),
     quotationId: String(record.quotationId || "").slice(0, 120),
     customer: String(record.customer || "").slice(0, 180),
     owner: String(record.owner || "").slice(0, 160),
-    createdBy: String(record.createdBy || "Template generator").slice(0, 160),
-    createdByInitials: String(record.createdByInitials || initialsFromName(record.createdBy || "Template generator")).slice(0, 12),
+    createdBy: String(record.createdBy || "Document generation").slice(0, 160),
+    createdByInitials: String(record.createdByInitials || initialsFromName(record.createdBy || "Document generation")).slice(0, 12),
     created: String(record.created || record.createdAt || new Date().toISOString()).slice(0, 10),
     createdAt: String(record.createdAt || new Date().toISOString()).slice(0, 40),
     status: String(record.status || "Signature").slice(0, 80),
     pipelineStep: String(record.pipelineStep || "Signature").slice(0, 80),
     deliveryStatus: String(record.deliveryStatus || "Needs signed upload").slice(0, 120),
     description: String(record.description || "").slice(0, 1000),
-    sourceType: String(record.sourceType || generatedFile.sourceType || "template").slice(0, 80),
-    sourceId: String(record.sourceId || generatedFile.sourceId || record.templateRecordId || "").slice(0, 120),
+    sourceType: String(record.sourceType || generatedFile.sourceType || "").slice(0, 80),
+    sourceId: String(record.sourceId || generatedFile.sourceId || record.workActId || "").slice(0, 120),
     workActId: String(record.workActId || "").slice(0, 120),
     generatedFile: {
       ...generatedFile,
@@ -779,6 +845,34 @@ function normaliseStoredGeneratedDocumentRecord(record = {}) {
   };
 }
 
+function generatedDocumentSourceType(record = {}) {
+  return String(
+    record.sourceType ||
+    record.generatedFile?.sourceType ||
+    record.generatedFile?.fileRecord?.sourceType ||
+    record.generatedFile?.fileRecord?.meta?.sourceType ||
+    ""
+  ).toLowerCase();
+}
+
+function isDocumentRepositoryRecord(record = {}) {
+  const sourceType = generatedDocumentSourceType(record);
+  const type = String(record.type || record.documentType || "").toLowerCase();
+  const hasSourceDocumentContext = Boolean(
+    record.workActId ||
+    record.defectActId ||
+    record.commercialOfferDraftId ||
+    record.jobId ||
+    record.quotationId ||
+    ["work-act", "defect-act", "commercial-offer"].includes(sourceType)
+  );
+
+  if (sourceType === "template" && !hasSourceDocumentContext) return false;
+  if (type === "template document" && !hasSourceDocumentContext) return false;
+  if (record.templateRecordId && !hasSourceDocumentContext) return false;
+  return true;
+}
+
 function normaliseGeneratedFileVersions(versions = [], generatedFile = {}) {
   const fileKey = generatedFile.fileId || generatedFile.id || generatedFile.fileName;
   const safeVersions = Array.isArray(versions) ? versions.filter(Boolean) : [];
@@ -787,18 +881,6 @@ function normaliseGeneratedFileVersions(versions = [], generatedFile = {}) {
     generatedFile,
     ...safeVersions.filter((item) => (item.fileId || item.id || item.fileName) !== fileKey)
   ].slice(0, 12);
-}
-
-function nextGeneratedTemplateDocumentId(records = []) {
-  const today = new Date().toISOString().slice(0, 10).replaceAll("-", "");
-  const prefix = `DOC-TPL-${today}`;
-  const next = records
-    .map((record) => String(record.id || ""))
-    .filter((id) => id.startsWith(prefix))
-    .map((id) => Number(id.split("-").at(-1)))
-    .filter(Number.isFinite)
-    .reduce((max, value) => Math.max(max, value), 0) + 1;
-  return `${prefix}-${String(next).padStart(3, "0")}`;
 }
 
 function initialsFromName(value = "") {
@@ -1566,6 +1648,12 @@ function resolveStoredFilePath(storagePath = "") {
     throw new Error("Stored file path is outside service root.");
   }
   return filePath;
+}
+
+async function deleteStoredFile(fileRecord = {}) {
+  if (!fileRecord.storagePath) return;
+  const filePath = resolveStoredFilePath(fileRecord.storagePath);
+  await fs.rm(filePath, { force: true }).catch(() => {});
 }
 
 function isPreviewableFile(fileName = "") {

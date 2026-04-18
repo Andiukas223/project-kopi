@@ -278,6 +278,20 @@
   min-width: 2020px;
 }
 
+.templates-table .data-table {
+  min-width: 1180px;
+}
+
+.template-name-cell,
+.template-applicability-cell {
+  min-width: 220px;
+}
+
+.template-name-cell strong,
+.template-applicability-cell span {
+  display: block;
+}
+
 .doc-table-file,
 .doc-table-note {
   display: block;

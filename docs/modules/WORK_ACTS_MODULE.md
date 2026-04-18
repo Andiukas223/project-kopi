@@ -51,7 +51,7 @@ Implementation entry points:
 - `src/modules/workActs/workActTemplateGeneration.js` - Work Act to reusable-template generation payload mapping and selected/derived Template resolution.
 - `src/js/render.js` - generated document print preview/output helpers still used by Work Act source preview flows. It no longer renders the active Work Acts route.
 - `src/js/interactions.js` - delegated Work Act creation, selection, equipment/template/row updates, report option updates, document draft creation, and template-based Work Act generation bridge.
-- `src/services/templateService.js` - calls `POST /api/documents/templates/:templateId/generate` for reusable-template generation.
+- `src/services/templateService.js` - calls `POST /api/templates/:templateId/generate` for Work Act generation from a reusable Template.
 - `src/stores/documentStore.js` - upserts generated Work Act document records into the Documents collection while preserving signed upload state.
 - `src/js/state.js` - selected Work Act, source job id, filters, and Work Act errors.
 - `src/js/data.js` - `workActs` seed/prototype collection.
@@ -218,7 +218,8 @@ Output layout:
 Generation flow:
 
 - Work Act creates or updates a `Documents` draft record.
-- `document-service` generates the PDF from `POST /api/documents/templates/:templateId/generate` using the saved reusable Template plus a structured Work Act payload.
+- `document-service` generates the PDF from `POST /api/templates/:templateId/generate` using the saved reusable Template plus a structured Work Act payload.
+- The request must include the existing Work Act document draft id, `sourceType = work-act`, and `workActId`; direct template-source documents are not persisted as Documents.
 - Generated file metadata should be saved back to both the document record and the Work Act source record.
 - Generated PDF/preview is the review path. There is no Collabora/WOPI edit path.
 
@@ -293,7 +294,7 @@ Migration tasks for the next implementation pass:
 - Keep the removed legacy `workActsWorkspace()` / `workActsPage()` renderer out of the compatibility layer; future Work Act UI changes should happen in `src/modules/workActs/`.
 - Rename UI copy from `Template Generation / Work Acts` to `Work Acts`.
 - Rename remaining state names only when safe:
-  - `templateGenWorkActJobId` can become `workActSourceJobId`.
+  - `workActSourceJobId` now owns the active Work Acts source-job selection; old persisted `templateGenWorkActJobId` is migrated on load.
   - `templateGenTab` should become unnecessary once Defect Acts and Commercial Offers have their own modules.
 - Update Documents edit routing to `workacts`.
 - Update Service links to route to `workacts`.

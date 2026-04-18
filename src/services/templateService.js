@@ -1,4 +1,4 @@
-const TEMPLATE_API_BASE = "/api/documents/templates";
+const TEMPLATE_API_BASE = "/api/templates";
 
 async function readJsonResponse(response, fallbackMessage) {
   let result = null;

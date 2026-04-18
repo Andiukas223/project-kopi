@@ -74,7 +74,7 @@ Production/server paleidimui nenaudoti sio lokalaus apraso kaip vienintelio salt
 Paleidziami servisai:
 
 - `web` - nginx frontend ir reverse proxy, pasiekiamas per `http://localhost:8080/`.
-- `document-service` - dokumentu generavimas/failu saugykla, taip pat pasiekiamas per `/api/documents/`.
+- `document-service` - dokumentu generavimas/failu saugykla per `/api/documents/`, reusable Templates persistence per `/api/templates/`.
 
 Collabora/WOPI runtime pasalintas 2026-04-16, kad migracija i Vue 3 butu paprastesne. Generated dokumentai perziurimi per PDF/print preview arba `previewUrl`, reusable template content redaguojamas per Umo, o Work Act redagavimas lieka strukturuotuose source laukuose.
 
@@ -100,7 +100,7 @@ Dabartine frontend architektura:
 - Vue 3 owns app bootstrap, routes, shell/topbar/sidebar, shared UI primitives, and the Documents/Templates/Work Acts routes.
 - Legacy vanilla renderer remains as compatibility host for not-yet-migrated modules and shared overlays.
 - The old legacy Documents index renderer has been removed; Documents UI now lives in `src/modules/documents/`.
-- The old legacy Templates landing renderer has been removed; Templates UI now lives in `src/modules/templates/`, with only delegated save/delete/rich-editor compatibility handlers remaining.
+- The old legacy Templates landing renderer has been removed; Templates UI now lives in `src/modules/templates/` as a `/templates` list and `/templates/:templateId` editor detail flow, with only delegated save/delete/rich-editor compatibility handlers remaining.
 - The old legacy Work Acts route renderer has been removed; Work Acts UI now lives in `src/modules/workActs/`, with delegated action/document-generation compatibility still in place.
-- The old Documents-side template generation mock/output-layout editor panel has been removed; real document generation now uses the PDF/document-service flow, while future output-layout editing should be rebuilt as a Vue/admin surface.
+- The old Documents-side template generation mock/output-layout editor panel has been removed; Work Acts now creates generated document outputs from selected Templates, while Templates remains the reusable source configurator.
 - Templates use the active Umo editor wrapper in `src/components/documentEditor/UmoDocumentEditor.vue`; no WOPI endpoint or Collabora proxy is active.

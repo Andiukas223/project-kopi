@@ -1,6 +1,6 @@
 # Templates Module
 
-Date: 2026-04-16
+Date: 2026-04-18
 
 This document is the source of truth for the user-facing `Templates` workspace.
 Use it for future changes to reusable procedure/checklist templates and output document layouts.
@@ -12,7 +12,7 @@ Collabora/WOPI is decommissioned. Keep this file focused on active Templates beh
 `Templates` is the workspace sidebar label. The canonical internal route/page id is `templates`.
 The old route id `templategen` is kept only as a compatibility alias, and older documentation may still refer to this workspace as `Template Generation`.
 
-When a user opens `Templates`, the landing screen is a Work List Template configurator, not a document-type tab list.
+When a user opens `Templates`, the landing screen is a Templates list/management page. Editing one Template happens on a separate detail route so browsing controls do not compete with the Umo editor.
 
 Templates are split into two different concepts:
 
@@ -28,30 +28,36 @@ Workspace:
 - Sidebar module: `Templates`
 - Internal route/page id: `templates`
 - Legacy route/page id: `templategen`
-- Landing screen: Work List Template configurator with metadata, link configuration, actions, merge fields, and Umo editor.
+- Landing route: `/templates`, a Template list/table with template-domain filters/actions only.
+- Detail/edit route: `/templates/:templateId`, an editor-first Template detail page with header actions, Umo content editing, and secondary metadata/applicability/merge-field panels.
 - No top-level tab row is shown on the `Templates` landing screen.
 
 Implementation entry points:
 
 - `src/js/data.js` - seed data for templates and output layouts.
 - `src/js/state.js` - selected template, edit-mode compatibility flag, and template error state.
-- `src/modules/templates/TemplatesPage.vue` - active Vue 3 Templates workspace UI: Work List Template configurator, metadata fields, applicability comboboxes, merge fields, actions, generation, and Umo editor.
+- `src/modules/templates/TemplatesPage.vue` - route-aware wrapper that renders the Template list route or Template detail route.
+- `src/modules/templates/TemplateListPage.vue` - active Vue 3 Templates list/management UI: search, filters, table rows, create, open/edit, duplicate, and archive actions.
+- `src/modules/templates/TemplateDetailPage.vue` - active Vue 3 Template detail/edit UI: header actions, Umo editor, metadata, applicability comboboxes, template data fields (internal `mergeFields`), save/archive/cancel actions.
 - `src/components/documentEditor/UmoDocumentEditor.vue` - Umo wrapper for template content editing, content load/save snapshots, Ctrl+S, and token insertion.
 - `src/components/documentEditor/editorContent.js` - editor content normalization helpers.
 - `src/modules/templates/components/WltSearchableCombobox.vue` - Vue wrapper for the existing searchable combobox DOM contract.
-- `src/modules/templates/templateViewModel.js` - Vue-facing helper functions for selected template, options, Umo-compatible editor HTML, and normalized link arrays.
+- `src/modules/templates/templateViewModel.js` - Vue-facing helper functions for selected template, list rows/filters, options, Umo-compatible editor HTML, and normalized link arrays.
+- `src/stores/templateStore.js` - Vue-facing Template persistence store for load/create/save/duplicate/archive/select.
+- `src/services/templateService.js` - `/api/templates/` client. Do not route reusable Templates through `/api/documents/`.
 - `src/js/render.js` - generated document print preview/template mapping helpers still used by source preview flows. It no longer renders the active Templates landing page, the Work Acts route, or the old Documents-side output-layout editor panel.
 - `src/js/interactions.js` - delegated Work List Template save/delete/cancel compatibility handlers and searchable combobox behavior. Old legacy new/filter/archive/start-work-act/rich-toolbar handlers have been removed.
 - `document-service/src/server.js` - document generation and file template endpoints.
 - `docker-compose.yml` - `web` + `document-service` runtime.
-- `nginx.conf` - `/api/documents/` reverse proxy.
+- `nginx.conf` - `/api/templates/` and `/api/documents/` reverse proxy. `/api/documents/templates*` is blocked because reusable Templates are not Documents.
 
 ## Terminology
 
 `Procedure template`:
 
 - The user-facing checklist/procedure template configured in the `Templates` workspace.
-- Current data collection: `workListTemplates`.
+- Current persisted resource: Template records under `/api/templates/`.
+- Frontend compatibility collection: `workListTemplates`.
 - Old/internal abbreviation: WLT, meaning Work List Template.
 - Example: ultrasound PM checklist, endoscope washer PM checklist, patient lift safety check.
 
@@ -67,10 +73,10 @@ Implementation entry points:
 - Current data collection: `documentTemplateBlueprints`.
 - Contains merge fields and editable layout sections.
 
-`Merge field`:
+`Template data field` (internal `merge field`):
 
 - A placeholder available to document generation, for example `{d.buyerName}` or `{d.jobId}`.
-- Merge fields must match the payload sent to `document-service`.
+- Template data fields must match the payload sent to `document-service`.
 
 `FODT template file`:
 
@@ -81,15 +87,16 @@ Implementation entry points:
 
 Purpose:
 
-- Store reusable work/procedure checklists.
-- Let users configure, save, delete, cancel, and edit template body content through Umo.
+- Store reusable work/procedure checklists as Template records.
+- Let users scan, configure, save, archive, duplicate, cancel, and edit template body content through Umo.
 - Provide applicable templates to concrete Work Acts.
 - Keep repeatable work instructions out of individual service jobs until a specific Work Act needs them.
 - Do not own concrete Work Acts. Those belong to `Work Acts`.
 
 Current data owner:
 
-- `workListTemplates` in `src/js/data.js`.
+- Template records persisted through `document-service` under `/api/templates/`.
+- `workListTemplates` in `src/js/data.js` remains the frontend compatibility collection used by Work Acts selection and legacy state sync.
 
 Current state owner:
 
@@ -100,6 +107,8 @@ Current state owner:
 Current UI entry points:
 
 - `src/modules/templates/TemplatesPage.vue`
+- `src/modules/templates/TemplateListPage.vue`
+- `src/modules/templates/TemplateDetailPage.vue`
 - `src/modules/templates/templateViewModel.js`
 - Work Act Template applicability is used by the Vue Work Acts route through `src/modules/workActs/workActsViewModel.js`.
 
@@ -124,12 +133,12 @@ Current fields:
 - `richBodyHtml` - compatibility HTML snapshot for older demo records.
 - `editorContent` - current Umo editor content snapshot with HTML, plain text, optional JSON, and update timestamp.
 - `editorNote` - optional bug/workaround/review note.
-- `isActive` - `false` means archived; missing/true means active.
+- `isActive` - `false` means archived; missing/true means active. This is derived from the persisted Template record status.
 
 Rules:
 
 - Prefer stable ids over display names for links.
-- Current prototype has a visible `Delete` action for the selected template. Production delete should become permissioned and version-aware.
+- Current UI archives reusable Templates instead of deleting them from management. Archived Templates stay visible in Templates but are not offered for new active Work Act generation.
 - `Templates` stores applicability and reusable template body/context. It should not be used as the daily Work Act row editor.
 - `editorContent` is for Umo editing and micro formatting of the template body. `richBodyHtml` remains a compatibility fallback.
 - `editorNote` is for implementation notes, workaround notes, or known review needs. It is not customer-facing document copy.
@@ -138,7 +147,12 @@ Rules:
 
 The `Templates` workspace currently supports:
 
-- Selecting an existing template.
+- Viewing a dedicated Templates list/table.
+- Searching by template name, type, owner, applicability, status, dates, output format, or merge-field count.
+- Filtering by template type, status, and owner.
+- Opening a template from the list into the editor.
+- Duplicating a template into a new active Template record.
+- Archiving a template from the list or selected editor.
 - Editing `Company`.
 - Editing `Entry person`.
 - Editing `Template name`.
@@ -146,10 +160,10 @@ The `Templates` workspace currently supports:
 - Linking `Equipment` through a searchable combobox/autocomplete dropdown. The main field itself is the search input; opening the dropdown shows matching equipment rows.
 - Linking `Hospitals` through a searchable combobox/autocomplete dropdown. The main field itself is the search input; opening the dropdown shows matching hospital/customer rows.
 - Linking `Work Equipment` through a searchable combobox/autocomplete dropdown of service/metrology tools. This list is a seed registry for a future `Work Equipment` module.
-- Viewing and editing the current Umo editor content on the same screen.
-- Managing merge fields and inserting `{d.fieldKey}` tokens into template content.
+- Viewing and editing the current Umo editor content on `/templates/:templateId`.
+- Managing template data fields and inserting `{d.fieldKey}` tokens into template content.
 - Saving template metadata, applicability links, and visual editor HTML.
-- Deleting the selected template from prototype state.
+- Archiving the selected template so it remains managed in Templates but is not offered to Work Acts.
 - Cancelling unsaved metadata/visual-editor changes by rerendering from persisted data.
 - Work rows are intentionally not shown on this page. They belong in `Work Acts`, where rows are added to a concrete Work Act and appended to the generated Work Act document.
 
@@ -167,9 +181,65 @@ Searchable combobox/dropdown behavior:
 
 Selection behavior:
 
-- Selecting a template in the picker reloads the configurator for that template.
+- Opening a row in the Templates list routes to `/templates/:templateId` and selects that reusable Template source record.
+- The edit route is the selection context; the Template picker is not shown in the editing page.
 - Editing a selected template should not silently switch to another selected template.
 - Cancel should leave persisted data untouched.
+
+## Template List Behavior
+
+Purpose:
+
+- Make reusable Templates easy to scan and manage inside the Templates module.
+- Reuse the familiar Documents table density and toolbar pattern without using Documents data, labels, or services.
+- Keep the user-facing distinction clear: list rows are reusable source assets, not generated/uploaded document outputs.
+
+Current columns:
+
+- `Template name`
+- `Type`
+- `Applicability`
+- `Owner`
+- `Updated`
+- `Created`
+- `Status`
+- `Actions`
+
+Current row actions:
+
+- `Open / Edit` selects the Template source record and opens `/templates/:templateId`.
+- `Duplicate` creates a new active Template record through `/api/templates/`.
+- `Archive` changes the Template status to `Archived`; it does not create, delete, or mutate Documents.
+
+Rules:
+
+- The list rows are normalized from `templateStore.state.records`, which are loaded from Template persistence.
+- Do not use the Documents collection, Documents view model, or Documents API to build this list.
+- Archived Templates stay visible in the Templates list for management.
+- Work Acts must continue to filter archived Templates out of active generation choices.
+- The list may borrow table/filter styling conventions from Documents, but labels, empty states, toolbar copy, and actions must describe reusable Templates.
+
+## Template Detail/Edit Behavior
+
+Purpose:
+
+- Keep Umo as the primary visual focus while editing one reusable Template source record.
+- Keep list search/filter/table decisions out of the editing context.
+- Keep metadata, applicability, and template data fields available as secondary supporting panels.
+
+Current layout:
+
+- Page header: back to Templates, Template identity/status, updated date, save, duplicate, archive, and cancel.
+- Main content: large Umo editor area for reusable template body content.
+- Supporting sidebar: tabbed `Metadata`, `Applicability`, and `Template data fields` sections.
+- Metadata and applicability remain outside the Umo document body so structured generation inputs are not mixed into freeform content.
+
+Rules:
+
+- `/templates/:templateId` must load from Template persistence through `templateStore` and `/api/templates/`.
+- The route must not read Documents records or create persisted Documents.
+- Umo content, metadata, applicability, and template data fields save back to the Template record.
+- Generated document outputs still belong to Work Acts -> Documents, not to the Template detail page.
 
 ## Editor Runtime Decision
 
@@ -177,11 +247,11 @@ Collabora/WOPI is decommissioned and is not part of active Templates behavior.
 
 Active editor:
 
-- Umo is the current same-page template body editing path.
+- Umo is the current Template detail body editing path on `/templates/:templateId`.
 - Structured fields remain the source of truth for company, entry person, template name, service type, and applicability links.
 - `editorContent` persists the Umo editor HTML/text/json snapshot, with `richBodyHtml` retained only for compatibility.
-- Template document generation converts saved Umo HTML into a temporary FODT source before rendering. The converter preserves editor-authored paragraphs, merge fields, bordered tables with generated ODF table columns/cell styles, header cells, multiline table-cell text, and basic merged-cell spans; it must not fall back to copying `editorContent.text` when a visual template PDF is requested.
-- Validate this path with `docker compose exec -T document-service npm run validate:template-generation` after generation changes. The smoke test creates a temporary saved Umo template, generates a PDF through the backend endpoint, checks the temporary FODT structure, converts the PDF to PNG, inspects table border pixels, and removes its temporary artifacts when it passes.
+- Work Act document generation converts saved Umo template HTML into a temporary FODT source before rendering. The converter preserves editor-authored paragraphs, merge fields, bordered tables with generated ODF table columns/cell styles, header cells, multiline table-cell text, and basic merged-cell spans; it must not fall back to copying `editorContent.text` when a visual Work Act PDF is requested.
+- Validate this path with `docker compose exec -T document-service npm run validate:template-generation` after generation changes. The smoke test creates a temporary saved Umo template, generates a PDF through the backend endpoint from a Work Act source context, checks the temporary FODT structure, converts the PDF to PNG, inspects table border pixels, and removes its temporary artifacts when it passes.
 - Strict proof passes should verify that an HTML-only marker from `editorContent.html` appears in the generated FODT, fallback text/body markers do not appear, placeholders inside normal and merged table cells resolve, `{d.notes}` appears only where explicitly placed, the generated PDF exposes visible table border runs after PNG conversion, and the generated document/file records are accessible through the normal Documents download/preview URLs.
 - PDF generation remains handled through source modules and `document-service`.
 
@@ -341,15 +411,18 @@ Templates owns:
 
 - Reusable checklist/procedure definitions.
 - Output layout definitions.
-- Source generation choices before the generated file lands in Documents.
+- Template metadata, applicability, template data fields, and Umo-authored reusable source content.
+
+Templates does not create persisted Documents directly. Work Acts selects a Template and creates the generated output that lands in Documents.
 
 ## Where To Put Future Modifications
 
 Add or change a procedure/checklist template:
 
-- Update `workListTemplates` seed data in `src/js/data.js`.
-- If the UI needs a new field/filter, update `src/modules/templates/TemplatesPage.vue`, `src/modules/templates/templateViewModel.js`, and the relevant delegated handlers in `src/js/interactions.js`.
-- If a create/new-template flow is reintroduced, implement it as Vue UI instead of restoring the deleted legacy `workListTemplatesWorkspace()` renderer.
+- Update Template persistence through `/api/templates/` or the default Template seed records in `document-service/src/server.js`.
+- If the UI needs a new list field/filter, update `src/modules/templates/TemplateListPage.vue`, `src/modules/templates/templateViewModel.js`, and related CSS.
+- If the UI needs a new editor field/action, update `src/modules/templates/TemplateDetailPage.vue`, `src/modules/templates/templateViewModel.js`, and the relevant delegated handlers in `src/js/interactions.js`.
+- Keep `workListTemplates` compatibility state in sync only for frontend/Work Acts selection; it must not become the persistence owner again.
 - If new state is needed, update `src/js/state.js`.
 - Update this document.
 
@@ -361,7 +434,7 @@ Add or change an output layout:
 - Update `document-service` template registry/FODT files when real generated output must change.
 - Update this document.
 
-Add a merge field:
+Add a template data field:
 
 - Add the field to the generation payload.
 - Add the field to the relevant `mergeFields` list.
@@ -371,7 +444,7 @@ Add a merge field:
 
 Change visual editor behavior:
 
-- Update `src/modules/templates/TemplatesPage.vue`, `src/modules/templates/templateViewModel.js`, rich editor command handlers in `src/js/interactions.js`, and related CSS.
+- Update `src/modules/templates/TemplateDetailPage.vue`, `src/modules/templates/templateViewModel.js`, rich editor command handlers in `src/js/interactions.js`, and related CSS.
 - Keep concrete Work Act rows in `Work Acts`; do not reintroduce row add/edit UI into Templates unless the ownership decision changes.
 - Update this document.
 
@@ -396,16 +469,21 @@ The Templates module does not own:
 
 When changing Templates, verify:
 
-- Opening sidebar `Templates` renders the Work List Template configurator.
-- Template picker switches selected template.
+- Opening sidebar `Templates` renders the Templates list/management page.
+- The Templates list renders saved Template records from `/api/templates/`.
+- Newly created Templates appear in the Templates list.
+- The Templates list does not use or show Documents records.
+- Opening a row routes to `/templates/:templateId`.
+- The Template detail page shows Umo as the primary editing surface.
 - Company, entry person, template name, and service type save.
 - Equipment, hospitals, and work equipment searchable comboboxes filter by keyword, allow mouse scrolling, and do not render checkbox lists.
 - Equipment, hospitals, and work equipment links save.
-- Delete removes the selected template from prototype state and selects the next available template.
+- Archive keeps the selected Template visible in Templates with `Archived` status and removes it from active Work Act generation choices.
+- Duplicate creates a new active Template record in Template persistence.
 - Cancel leaves persisted data untouched.
-- Umo editor remains usable on the same page.
+- Umo editor remains usable on `/templates/:templateId`.
 - Visual editor Save persists expected HTML and structured metadata.
-- Template generation from saved Umo HTML preserves visible table borders, a distinct header row, placeholders inside table cells, multiline table-cell content, and does not inject the flattened template body through `{d.notes}`.
+- Work Act generation from saved Umo template HTML preserves visible table borders, a distinct header row, placeholders inside table cells, multiline table-cell content, and does not inject the flattened template body through `{d.notes}`.
 - No `Open in advanced editor` or Collabora iframe action is visible.
 - Work rows are not visible in Templates and are handled in `Work Acts`.
 - Work Act template selection offers applicable active templates first.
@@ -417,7 +495,7 @@ When changing Templates, verify:
 
 Likely next improvements:
 
-- Move procedure templates from seed data/localStorage to backend storage.
+- Move Template persistence from prototype JSON/localStorage compatibility to the future production database.
 - Add version history for procedure templates.
 - Add approval/review state for templates before active use.
 - Add import/export for template packs.

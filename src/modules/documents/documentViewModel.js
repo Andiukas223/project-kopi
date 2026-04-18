@@ -1,6 +1,7 @@
 import { documents, jobs, workActs } from "../../js/data.js";
 import { state } from "../../js/state.js";
 import { displayInitialsForRecord } from "../../js/userIdentity.js";
+import { isDocumentRepositoryRecord } from "./documentDomain.js";
 
 export const documentColumns = [
   { key: "reference", label: "Reference" },
@@ -10,7 +11,7 @@ export const documentColumns = [
   { key: "created", label: "Created" },
   { key: "generated", label: "Generated output" },
   { key: "signed", label: "Signed return" },
-  { key: "source", label: "Source" }
+  { key: "actions", label: "Actions" }
 ];
 
 export const documentTypeOptions = [
@@ -238,7 +239,7 @@ export function jobStatusForDocument(doc) {
 
 export function applyDocumentTableFilters(rows = documents) {
   const query = state.documentSearchQuery.trim().toLowerCase();
-  return rows.filter((doc) => {
+  return rows.filter(isDocumentRepositoryRecord).filter((doc) => {
     if (state.documentTypeFilter !== "All" && doc.type !== state.documentTypeFilter) return false;
     if (state.documentCustomerFilter !== "All" && doc.customer !== state.documentCustomerFilter) return false;
     if (!documentCreatedDateMatches(doc, state.documentDateQuery)) return false;
@@ -271,11 +272,11 @@ export function applyDocumentTableFilters(rows = documents) {
 }
 
 export function documentFilterTypes() {
-  return ["All", ...new Set(documents.map((doc) => doc.type).filter(Boolean))];
+  return ["All", ...new Set(documents.filter(isDocumentRepositoryRecord).map((doc) => doc.type).filter(Boolean))];
 }
 
 export function documentFilterCustomers() {
-  return ["All", ...new Set(documents.map((doc) => doc.customer).filter(Boolean))];
+  return ["All", ...new Set(documents.filter(isDocumentRepositoryRecord).map((doc) => doc.customer).filter(Boolean))];
 }
 
 export function uploadTargetDocument() {

@@ -79,7 +79,7 @@ function showWorkActError(act) {
             <VmSelect
               :model-value="sourceJob?.id || ''"
               :options="sourceJobOptions()"
-              data-template-work-act-job
+              data-work-act-source-job
             />
           </label>
           <div class="tg-action-cluster">

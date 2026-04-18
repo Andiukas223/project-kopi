@@ -1,6 +1,6 @@
 # Workspace Modules
 
-Date: 2026-04-16
+Date: 2026-04-18
 
 This document describes active Viva Medical workspace modules. It replaces the old pattern where module rules were mixed into the broad project plan.
 
@@ -53,10 +53,19 @@ Owns:
 Current UI:
 
 - Topbar wordmark: `Viva Medical` + `Informational system` / `Informacine sistema`.
-- Theme toggle fixed near the bottom-left, centered in the `Workspace` sidebar column, with sun/moon labels.
+- Theme toggle fixed near the bottom-left, centered in the `Workspace` sidebar column, with light/dark labels.
 - Sidebar modules are grouped visually, but the top non-functional `Workspace` text label is not shown.
-- Sidebar navigation shows module names only. Initials/icons (`SV`, `WA`, `CT`, etc.) and yellow status badge bubbles are intentionally not used because they confuse module navigation with task/status queues.
+- Sidebar can collapse/expand from a top toggle button in the rail.
+- Collapse now targets the sidebar rail itself, not Equipment content sections.
+- Expanded mode shows neutral outline icon + module label; collapsed mode is a neutral outline icon rail with tooltip/aria module naming.
+- Yellow status badge bubbles are intentionally not used because they confuse module navigation with task/status queues.
 - The old sidebar `Reminders` block is not active. Reminder/notification logic will be redesigned later.
+
+In-progress handoff (2026-04-18):
+
+- Shell collapse state and toggle wiring are implemented.
+- Equipment-local list collapse behavior was removed so sidebar collapse is the primary navigation collapse mechanism.
+- Neutral outline collapsed icon rail is implemented; next step is explicit browser keyboard/tooltip smoke validation.
 
 Does not own:
 
@@ -324,12 +333,23 @@ Owns:
 - Advanced/admin `Output Layouts` for printable document layouts.
 - Template naming, service-type, equipment, hospital, and work-equipment applicability links.
 
-Current landing screen:
+Current routes:
 
-- Work List Template configurator.
+- `/templates`: Templates list/table management page.
+- `/templates/:templateId`: Template detail/edit page.
+
+List screen:
+
+- List filters: search, type, status, and owner.
+- List actions: `Open / Edit`, `Duplicate`, and `Archive`.
+- Records come from `/api/templates/`; the list does not read from Documents.
+
+Detail/edit screen:
+
 - Fields: `Company`, `Entry person`, `Template name`, `Service type`, searchable linked `Equipment`, searchable linked `Hospitals`, searchable linked `Work equipment`.
-- Actions: `Save`, `Delete`, `Cancel`.
-- Preview/editor: same-page Umo editor for reusable template content.
+- Editor actions: `Save`, `Duplicate`, `Archive`, `Cancel`.
+- Preview/editor: Umo editor is the primary surface for reusable template content.
+- Supporting sections: metadata, applicability, and merge fields.
 - Collabora/WOPI advanced editor runtime is decommissioned; reusable template content editing uses Umo.
 
 Creates/updates:
@@ -337,17 +357,20 @@ Creates/updates:
 - Reusable template metadata.
 - Umo editor HTML/text/JSON content snapshots.
 - Applicability links used when a Work Act chooses a template.
+- Template list/detail records loaded from `/api/templates/`; this flow does not read from Documents.
 
 Links to:
 
-- `Work Acts` when a concrete act needs to copy rows from a reusable Template.
-- `Documents` only through generated output/layout behavior, not signed-file custody.
-- `document-service` for generation/file registry.
+- `Work Acts` when a concrete act selects a reusable Template as generation input.
+- `Documents` only after a source module, currently Work Acts, creates a generated output. Templates do not create document rows directly.
+- `document-service` for Template persistence and Work Act template-based rendering support.
 
 Does not own:
 
 - Signed copy upload.
 - Document repository filtering/search.
+- Direct persisted document generation.
+- Reusable Templates in the Documents table/list.
 - Invoice payment status.
 - Final file custody after a document is generated or signed.
 
@@ -366,7 +389,7 @@ Owns:
 - Document register.
 - Search/filter UX.
 - Generated/signed/uploaded file custody view.
-- Signed upload modal and Status column download action.
+- Signed upload modal and `Signed return` column download action.
 
 Current table:
 
@@ -375,20 +398,24 @@ Current table:
 - `Customer`
 - `Job status`
 - `Created`
-- `Status`
-- `Action`
+- `Generated output`
+- `Signed return`
+- `Actions`
 
 Action rule:
 
 - `Job status` shows the linked Service job status.
-- `Status` owns yellow `Upload signed` / green `Download signed`.
-- `Action` owns only daily row actions: `View`, `Edit`.
+- `Generated output` owns generated preview/print, generated PDF download, and generated PDF export.
+- `Signed return` owns yellow `Upload signed` / green `Download signed`.
+- `Actions` owns source/custody row actions: `Edit source`, `Delete`.
 - Uploading a signed Work Act opens a confirmation. Confirming marks the linked Service job `Done`; declining leaves it `Waiting signature`.
+- `Delete` asks for confirmation, removes the Documents custody row, asks `document-service` to remove matching generated/signed/uploaded file records for that document id, and clears generated-document pointers on linked source records without deleting the source records themselves.
 
 Does not own:
 
 - Delivery/shipping status.
 - Template/procedure checklist editing.
+- Reusable Templates or direct template-source generated artifacts.
 - Invoice payment status.
 
 ## Finance
@@ -476,7 +503,7 @@ Owns:
 - Customer/equipment links.
 - Serial/model/system identity.
 - Support portal settings/emails/web links in prototype.
-- Warranty/acceptance fields synced from acceptance upload.
+- Warranty/acceptance structured metadata fields.
 
 Shows:
 
@@ -639,8 +666,10 @@ Does not own:
 
 Current rules:
 
-- Sidebar items show only the module label.
-- Module initials/icons are not shown.
+- Sidebar has a top collapse/expand control.
+- Collapse affects only the shell navigation rail; module content panels remain visible.
+- Expanded mode shows labels; collapsed mode is icon/marker-focused and remains clickable for direct module routing.
+- Neutral outline-style icons are the target style. Temporary compact placeholders may appear during the in-progress refactor.
 - Yellow status/count badge bubbles are not shown.
 - Queue pressure, reminders, overdue states, and module counters should be redesigned as a separate notification/overview concept instead of being attached to every sidebar item.
 

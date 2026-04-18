@@ -1,6 +1,6 @@
 # Linking And Pipeline Logic
 
-Date: 2026-04-16
+Date: 2026-04-18
 
 This document explains how records link across Viva Medical modules and how work should move through the prototype. It is intentionally detailed because most future bugs will come from unclear ownership or hidden duplicated state.
 
@@ -225,7 +225,7 @@ Service creates/receives technical case
   -> Engineer uploads signed copy in Documents
   -> User confirms completion
   -> Service job becomes Done
-  -> Documents Status becomes green `Download signed`
+  -> Documents `Signed return` becomes green `Download signed`
   -> Finance creates/uploads invoice when billing is needed
 ```
 
@@ -266,7 +266,7 @@ Service job created
   -> document-service generates PDF
   -> Documents handles signed upload
   -> User confirms completion
-  -> Documents Status becomes green `Download signed`
+  -> Documents `Signed return` becomes green `Download signed`
 ```
 
 Rules:
@@ -299,7 +299,7 @@ Sales creates Commercial Offer / Quotation
   -> Equipment acceptance date is set from upload date
   -> Warranty expiry is calculated
   -> Calendar gets warranty expiry event
-  -> Documents Status becomes green `Download signed`
+  -> Documents `Signed return` becomes green `Download signed`
 ```
 
 Owner modules:
@@ -332,7 +332,7 @@ Contract has `pmPerYear`
   -> document-service generates PDF
   -> Documents handles signed upload
   -> User confirms completion
-  -> Documents Status becomes green `Download signed`
+  -> Documents `Signed return` becomes green `Download signed`
 ```
 
 PM rules:
@@ -434,6 +434,7 @@ Procedure/checklist template exists in Templates
 Procedure template rules:
 
 - Procedure/checklist templates are registry-style reusable instructions.
+- Procedure/checklist templates are not Documents and must not be listed or persisted as document rows.
 - Applicability can use service type, equipment, customer/hospital, and work-equipment tags.
 - Empty applicability links mean broadly applicable.
 - Work equipment currently means service/metrology tools such as multimeter, oscilloscope, safety analyzer, pressure gauge, thermometer, flow meter, or load-test set.
@@ -441,6 +442,7 @@ Procedure template rules:
 - Archived templates should not be offered for new active work.
 - Concrete rows/points belong to Work Acts. Later template edits should not silently mutate existing Work Act rows.
 - Template-based Work Act generation must upsert the generated document record into Documents and sync only the generated-file reference back to the Work Act source.
+- Direct `sourceType = template` generated records are invalid for the Documents repository; Work Acts must supply `sourceType = work-act`, `workActId`, and the pre-created document draft id.
 
 Output layout rules:
 
@@ -462,7 +464,7 @@ Documents row has yellow `Upload signed`
   -> Frontend uploads file to document-service
   -> document-service creates file registry record
   -> Document stores signed/uploaded file metadata
-  -> Documents row Status becomes green `Download signed`
+  -> Documents row `Signed return` becomes green `Download signed`
   -> If document is a Work Act, confirmation asks whether the linked Service job is Done
   -> Confirm Done marks Service job Done
   -> Keep open leaves Service job Waiting signature
@@ -487,11 +489,33 @@ File metadata:
 
 UI rules:
 
-- Upload button lives in `Status`.
-- Download after upload lives in `Status` as `Download signed`.
+- Upload button lives in `Signed return`.
+- Download after upload lives in `Signed return` as `Download signed`.
 - `View` opens the generated document, not the signed/uploaded return file.
 - Green `Download signed` downloads the signed/uploaded return file.
-- `Action` remains `View` / `Edit`.
+- `Actions` contains `Edit source` and `Delete`.
+
+## Document Delete Pipeline
+
+Use this when the user intentionally removes a document custody row from `Documents`.
+
+```text
+Documents row
+  -> Delete
+  -> confirmation
+  -> frontend calls document-service delete endpoint
+  -> document-service removes generated-document record and file records owned by that document id
+  -> frontend removes the document row from prototype state
+  -> linked source record keeps its business data but loses generated document/file pointers
+  -> source record can regenerate a new document later
+```
+
+Rules:
+
+- `Documents` owns this delete because it owns document/file custody.
+- Deleting a Documents row does not delete the Work Act, Defect Act, Commercial Offer draft, Service job, Customer, or Equipment source record.
+- If the deleted Work Act document was the explicit proof that closed a Service job, the job's explicit document-close link is cleared and the prototype returns the job to an open/waiting-signature state.
+- This is a prototype delete control, not the final legal retention model. Production delete must become permissioned, audited, and retention-aware.
 
 ## External Upload Pipeline
 
@@ -721,5 +745,5 @@ When implementing a flow that crosses modules, verify:
 - Display reference uses job/quotation/source reference before internal document id.
 - File upload creates file registry metadata.
 - Generated and signed files are separate records.
-- Sidebar navigation stays label-only; queue badges/reminders need a separate future notification design.
+- Sidebar collapse/expand affects only the shell rail (not module content), collapsed module buttons remain directly clickable, and queue badges/reminders stay a separate future notification design.
 - Documentation links are updated in this folder.

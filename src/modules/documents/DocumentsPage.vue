@@ -432,6 +432,7 @@ const generatedSyncStatus = computed(() => {
                 <td>
                   <div class="table-actions">
                     <VmButton compact :data-doc-edit="doc.id" variant="ghost">Edit source</VmButton>
+                    <VmButton compact danger :data-doc-delete="doc.id" title="Delete document custody record" variant="ghost">Delete</VmButton>
                   </div>
                 </td>
               </tr>

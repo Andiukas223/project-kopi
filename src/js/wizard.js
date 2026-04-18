@@ -208,7 +208,7 @@ function submitJob() {
 
   jobs.unshift(job);
   state.selectedServiceJobId = job.id;
-  state.templateGenWorkActJobId = job.id;
+  state.workActSourceJobId = job.id;
   setPage("service");
   closeWizard();
   saveDemoState();

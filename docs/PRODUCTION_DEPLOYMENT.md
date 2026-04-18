@@ -45,7 +45,8 @@ Important production notes:
 
 - Publishing `document-service:3001` to the host is convenient for local development, but it must not be exposed publicly on a production server.
 - In production, public traffic should enter through one HTTPS reverse proxy only, then go to `web`.
-- The nginx frontend proxies `/api/documents/` to `document-service:3001`.
+- The nginx frontend proxies `/api/documents/` to `document-service:3001` for document custody/generation APIs.
+- The nginx frontend proxies `/api/templates/` to `document-service:3001/templates/` for reusable Template persistence. The old `/api/documents/templates*` namespace is blocked because Templates are not Documents.
 - There are no Collabora proxy paths to configure.
 
 ## Required Production Configuration
@@ -84,6 +85,7 @@ Internet
   -> HTTPS reverse proxy on server, port 443
   -> Docker web service, container port 80
   -> /api/documents/ -> document-service:3001
+  -> /api/templates/ -> document-service:3001/templates/
 ```
 
 Expose publicly:

@@ -1,13 +1,13 @@
 export const activeModules = [
-  { id: "service", path: "/service", labelKey: "nav.service", label: "Service", group: "workspace" },
-  { id: "workacts", path: "/work-acts", labelKey: "nav.workActs", label: "Work Acts", group: "workspace" },
-  { id: "contracts", path: "/contracts", labelKey: "nav.contracts", label: "Contracts", group: "workspace" },
-  { id: "documents", path: "/documents", labelKey: "nav.documents", label: "Documents", group: "workspace" },
-  { id: "templates", path: "/templates", labelKey: "nav.templates", label: "Templates", group: "workspace" },
-  { id: "customers", path: "/customers", labelKey: "nav.customers", label: "Customers", group: "registry" },
-  { id: "equipment", path: "/equipment", labelKey: "nav.equipment", label: "Equipment", group: "registry" },
-  { id: "calendar", path: "/calendar", labelKey: "nav.calendar", label: "Calendar", group: "control" },
-  { id: "admin", path: "/admin", labelKey: "nav.admin", label: "Admin", group: "control" }
+  { id: "service", path: "/service", labelKey: "nav.service", label: "Service", group: "workspace", icon: "service" },
+  { id: "workacts", path: "/work-acts", labelKey: "nav.workActs", label: "Work Acts", group: "workspace", icon: "workacts" },
+  { id: "contracts", path: "/contracts", labelKey: "nav.contracts", label: "Contracts", group: "workspace", icon: "contracts" },
+  { id: "documents", path: "/documents", labelKey: "nav.documents", label: "Documents", group: "workspace", icon: "documents" },
+  { id: "templates", path: "/templates", labelKey: "nav.templates", label: "Templates", group: "workspace", icon: "templates" },
+  { id: "customers", path: "/customers", labelKey: "nav.customers", label: "Customers", group: "registry", icon: "customers" },
+  { id: "equipment", path: "/equipment", labelKey: "nav.equipment", label: "Equipment", group: "registry", icon: "equipment" },
+  { id: "calendar", path: "/calendar", labelKey: "nav.calendar", label: "Calendar", group: "control", icon: "calendar" },
+  { id: "admin", path: "/admin", labelKey: "nav.admin", label: "Admin", group: "control", icon: "admin" }
 ];
 
 export const moduleGroups = [

@@ -8,6 +8,7 @@ export const state = {
   role: "admin",
   theme: "light",
   language: "en",
+  sidebarCollapsed: false,
 
   // Documents module
   documentSearchQuery: "",
@@ -84,7 +85,7 @@ export const state = {
   serviceJobCustomerFilter: "All",
   serviceJobDateQuery: "",
   selectedWorkActId: null,
-  templateGenWorkActJobId: "VM-SV-1024",
+  workActSourceJobId: "VM-SV-1024",
   workActSearchQuery: "",
   workActStatusFilter: "All",
   selectedDefectActId: null,

@@ -15,30 +15,30 @@ export function templateRecordToWorkListTemplate(record = {}, existing = null) {
   const metadata = record.metadata || {};
   const applicability = metadata.applicability || {};
   const editorContent = record.editorContent || {};
-  const preserveExisting = existing && !existing.backendTemplateSyncedAt;
 
   return {
     ...(existing || {}),
     id: record.id,
-    name: preserveExisting ? existing.name : metadata.name || existing?.name || "Untitled template",
-    company: preserveExisting ? existing.company : metadata.company || existing?.company || "Viva Medical, UAB",
-    equipmentCategory: preserveExisting ? existing.equipmentCategory : metadata.equipmentCategory || existing?.equipmentCategory || "General",
-    serviceType: preserveExisting ? existing.serviceType : metadata.serviceType || existing?.serviceType || "Service",
-    linkedServiceTypes: preserveExisting ? existing.linkedServiceTypes || [] : applicability.serviceTypes || [],
-    linkedEquipmentIds: preserveExisting ? existing.linkedEquipmentIds || [] : applicability.equipmentIds || [],
-    linkedHospitalIds: preserveExisting ? existing.linkedHospitalIds || [] : applicability.hospitalIds || [],
-    linkedWorkEquipmentIds: preserveExisting ? existing.linkedWorkEquipmentIds || [] : applicability.workEquipmentIds || [],
-    entryPerson: preserveExisting ? existing.entryPerson : metadata.entryPerson || existing?.entryPerson || "",
-    entryDate: preserveExisting ? existing.entryDate : metadata.entryDate || existing?.entryDate || new Date().toISOString().slice(0, 10),
-    language: preserveExisting ? existing.language : metadata.language || existing?.language || "lt",
-    bodyText: preserveExisting ? existing.bodyText : metadata.description || editorContent.text || existing?.bodyText || "",
-    richBodyHtml: preserveExisting ? existing.richBodyHtml || editorContent.html || "" : editorContent.html || existing?.richBodyHtml || "",
+    name: metadata.name || existing?.name || "Untitled template",
+    company: metadata.company || existing?.company || "Viva Medical, UAB",
+    equipmentCategory: metadata.equipmentCategory || existing?.equipmentCategory || "General",
+    serviceType: metadata.serviceType || existing?.serviceType || "Service",
+    linkedServiceTypes: applicability.serviceTypes || existing?.linkedServiceTypes || [],
+    linkedEquipmentIds: applicability.equipmentIds || existing?.linkedEquipmentIds || [],
+    linkedHospitalIds: applicability.hospitalIds || existing?.linkedHospitalIds || [],
+    linkedWorkEquipmentIds: applicability.workEquipmentIds || existing?.linkedWorkEquipmentIds || [],
+    entryPerson: metadata.entryPerson || existing?.entryPerson || "",
+    entryDate: metadata.entryDate || existing?.entryDate || new Date().toISOString().slice(0, 10),
+    language: metadata.language || existing?.language || "lt",
+    bodyText: metadata.description || editorContent.text || existing?.bodyText || "",
+    richBodyHtml: editorContent.html || existing?.richBodyHtml || "",
     editorContent,
     mergeFields: normaliseMergeFields(record.mergeFields || existing?.mergeFields),
     output: record.output || existing?.output || { defaultFormat: "pdf", outputTemplateId: "tpl-service-act" },
     backendTemplateId: record.id,
     backendTemplateAudit: record.audit || {},
     backendTemplateStatus: metadata.status || "Active",
+    isActive: (metadata.status || "Active") !== "Archived",
     backendTemplateSyncedAt: new Date().toISOString()
   };
 }
@@ -87,7 +87,6 @@ export function workListTemplateToTemplateRecord(template = {}, overrides = {}) 
 
 export function syncTemplateRecordsToWorkListTemplates(records = [], workListTemplates = []) {
   records
-    .filter((record) => record?.metadata?.status !== "Archived")
     .forEach((record) => {
       const index = workListTemplates.findIndex((template) => template.id === record.id || template.backendTemplateId === record.id);
       if (index >= 0) {

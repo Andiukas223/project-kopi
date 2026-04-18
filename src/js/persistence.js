@@ -36,6 +36,10 @@ export function loadPersistedDemoState() {
     const snapshot = JSON.parse(raw);
     if (snapshot?.state && typeof snapshot.state === "object") {
       Object.assign(state, snapshot.state);
+      if (!snapshot.state.workActSourceJobId && snapshot.state.templateGenWorkActJobId) {
+        state.workActSourceJobId = snapshot.state.templateGenWorkActJobId;
+      }
+      delete state.templateGenWorkActJobId;
       if (state.page === "templategen") {
         state.page = state.templateGenTab === "work-acts" ? "workacts" : "templates";
       }

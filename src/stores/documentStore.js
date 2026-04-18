@@ -2,6 +2,7 @@ import { reactive } from "vue";
 import { documents } from "../js/data.js";
 import { saveDemoState } from "../js/persistence.js";
 import { state } from "../js/state.js";
+import { isDocumentRepositoryRecord } from "../modules/documents/documentDomain.js";
 import { listGeneratedDocumentRecords } from "../services/documentService.js";
 
 export const documentStoreState = reactive({
@@ -26,11 +27,12 @@ export async function loadGeneratedDocuments(options = {}) {
 
   try {
     const result = await listGeneratedDocumentRecords({ limit: options.limit || 1000 });
-    const syncedCount = upsertGeneratedDocumentRecords(result.documents, { persist: false });
+    const syncedRecords = result.documents.filter(isDocumentRepositoryRecord);
+    const syncedCount = upsertGeneratedDocumentRecords(syncedRecords, { persist: false });
     documentStoreState.generatedLoadedAt = new Date().toISOString();
     documentStoreState.generatedSyncCount = syncedCount;
     saveDemoState();
-    return result.documents;
+    return syncedRecords;
   } catch (error) {
     documentStoreState.generatedError = error.message || "Generated documents could not be loaded.";
     return [];
@@ -41,15 +43,17 @@ export async function loadGeneratedDocuments(options = {}) {
 
 export function upsertGeneratedDocumentRecords(records = [], options = {}) {
   const before = JSON.stringify(documents);
-  records.forEach((record) => upsertGeneratedDocumentRecord(record, { persist: false, select: false }));
+  const repositoryRecords = records.filter(isDocumentRepositoryRecord);
+  repositoryRecords.forEach((record) => upsertGeneratedDocumentRecord(record, { persist: false, select: false }));
   const changed = before !== JSON.stringify(documents);
   if (changed && options.persist !== false) saveDemoState();
-  return Array.isArray(records) ? records.length : 0;
+  return repositoryRecords.length;
 }
 
 export function upsertGeneratedDocumentRecord(record, options = {}) {
   const normalised = normaliseGeneratedDocumentRecord(record);
   if (!normalised) return null;
+  if (!isDocumentRepositoryRecord(normalised)) return null;
 
   const index = documents.findIndex((doc) => doc.id === normalised.id);
   if (index >= 0) {
@@ -95,7 +99,7 @@ function normaliseGeneratedDocumentRecord(record = {}) {
   return {
     ...record,
     id: String(record.id),
-    type: String(record.type || "Template document"),
+    type: String(record.type || "Document"),
     status: String(record.status || "Signature"),
     pipelineStep: String(record.pipelineStep || "Signature"),
     deliveryStatus: String(record.deliveryStatus || "Needs signed upload"),

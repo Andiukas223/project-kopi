@@ -38,6 +38,12 @@ export function bindDocumentPipeline(renderApp) {
       return;
     }
 
+    const docDeleteButton = event.target.closest("[data-doc-delete]");
+    if (docDeleteButton) {
+      void deleteDocument(docDeleteButton.dataset.docDelete);
+      return;
+    }
+
     const selectButton = event.target.closest("[data-doc-select]");
     if (selectButton) {
       selectDocument(selectButton.dataset.docSelect);
@@ -302,6 +308,165 @@ function selectDocument(id) {
   renderAppCallback();
 }
 
+async function deleteDocument(id) {
+  const index = documents.findIndex((item) => item.id === id);
+  if (index < 0) return;
+
+  const doc = documents[index];
+  const reference = [doc.id, doc.jobId || doc.quotationId].filter(Boolean).join(" / ");
+  const confirmed = window.confirm(
+    `Delete document ${reference}?\n\nThis removes the Documents row, generated/signed file links, and document-service custody records for this document. Source records stay available so the document can be regenerated if needed.`
+  );
+  if (!confirmed) return;
+
+  state.selectedDocumentId = doc.id;
+  state.generationStatus = `Deleting ${doc.id}...`;
+  renderAppCallback();
+
+  try {
+    await deleteDocumentBackendRecord(doc.id);
+  } catch (error) {
+    if (documentHasBackendCustody(doc)) {
+      state.generationStatus = error.message || `Could not delete ${doc.id}.`;
+      renderAppCallback();
+      return;
+    }
+  }
+
+  cleanupDocumentReferences(doc);
+  documents.splice(index, 1);
+  queuedAutoGenerationIds.delete(doc.id);
+
+  if (state.selectedDocumentId === doc.id) {
+    state.selectedDocumentId = documents[Math.min(index, documents.length - 1)]?.id || null;
+  }
+  if (state.documentUploadTargetId === doc.id) closeDocumentUploadState();
+  if (state.jobCompletionConfirmDocId === doc.id) state.jobCompletionConfirmDocId = null;
+  if (state.printPreviewDocumentId === doc.id) closePrintPreviewState();
+
+  state.generationStatus = `${doc.id} deleted.`;
+  state.generatedDocPreview = null;
+  state.rejectingDocumentId = null;
+  state.documentRejectError = "";
+  saveDemoState();
+  renderAppCallback();
+}
+
+async function deleteDocumentBackendRecord(docId) {
+  const response = await fetch(`/api/documents/documents/${encodeURIComponent(docId)}`, {
+    method: "DELETE",
+    headers: { "X-VM-Role": state.role }
+  });
+  const result = await readJsonResponse(response, "Document delete failed");
+  if (!response.ok || !result.ok) {
+    throw new Error(result.error || "Document delete failed.");
+  }
+  return result;
+}
+
+function documentHasBackendCustody(doc) {
+  return Boolean(
+    doc?.documentServiceSyncedAt ||
+    doc?.templateRecordId ||
+    doc?.generatedFile?.fileId ||
+    doc?.generatedFile?.fileRecord?.id ||
+    doc?.signedFile?.id ||
+    doc?.signedFile?.fileId ||
+    doc?.uploadedFile?.id ||
+    doc?.uploadedFile?.fileId
+  );
+}
+
+function cleanupDocumentReferences(doc) {
+  const sourceRecord = sourceRecordForDocument(doc);
+  if (sourceRecord) {
+    clearSourceDocumentLink(sourceRecord, doc);
+  }
+
+  workActs
+    .filter((act) => act.generatedDocumentId === doc.id || act.documentId === doc.id)
+    .forEach((act) => clearSourceDocumentLink(act, doc));
+  defectActs
+    .filter((act) => act.generatedDocumentId === doc.id || act.documentId === doc.id)
+    .forEach((act) => clearSourceDocumentLink(act, doc));
+  commercialOfferDrafts
+    .filter((draft) => draft.generatedDocumentId === doc.id || draft.documentId === doc.id)
+    .forEach((draft) => clearSourceDocumentLink(draft, doc));
+
+  invoices.forEach((invoice) => {
+    if (invoice.documentId === doc.id) invoice.documentId = "";
+  });
+
+  calendarEvents
+    .filter((event) => event.documentId === doc.id)
+    .forEach((event) => {
+      event.documentId = "";
+    });
+
+  restoreLinkedJobAfterDocumentDelete(doc);
+}
+
+function clearSourceDocumentLink(sourceRecord, doc) {
+  if (!sourceRecord) return;
+  const deletedGeneratedKey = doc.generatedFile?.fileId || doc.generatedFile?.id || doc.generatedFile?.fileName || "";
+  if (sourceRecord.generatedDocumentId === doc.id) sourceRecord.generatedDocumentId = "";
+  if (sourceRecord.documentId === doc.id) sourceRecord.documentId = "";
+  if (deletedGeneratedKey && sourceRecord.generatedFileId === deletedGeneratedKey) {
+    sourceRecord.generatedFileId = "";
+  }
+  if (deletedGeneratedKey && (sourceRecord.generatedFile?.fileId || sourceRecord.generatedFile?.id || sourceRecord.generatedFile?.fileName) === deletedGeneratedKey) {
+    sourceRecord.generatedFile = null;
+  }
+  if (Array.isArray(sourceRecord.generatedFileVersions)) {
+    const deletedFileIds = new Set(
+      [doc.generatedFile, ...(Array.isArray(doc.generatedFileVersions) ? doc.generatedFileVersions : [])]
+        .map((file) => file?.fileId || file?.id || file?.fileName)
+        .filter(Boolean)
+    );
+    sourceRecord.generatedFileVersions = sourceRecord.generatedFileVersions.filter((file) =>
+      !deletedFileIds.has(file?.fileId || file?.id || file?.fileName)
+    );
+  }
+  sourceRecord.generatedFileVersion = null;
+  sourceRecord.generatedAt = "";
+  sourceRecord.deliveryStatus = "Document deleted";
+  sourceRecord.updatedAt = new Date().toISOString();
+}
+
+function restoreLinkedJobAfterDocumentDelete(doc) {
+  const job = jobs.find((item) => item.id === doc?.jobId);
+  if (!job) return;
+
+  if (job.generatedWorkActDocumentId === doc.id) {
+    delete job.generatedWorkActDocumentId;
+  }
+  if (job.closedByDocumentId === doc.id) {
+    delete job.closedByDocumentId;
+    delete job.closedAt;
+    delete job.finishedAt;
+    job.status = doc.generatedFile ? "Waiting signature" : "Open";
+    job.stage = job.status;
+    job.documentStatus = doc.generatedFile ? "Waiting signature" : "Draft";
+  }
+}
+
+function closeDocumentUploadState() {
+  state.documentUploadOpen = false;
+  state.documentUploadTargetId = null;
+  state.documentUploadDefaultType = "";
+  state.documentUploadError = "";
+}
+
+function closePrintPreviewState() {
+  state.printPreviewOpen = false;
+  state.printPreviewDocumentId = null;
+  state.printPreviewPage = 1;
+  state.printPreviewZoom = 100;
+  state.printPreviewExportOpen = false;
+  state.printPreviewEmailOpen = false;
+  state.printPreviewEmailStatus = "";
+}
+
 async function routeDocumentEdit(id) {
   const doc = documents.find((item) => item.id === id);
   if (!doc) return;
@@ -348,7 +513,7 @@ function routeToWorkAct(doc) {
   state.templateGenTab = "work-acts";
   state.selectedTemplateId = "tpl-service-act";
   state.selectedWorkActId = act?.id || null;
-  state.templateGenWorkActJobId = act?.jobId || doc.jobId || state.templateGenWorkActJobId;
+  state.workActSourceJobId = act?.jobId || doc.jobId || state.workActSourceJobId;
   state.selectedServiceJobId = doc.jobId || state.selectedServiceJobId;
   state.workActEditorDocumentId = doc.id;
   return act || null;

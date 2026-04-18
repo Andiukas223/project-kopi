@@ -42,8 +42,11 @@ export function syncLegacyPageFromRoute(route) {
 function syncRouterToStatePage() {
   if (!shellRouter || syncingRoute) return;
   const page = normalizePageId(state.page);
+  const currentRoute = shellRouter.currentRoute.value;
+  const currentPage = normalizePageId(currentRoute.meta?.pageId || currentRoute.name || "service");
+  if (currentPage === page) return;
   const nextPath = routePathForPage(page);
-  if (shellRouter.currentRoute.value.path === nextPath) return;
+  if (currentRoute.path === nextPath) return;
   pushShellRoute(nextPath);
 }
 
@@ -81,6 +84,11 @@ export function useShellStore() {
     return state.language === "lt" ? "EN" : "LT";
   });
 
+  const sidebarCollapsed = computed(() => {
+    legacyRenderTick.value;
+    return Boolean(state.sidebarCollapsed);
+  });
+
   function goToPage(page) {
     const normalizedPage = normalizePageId(page);
     if (shellRouter) {
@@ -102,6 +110,11 @@ export function useShellStore() {
     rerenderLegacyApp();
   }
 
+  function toggleSidebarCollapsed() {
+    state.sidebarCollapsed = !state.sidebarCollapsed;
+    rerenderLegacyApp();
+  }
+
   function chooseRole(role) {
     setRole(role);
     rerenderLegacyApp();
@@ -114,8 +127,10 @@ export function useShellStore() {
     goToPage,
     isDarkTheme,
     languageButtonLabel,
+    sidebarCollapsed,
     themeButtonLabel,
     toggleLanguage,
+    toggleSidebarCollapsed,
     toggleTheme
   };
 }

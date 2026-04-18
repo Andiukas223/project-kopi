@@ -519,3 +519,24 @@ Highest-value early slice:
 - generate document from template + payload
 - surface generated document in Documents
 - export/download/print flow
+
+---
+
+## Product intent for Templates module
+
+The Templates module is a reusable document authoring environment for repetitive medical equipment service documentation.
+
+Users are expected to think in a Word/LibreOffice-like way:
+- create reusable service document layouts
+- reuse standard text, rows, checklists, and sections
+- insert dynamic data fields/placeholders
+- generate final documents later from Work Act context
+
+The Templates module should therefore optimize for:
+- document-first editing
+- familiar editor workflow
+- A4/document-oriented layout
+- repetitive service-document creation efficiency
+- clarity of reusable vs dynamic content
+
+This is not just a generic ERP form builder and not just a storage list for templates.

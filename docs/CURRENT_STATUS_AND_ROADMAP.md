@@ -1,6 +1,6 @@
 # Current Status And Roadmap
 
-Date: 2026-04-16
+Date: 2026-04-18
 
 Latest pushed implementation baseline noted before the current uncommitted review pass: `28fd1dd refactor: split contracts from sales and finance`.
 
@@ -21,7 +21,7 @@ The project is now a Docker-runnable internal operations prototype for Viva Medi
 The app currently runs as:
 
 - `web`: nginx static frontend, served on `http://localhost:8080`.
-- `document-service`: Node.js + Carbone + LibreOffice service, served behind nginx under `/api/documents/`.
+- `document-service`: Node.js + Carbone + LibreOffice service, served behind nginx under `/api/documents/` for document custody/generation and `/api/templates/` for reusable Template persistence.
 - `document-service/generated`: generated document output.
 - `document-service/storage`: persistent local runtime storage for uploaded files, feedback screenshots, and file registry JSON. Runtime contents are ignored by git; only `.gitkeep` is tracked.
 
@@ -57,20 +57,49 @@ Detailed module documentation now lives in `docs/modules/`:
 - Shell state is managed through a small Vue shell store that syncs router state with the existing legacy `state.page` during gradual migration.
 - `Documents` is now a Vue-rendered module route. It still uses the existing document pipeline handlers for upload/generation/edit routing/preview actions until that business logic is moved behind Vue services.
 - The old legacy Documents page renderer in `src/js/render.js` has been removed. Legacy support for Documents is now limited to shared overlays and delegated document handlers.
-- `Templates` is now a Vue-rendered module route for the active Work List Template configurator. The old legacy Templates landing renderer and unused new/filter/archive/start-work-act handlers have been removed. The route still uses existing delegated `data-wlt-*` handlers for save/delete/cancel, combobox behavior, and visual editor commands until Template state/actions are moved into Vue services.
+- `Templates` is now a Vue-rendered module flow with `/templates` for list/management and `/templates/:templateId` for editor-first Template detail. The old legacy Templates landing renderer and unused new/filter/archive/start-work-act handlers have been removed. The detail route still uses existing delegated `data-wlt-*` handlers for save/delete/cancel, combobox behavior, and visual editor commands until Template state/actions are moved into Vue services.
 - `Work Acts` is now a Vue-rendered module route for the active Work Act source workspace. It still uses delegated `data-work-act-*` handlers for create/open, equipment changes, template selection/application, row edits, report options, and PDF draft creation until Work Act actions are moved into Vue services.
-- Other feature module pages still render through the legacy compatibility host until each module is migrated.
+- `Equipment` is now a Vue-rendered module route for installed-system registry and support metadata settings. Interaction behavior (row/tab/sub-tab selection, structured field editing/saving, support toggle, and support URL copy) is now handled by `src/stores/equipmentStore.js`; Equipment-specific delegated handlers were removed from `src/js/interactions.js`.
+- Service, Contracts, Customers, Calendar, Admin, and dormant prototype pages still render through the legacy compatibility host until each module is migrated.
 - Shared Vue UI primitives now exist for buttons, fields, form grids, panels, stat cards, status chips, table wrappers, modal shells, and wizard shells. They reuse existing CSS class names so module migration can be incremental.
 - Umo is the active browser editor integration for template content. The old disabled shell-level advanced editor boundary has been removed, and no Collabora/WOPI runtime behavior, endpoints, proxy paths, or UI launch buttons are active.
 - The unused `legacyStore` compatibility shim has been removed; active Vue/legacy synchronization is handled directly by `src/stores/shellStore.js`.
 - Topbar wordmark subtitle is `Informational system` in EN and `Informacine sistema` in LT.
 - Light and dark mode with persisted theme state.
-- Theme toggle is fixed near the bottom-left and centered within the `Workspace` sidebar column, using `☀️` / `🌙` labels.
+- Theme toggle is fixed near the bottom-left and centered within the `Workspace` sidebar column, using light/dark labels.
 - LT/EN language toggle foundation for topbar/sidebar/global shell labels.
-- Sidebar navigation now shows only module names. Initials/icons and yellow status/count badge bubbles are intentionally removed from the active shell.
+- Sidebar collapse state is now owned by shell state (`state.sidebarCollapsed`) and toggled from the top of the sidebar.
+- Sidebar collapse now targets the shell rail itself. It no longer collapses Equipment list content panels.
+- Expanded mode shows neutral outline icon + full module label. Collapsed mode shows icon-only rail buttons with tooltip/aria labels and clear active indication.
+- Queue/status bubbles are still intentionally excluded from module navigation and should be redesigned as a separate notification concept.
 - The top non-functional `Workspace` sidebar label is hidden so the sidebar starts directly with module navigation.
 - Docker/web control is intentionally outside the web UI through `vm-web-control.ps1` / `.cmd`.
 - `Report issue` is global and available from every page.
+
+### Sidebar Navigation Refactor Snapshot (2026-04-18)
+
+Current status:
+
+- Implemented in shell: `state.sidebarCollapsed`, `toggleSidebarCollapsed()`, and AppShell class/prop wiring.
+- Sidebar has a top collapse/expand button.
+- Collapsing now affects left navigation rail width, not Equipment module content sections.
+- Collapsed rail remains route-clickable.
+- Build status for this phase: `npm run build` passed.
+
+Still incomplete:
+
+- Finalize collapsed-rail tooltip/hover/active/focus polish in the real browser flow.
+- Run explicit keyboard-path validation for expanded and collapsed navigation states.
+- Keep App Shell docs synchronized with final icon/rail behavior after implementation.
+
+Exact next files to continue in next chat:
+
+- `src/components/shell/SidebarNavigation.vue`
+- `src/styles/shell.css`
+- `src/router/routes.js`
+- `docs/modules/WORKSPACE_MODULES.md`
+- `docs/CURRENT_STATUS_AND_ROADMAP.md`
+- `docs/CHANGELOG.md`
 
 ### Command Center
 
@@ -147,27 +176,28 @@ Current implementation:
 Implemented behavior:
 
 - Search/filter table by text, type, customer, creator initials, and a single compact created-date query. The created-date filter accepts partial dates (`2026`, `2026-04`, `2026-04-15`) or a calendar picker selection. Queue and status filters were removed from the active UI to reduce clutter.
-- Table contains the important document custody fields directly; the old selected document side panel is no longer needed as the primary source of information. Documents index does not show delivery status; delivery belongs to Parts/Shipping flows. The table columns are `Reference`, `Type`, `Customer`, `Job status`, `Created`, `Status`, `Action`. The document register focuses on one upload `Status`: before signed/uploaded file exists it shows a yellow `Upload signed` action, and after upload it shows a green `Download signed` link. File names are not shown as a separate index column.
+- Table contains the important document custody fields directly; the old selected document side panel is no longer needed as the primary source of information. Documents index does not show delivery status; delivery belongs to Parts/Shipping flows. The table columns are `Reference`, `Type`, `Customer`, `Job status`, `Created`, `Generated output`, `Signed return`, `Actions`. Generated-file actions live in `Generated output`, signed return upload/download lives in `Signed return`, and row-level source/custody actions live in `Actions`.
 - The repository table shows document `Created` date instead of `Due`; creation/upload date is the daily reference point. Internal due dates can still support SLA/overdue reminders.
 - Documents index rows no longer show the old red overdue stripe; overdue remains a reminder/overview concern, while the table focuses on upload status and actions.
-- `View` opens the generated document through PDF/print preview or the generated file `previewUrl`. The table `Status > Download signed` action is reserved for the uploaded signed copy.
+- `View` opens the generated document through PDF/print preview or the generated file `previewUrl`. The table `Signed return > Download signed` action is reserved for the uploaded signed copy.
 - `Edit` routes to the correct source workspace where possible:
   - Work Act -> `Work Acts`
 - Retired/inactive source modules stay in Documents until their source workspace is reactivated.
 - Work Act / legacy Service Act `Edit` opens the exact linked Work Act configuration page. Legacy/demo Service Act rows without a Work Act source create a minimal linked Work Act shell instead of landing on an empty Work Acts page. It does not open a Collabora editor.
-- `Download signed` appears in the table `Status` column when a signed/uploaded file is available. Generated-file download remains available from preview/source contexts rather than as a separate Documents index action.
+- `Download signed` appears in the table `Signed return` column when a signed/uploaded file is available. Generated-file download remains available in `Generated output`.
 - `Reject` is not exposed in the Documents index action column.
 - The generic `Advance` button was removed.
 - Archiving is removed from the active Documents workflow for now.
-- Generated documents expose the `Upload signed` action directly in the table `Status` column. The action opens a centered upload modal with drag-and-drop/click file selection plus `Upload` and `Cancel`.
-- After a signed copy is uploaded, the table `Status` column changes to green `Download signed`; `Finish` / `DONE` is not exposed in the Documents index action column.
+- Generated documents expose the `Upload signed` action directly in the table `Signed return` column. The action opens a centered upload modal with drag-and-drop/click file selection plus `Upload` and `Cancel`.
+- After a signed copy is uploaded, the table `Signed return` column changes to green `Download signed`; `Finish` / `DONE` is not exposed in the Documents index action column.
+- `Delete` is available in the row `Actions` column. It asks for confirmation, removes the Documents custody row from prototype state, calls `document-service` to remove matching generated document/file registry records and binaries for that document id, and clears generated document/file pointers on linked source records without deleting those source records.
 - If the signed upload is for a Work Act, a completion confirmation opens. Confirming marks the linked Service job `Done`; declining keeps the job `Waiting signature`.
 - Uploaded signed copies are stored through `document-service` and linked back to the same document record.
 - Nginx allows larger document uploads with `client_max_body_size 20m`.
 - The table reference uses the source/job reference (`VM-SV-...`, `QTE-...`) instead of exposing the internal `DOC-...` as the primary daily identifier. Internal document IDs remain for system links and logs.
 - User-facing Owner is the creator initials (`AL`, `VK`, `RP`). Internal module queue ownership remains in data for routing, but it is no longer exposed as an active Documents filter.
 - Newly created document drafts auto-generate a PDF through `document-service` by default, with file registry metadata, preview URL, and download URL. Manual generate remains available as a regenerate action.
-- Document workflow status is normalized from file state: generated file -> `Signature` / `Needs signed upload`, signed file -> green `Download signed` in Status. Persisted `Auto generating` states are reset on load and queued again so documents do not get stuck without a generated file.
+- Document workflow status is normalized from file state: generated file -> `Signature` / `Needs signed upload`, signed file -> green `Download signed` in `Signed return`. Persisted `Auto generating` states are reset on load and queued again so documents do not get stuck without a generated file.
 - Mock preview artifacts are not treated as real generated files in the repository. A document must have a `document-service` download/preview URL before it can signal signed-upload readiness.
 - Documents table text remains selectable for copy/paste; row selection must not clear an active text selection.
 - Document types without a dedicated output layout use `tpl-generic-document` / `generic-document.fodt` until a specific layout is designed.
@@ -179,7 +209,7 @@ Draft / generated draft
   -> Preview or download generated file
   -> Collect signature outside the system
   -> Upload signed copy into the same document record
-  -> Status changes to green Download signed
+  -> Signed return changes to green Download signed
   -> For Work Acts, confirm whether the linked Service job is Done
 ```
 
@@ -204,16 +234,22 @@ Deferred:
 
 Templates is the reusable Work List Template configuration workspace. It is separate from Documents.
 
-Current landing screen:
+Current routes:
 
-- Work List Template configurator.
+- `/templates`: Templates list/table management page.
+- `/templates/:templateId`: editor-first detail page for one reusable Template.
 - The active route is rendered by Vue 3 components in `src/modules/templates/`.
+- The list loads reusable Template records from `/api/templates/`, with template-domain search/type/status/owner filters and row actions.
 - Fields: Company, Entry person, Template name, Service type.
 - Link configuration: searchable combobox/autocomplete dropdowns for Equipment, Hospitals, and Work Equipment. The field itself acts as the search input; options are clicked in the dropdown rows, not selected through a checkbox list.
-- Actions: Save, Delete, Cancel.
-- Same-page Umo editor for template content.
+- Row actions: Open/Edit, Duplicate, Archive.
+- Editor actions: Save, Duplicate, Archive, Cancel.
+- Umo editor is primary on the detail page; metadata, applicability, and merge fields are secondary supporting panels.
 - Collabora/WOPI advanced editor actions were removed. Template editing stays in structured fields plus Umo.
 - Work rows are no longer edited in Templates. Concrete Work Act points/rows belong to the `Work Acts` module and are appended to generated Work Act documents.
+- Templates no longer generate persisted Documents directly; Work Acts selects Templates as input and creates the generated output.
+- Public template persistence uses `/api/templates/`; the old `/api/documents/templates*` route is blocked at nginx because Templates are not Documents.
+- Archived Templates remain visible/manageable in Templates and are not offered for active Work Act generation.
 - Output layout metadata, merge fields, and FODT/template-file concerns remain separate from the Work List Template landing and are preserved as existing data/helper behavior until a dedicated Vue admin surface is planned.
 - Template applicability options are now owned by the Vue Work Acts route/view model; the old matching legacy helper in `src/js/render.js` has been removed.
 
@@ -276,13 +312,15 @@ Commercial Offers implemented:
 
 Templates implemented:
 
+- Template list/table for reusable source Template records, using Documents-style density/toolbar behavior only as a visual pattern.
 - Selected-template configurator based on the Tomis Work List Template screen.
 - Template picker for existing procedure/checklist templates.
 - Template name, company, entry person, service type, and description metadata.
 - Linked service types, equipment, hospitals, work equipment.
 - Work equipment now means service/metrology tools such as digital multimeter, oscilloscope, safety analyzer, pressure gauge, thermometer, flow meter, or load-test set. It is seed data for a future `Work Equipment` module.
 - Applicability logic for Work Act template selection.
-- Delete action for prototype template records.
+- Archive action for reusable Template records.
+- Duplicate action for reusable Template records.
 - Umo editor MVP:
   - same-page document editor
   - HTML/text/json editor snapshots
@@ -361,13 +399,14 @@ Not implemented yet:
 - `Documents` is a repository/search/file-custody module.
 - `Work Acts` is the concrete Work Act source/generation module.
 - `Templates` is the reusable procedure/checklist and output-layout configuration module.
+- Templates are not stored, listed, or treated as file/document rows inside `Documents`.
 - User-facing equipment/procedure checklists are called `Templates` in the web UI. Internal notes may still refer to Tomis `Work List Templates` when describing the old system.
 - `Output Layouts` are advanced/admin printable form layouts for Carbone/LibreOffice generation; they should not dominate the daily document creation flow and may later move under Admin/settings.
 - Daily users should normally generate documents from structured records and prepared templates, not design each document from scratch.
 - Daily users still need access to the controlled Umo editor for micro edits, user-specific templates, and production bug/workaround capture.
 - Admin is an overseer for users, roles, permissions, pipeline progress, and exception queues, not just a final approver.
 - Archive in Documents is deferred.
-- The main document return path is: generate -> preview/download generated file -> collect signature -> upload signed copy -> green Download signed in Status.
+- The main document return path is: generate -> preview/download generated file -> collect signature -> upload signed copy -> green Download signed in `Signed return`.
 - Page/document previews should stay white even in dark mode because they represent printable output.
 - Runtime files and captured screenshots should not be committed to git.
 
@@ -385,6 +424,58 @@ Not implemented yet:
 - Existing demo data contains placeholder hospital requisites that must be verified before real use.
 
 ## Roadmap
+
+### B-48 - Sidebar Rail Finalization + Navigation Usability (In Progress)
+
+Goal: complete the sidebar refactor so collapse behavior is shell-first, icon-rail based, and production-usable.
+
+Current checkpoint:
+
+- Shell-level collapse behavior is implemented and persisted via demo state save cycle.
+- Equipment-local "collapse installed systems panel" behavior has been removed from the primary collapse workflow.
+- Temporary collapsed markers were replaced with neutral outline module icons; rail remains icon-button clickable.
+
+Implementation sequence for next chat:
+
+1. Replace temporary short markers with neutral outline-style icons per module/category.
+2. Ensure collapsed mode keeps icon buttons fully clickable with clear active indication.
+3. Keep expanded mode icon + label structure aligned with current module ordering/groups.
+4. Finalize focus-visible, hover, and keyboard behavior in both states.
+5. Revalidate that collapse does not alter installed systems content visibility/behavior in Equipment.
+6. Run `npm run build` and a quick interaction smoke check.
+7. Update docs/changelog after the icon rail phase lands.
+
+Acceptance checklist:
+
+- Top collapse button works.
+- Collapsed rail remains usable with icon-only buttons.
+- Expanded mode shows full labels.
+- Active module is clearly visible in both states.
+- No colorful emoji-style nav icons.
+- Installed systems content is not treated as the collapse target.
+
+### B-49 - Equipment Registry UX/Logic Completion (Done)
+
+Completed 2026-04-19.
+
+Goal: finalize Equipment as a structured system registry with clear list/detail behavior and reliable downstream reuse.
+
+Delivery summary:
+
+- Equipment list row visuals now use neutral outline SVG iconography (no emoji markers).
+- Registry rows remain fully clickable and are now keyboard-selectable (`Enter` / `Space`) with explicit focus-visible state.
+- Demo/outdated flags continue to update list indicators immediately from draft state and persist after save/reload.
+- Search/filter/list/detail behavior remains consistent with the shell layout and desktop-first scanning.
+- Equipment continues to feed downstream Work Acts equipment selection through existing integration boundaries.
+
+Validation summary:
+
+- New Equipment record create/edit/save path is working.
+- Demo/outdated visibility in list + detail is working and persisted after reload.
+- Search/filter flow is working.
+- No upload/download/file-custody controls are exposed in Equipment.
+- Work Acts downstream equipment selection validated in runtime.
+- Templates downstream runtime validation was blocked in this local Vite run because `/api/templates` returned `404` (integration path remains wired in code).
 
 ### B-38 - Defect Act / Commercial Offer Generation Parity - Done
 
@@ -410,6 +501,7 @@ Plan:
 4. Add better empty states for filtered searches.
 5. Add a concise row audit popover or expandable row for file history.
 6. Keep archive hidden until a future retention design exists.
+7. Keep the new delete action as a prototype custody control until production permissions/audit/retention are designed.
 
 ### B-40 - Finance Invoice Register Polish
 
@@ -510,7 +602,7 @@ Goal: prepare the system for real users.
 Plan:
 
 1. Add automated smoke tests for critical flows.
-2. Add Playwright flows for document generation, signed upload, Status-column download, feedback capture, and admin queue.
+2. Add Playwright flows for document generation, signed upload, `Signed return` download, delete confirmation, feedback capture, and admin queue.
 3. Add logging and error boundaries.
 4. Add DB backups and restore drills.
 5. Add environment config and secrets handling.
