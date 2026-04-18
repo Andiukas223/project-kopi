@@ -131,7 +131,7 @@ const moduleSpecs = {
       "  Emails: Company Emails · Manufacturer Emails · Hospital Emails",
       "  Web Links: System URL (+ Copy) · Hospital URL · Group URL",
       "Comments tab · Record Information tab",
-      "Device type templates (autofill by model) · Service history · PM contract link"
+      "Device type templates (autofill by model) · PM contract link"
     ].join(" · "),
     pipeline: [
       "Register system (apply device type template → fill/modify fields → save with serial)",
@@ -150,8 +150,8 @@ const moduleSpecs = {
       "→ Case status: New / Unassigned",
       "→ Admin notified → Admin assigns to engineer → normal service pipeline continues"
     ].join("\n"),
-    actions: "Register new installed system · Apply device type template · Enable Support Portal · Copy system/hospital/group URL · View service history · Link to contract · View warranty expiry",
-    planned: "Full Support tab UI on equipment detail page · Public support sub-page (no auth) for hospital staff · Auto case creation on support form submit · Admin notification on new support case · Warranty expiry calendar sync · Device ID autofill across job wizard forms · PM schedule linked to equipment · Service history timeline · Autofill suggestions for same model type"
+    actions: "Register new installed system · Apply device type template · Enable Support Portal · Copy system/hospital/group URL · Link to contract · View warranty expiry",
+    planned: "Full Support tab UI on equipment detail page · Public support sub-page (no auth) for hospital staff · Auto case creation on support form submit · Admin notification on new support case · Warranty expiry calendar sync · Device ID autofill across job wizard forms · PM schedule linked to equipment · Autofill suggestions for same model type"
   },
   parts: {
     purpose: "Parts request pipeline from engineer identification through warehouse fulfillment to job-site delivery. Includes vendor return management triggered by Work Act repair-exchange notation.",
@@ -2348,7 +2348,6 @@ function equipmentDetail(eq) {
         <label class="flag-check"><input type="checkbox" ${eq.isOutdated ? "checked" : ""} disabled> Outdated / Unused / Uninstalled</label>
       </div>
       <div class="action-row">
-        <button class="btn ghost" type="button">Open service history</button>
         <button class="btn dark" type="button">Save</button>
       </div>
     </div>
