@@ -1,6 +1,6 @@
 # Templates Module
 
-Date: 2026-04-18
+Date: 2026-04-19
 
 This document is the source of truth for the user-facing `Templates` workspace.
 Use it for future changes to reusable procedure/checklist templates and output document layouts.

@@ -1,12 +1,14 @@
 # Projekto Kurimo Planas
 
-Data: 2026-04-15
+Data: 2026-04-19
 
-Current runtime update, 2026-04-16:
+Current runtime update, 2026-04-19:
 
 - This file is historical backlog/context. Active runtime decisions are in `docs/CURRENT_STATUS_AND_ROADMAP.md`, `docs/PRODUCTION_DEPLOYMENT.md`, and module docs.
 - Collabora/WOPI was removed from the active architecture. Historical backlog rows that mention Collabora, WOPI, or `Open in advanced editor` are no longer current requirements.
 - Vue 3 migration starts with a Vue/Vite shell and keeps legacy modules through a compatibility layer until each module is migrated.
+- Sidebar rail collapse finalization (B-48) is completed in active runtime docs.
+- Equipment registry UX/logic completion (B-49) is completed in active runtime docs.
 
 ## 1. Projekto tikslas
 

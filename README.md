@@ -19,7 +19,7 @@ Visa dokumentacija yra `docs/` aplanke:
 
 - `docs/PROJECT_PLAN.md` - detalus kurimo planas, fazes, moduliai, techniniai sprendimai, pilnas backlog.
 - `docs/DOCUMENTATION_RULES.md` - taisykles busimiems chatams/agentams: ka skaityti pirmiausia, kaip dokumentuoti modulius, ownership, UI kontroles, runtime, changelog ir handoff.
-- `docs/CURRENT_STATUS_AND_ROADMAP.md` - dabartine 2026-04-16 projekto busena, kas jau padaryta, kas dar truksta, ir kaip planuojami B-38+ darbai.
+- `docs/CURRENT_STATUS_AND_ROADMAP.md` - dabartine 2026-04-19 projekto busena, kas jau padaryta, kas dar truksta, ir kaip planuojami tolesni darbai.
 - `docs/FRONTEND_ARCHITECTURE.md` - dabartine Vue 3/Vite + legacy compatibility frontend architektura, migracijos riba ir runtime/build taisykles.
 - `docs/PRODUCTION_DEPLOYMENT.md` - production/private server paleidimo runbook: domenas, TLS, Docker, `.env`, reverse proxy, dokumentu servisas, backup/restore, health checks ir go-live checklist.
 - `docs/CHANGELOG.md` - visi reiksmingi pakeitimai, kad kita sesija galetu greitai perimti konteksta.
@@ -98,9 +98,11 @@ Tada atidaryti Vite nurodyta lokalu URL. Dokumentu generavimo API dev rezime vis
 Dabartine frontend architektura:
 
 - Vue 3 owns app bootstrap, routes, shell/topbar/sidebar, shared UI primitives, and the Documents/Templates/Work Acts routes.
+- Equipment route is also Vue-owned (`/equipment`) with structured registry list/detail behavior.
 - Legacy vanilla renderer remains as compatibility host for not-yet-migrated modules and shared overlays.
 - The old legacy Documents index renderer has been removed; Documents UI now lives in `src/modules/documents/`.
 - The old legacy Templates landing renderer has been removed; Templates UI now lives in `src/modules/templates/` as a `/templates` list and `/templates/:templateId` editor detail flow, with only delegated save/delete/rich-editor compatibility handlers remaining.
 - The old legacy Work Acts route renderer has been removed; Work Acts UI now lives in `src/modules/workActs/`, with delegated action/document-generation compatibility still in place.
+- Sidebar collapse now targets only the shell navigation rail (not module content areas), with neutral outline icon rail behavior in collapsed mode.
 - The old Documents-side template generation mock/output-layout editor panel has been removed; Work Acts now creates generated document outputs from selected Templates, while Templates remains the reusable source configurator.
 - Templates use the active Umo editor wrapper in `src/components/documentEditor/UmoDocumentEditor.vue`; no WOPI endpoint or Collabora proxy is active.

@@ -1,6 +1,6 @@
 # Frontend Architecture
 
-Date: 2026-04-18
+Date: 2026-04-19
 
 This document summarizes the current frontend architecture after the Vue 3 foundation, shell, shared component, routing/state, Documents migration, Templates migration, Work Acts migration, Equipment migration, and cleanup passes.
 
@@ -32,11 +32,12 @@ Vue currently owns:
 - Active module navigation for `Service`, `Work Acts`, `Contracts`, `Documents`, `Templates`, `Customers`, `Equipment`, `Calendar`, and `Admin`.
 - Theme and language toggle shell state.
 - Sidebar collapse state and top-toggle behavior (`state.sidebarCollapsed`) in the Vue shell store; collapse targets the navigation rail itself. Collapsed mode uses neutral outline icon rail buttons, while expanded mode keeps icon + label navigation.
+- The shell collapse toggle is a symbol-only edge control (`<` expanded, `>` collapsed).
 - Shared UI primitives: buttons, fields, form grids, panels, stat cards, status chips, tables, modal shell, and wizard shell.
 - The Documents module surface: filters, table, signed/external upload modal, and Work Act completion confirmation.
 - The Templates module surface: `/templates` list/management page and `/templates/:templateId` editor-first detail page with metadata, applicability comboboxes, action buttons, merge fields, and Umo editor.
 - The Work Acts module surface: source service job selector, selected Work Act builder, equipment picker, Template picker, report options, work rows, PDF draft/generation actions, and grouped Work Act list.
-- The Equipment module surface: installed system table, detail tabs (`System Info`, `Installation`, `Hospital Acceptance`, `Support`), support sub-tabs (`Settings`, `Emails`, `Web Links`), support-toggle/copy/preview actions, and Equipment ownership/boundary dev reference.
+- The Equipment module surface: installed system table, detail tabs (`System Info`, `Installation`, `Hospital Acceptance`, `Support`), support sub-tabs (`Settings`, `Emails`, `Web Links`), support toggle/copy actions, and list-detail/footer CRUD behavior (`Edit`, `Delete`, `Save`, and create-only `Cancel`).
 
 ## Legacy Compatibility
 
@@ -54,7 +55,7 @@ The old legacy Templates landing renderer has been removed. The active Templates
 
 The old legacy Work Acts route renderer has been removed. The active Work Acts route is rendered by `src/modules/workActs/WorkActsPage.vue`; legacy support is limited to delegated Work Act handlers in `src/js/interactions.js`, generated document preview/output helpers in `src/js/render.js`, and document generation/routing behavior in `src/js/documentPipeline.js`.
 
-The old legacy Equipment route renderer has been removed from the active route surface. The active Equipment route is rendered by `src/modules/equipment/EquipmentPage.vue`; Equipment interactions are now Vue-owned through `src/stores/equipmentStore.js` (row/tab/sub-tab selection, support toggle, copy URL, support preview, and support-case submit). Equipment-specific delegated handlers were removed from `src/js/interactions.js`.
+The old legacy Equipment route renderer has been removed from the active route surface. The active Equipment route is rendered by `src/modules/equipment/EquipmentPage.vue`; Equipment interactions are now Vue-owned through `src/stores/equipmentStore.js` (row/tab/sub-tab selection, support toggle, copy URL, create/edit/save/delete, and create-draft cancel rollback). Equipment-specific delegated handlers were removed from `src/js/interactions.js`.
 
 The old Documents-side template generation mock panel and inline output-layout editor helpers have been removed from the active frontend. Real generation now uses `document-service` directly through source modules and the Documents `View` path. Output-layout seed data and backend template files remain for future Vue/admin work, but there is no active legacy UI for `Generate mock`, `Edit template`, `Export sections as .fodt`, or `Upload .fodt template`.
 

@@ -1,6 +1,6 @@
 # vm-web-control - Viva Medical Service IS Local Web Control
 
-Date: 2026-04-16
+Date: 2026-04-19
 
 ## Purpose
 
@@ -68,12 +68,14 @@ vm-web-control.cmd open
 
 ```text
 vm-web-control.cmd %*
-  -> powershell -NoProfile -ExecutionPolicy Bypass -File vm-web-control.ps1 [action]
+  -> choose shell in this order: powershell.exe, then pwsh.exe fallback
+  -> [shell] -NoProfile -ExecutionPolicy Bypass -File vm-web-control.ps1 [action]
        -> docker compose up -d --build   (on / restart; web + document-service)
        -> docker compose down            (off / restart)
        -> docker compose ps              (status)
        -> docker compose logs --tail 80  (logs)
        -> Start-Process http://localhost:8080/  (open)
+  -> return the exact exit code from vm-web-control.ps1
 ```
 
 The script always runs `docker compose` from the project root (`$ProjectRoot`), regardless of the caller's current directory.

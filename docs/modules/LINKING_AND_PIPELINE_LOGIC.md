@@ -1,6 +1,6 @@
 # Linking And Pipeline Logic
 
-Date: 2026-04-18
+Date: 2026-04-19
 
 This document explains how records link across Viva Medical modules and how work should move through the prototype. It is intentionally detailed because most future bugs will come from unclear ownership or hidden duplicated state.
 
@@ -617,6 +617,7 @@ Equipment:
 - Links to Contracts.
 - Links to Service jobs.
 - Receives acceptance/warranty updates from acceptance report upload.
+- Keeps structured support URL/settings metadata only; case execution timeline/service-history flow belongs to Service operations.
 
 Use stable ids where available:
 
@@ -624,6 +625,11 @@ Use stable ids where available:
 - `equipmentId`
 
 Use display names only as fallback in prototype logic.
+
+Equipment non-ownership reminder:
+
+- Equipment is not a document/file custody surface.
+- Equipment does not own generated/signed upload/download workflow.
 
 ## Admin And Feedback Link Rules
 

@@ -1,8 +1,8 @@
 # Current Status And Roadmap
 
-Date: 2026-04-18
+Date: 2026-04-19
 
-Latest pushed implementation baseline noted before the current uncommitted review pass: `28fd1dd refactor: split contracts from sales and finance`.
+Latest pushed implementation baseline: `dc7ecbf Commit remaining frontend migration, template workflow, and docs updates` (this build also includes the prior Equipment/sidebar completion commit `60cae2e Finalize equipment registry UX and remove service history actions`).
 
 This document is the current operating truth for the Viva Medical web prototype. It summarizes what has been built, what product decisions are locked for now, what is still missing, and how the next implementation steps should be done.
 
@@ -13,6 +13,57 @@ This document is the current operating truth for the Viva Medical web prototype.
 - Keep documentation current after meaningful implementation work, but leave git changes uncommitted until the user approves commit/push.
 - LT/EN language support is now scaffolded, not complete: use `src/js/i18n.js` and `state.language` for new global UI copy, then revise module-level copy in later passes.
 - User-facing Owner means creator initials: the person who produced/added the record. Admin user creation generates initials from full name for later record ownership display. Document `owner` can still be an internal queue/module bucket (`Service`, `Sales`, `Finance`) for filters and routing; show `createdByInitials` to users.
+
+## Visual Re-skin Snapshot (2026-04-19)
+
+This snapshot records the visual-only migration work and guardrails. It does not change module ownership, workflow logic, or runtime architecture.
+
+### Token system and mapping
+
+- New design-system token prefix: `--vm-*`.
+- Active token families:
+  - colors (app/shell/sidebar/surface/input/text/border/accent/semantic/row/overlay)
+  - geometry (`--vm-radius-*`)
+  - depth (`--vm-shadow-*`)
+  - typography (`--vm-font-*`)
+- Compatibility strategy: legacy aliases (`--bg`, `--brand`, `--border`, `--text`, etc.) map to `--vm-*` tokens so existing class selectors keep working during migration.
+
+### CSS files touched
+
+- `src/styles/base.css`
+- `src/styles/shell.css`
+- `src/styles/components.css`
+- `src/styles/pages.css`
+
+### Completed rollout phases
+
+- Phase A: token foundation + alias mapping.
+- Phase B: shell/sidebar/topbar theming.
+- Phase C: primitive components (`.btn*`, cards/panels/stats) re-skin.
+- Phase D: forms/tables page controls, tabs, modals/overlays.
+- Phase E: module-level polish for Templates, Documents, Work Acts, Equipment.
+
+### Constraint lock used during migration
+
+- CSS-only migration boundary preserved.
+- No Vue logic, routes, stores, services, or module workflow changes.
+- No DOM structure changes.
+- No button placement/order changes.
+- No module ownership/boundary changes.
+
+### Remaining module-level visual polish
+
+- Some hardcoded non-paper visual values remain in:
+  - `src/styles/shell.css`
+  - `src/styles/components.css`
+  - `src/styles/pages.css`
+  - `src/styles/wizard.css`
+- Scoped editor skin in `src/components/documentEditor/UmoDocumentEditor.vue` still contains hardcoded values and should be tokenized in a dedicated follow-up.
+
+### Validation
+
+- Latest `npm run build` passed.
+- This documentation update is metadata-only and does not alter runtime behavior.
 
 ## Current Product Shape
 
@@ -70,36 +121,30 @@ Detailed module documentation now lives in `docs/modules/`:
 - LT/EN language toggle foundation for topbar/sidebar/global shell labels.
 - Sidebar collapse state is now owned by shell state (`state.sidebarCollapsed`) and toggled from the top of the sidebar.
 - Sidebar collapse now targets the shell rail itself. It no longer collapses Equipment list content panels.
+- Collapse toggle is symbol-only near the rail edge (`<` when expanded, `>` when collapsed), without a boxed button style.
 - Expanded mode shows neutral outline icon + full module label. Collapsed mode shows icon-only rail buttons with tooltip/aria labels and clear active indication.
 - Queue/status bubbles are still intentionally excluded from module navigation and should be redesigned as a separate notification concept.
 - The top non-functional `Workspace` sidebar label is hidden so the sidebar starts directly with module navigation.
 - Docker/web control is intentionally outside the web UI through `vm-web-control.ps1` / `.cmd`.
 - `Report issue` is global and available from every page.
 
-### Sidebar Navigation Refactor Snapshot (2026-04-18)
+### Sidebar Navigation Snapshot (Completed 2026-04-19)
 
-Current status:
+Delivery summary:
 
-- Implemented in shell: `state.sidebarCollapsed`, `toggleSidebarCollapsed()`, and AppShell class/prop wiring.
-- Sidebar has a top collapse/expand button.
-- Collapsing now affects left navigation rail width, not Equipment module content sections.
-- Collapsed rail remains route-clickable.
-- Build status for this phase: `npm run build` passed.
+- Shell-level collapse state (`state.sidebarCollapsed`) is wired through Vue shell store and AppShell.
+- Collapse affects only the shell navigation rail width.
+- Collapsed rail stays directly clickable for module entry.
+- Collapsed mode uses neutral outline icon buttons; expanded mode keeps icon + label.
+- Hover, active, focus-visible, and keyboard behavior are preserved for both rail states.
+- Collapse toggle is clear and functional at the rail edge, using plain `<` / `>` symbols.
+- Equipment content sections are no longer used as collapse targets.
 
-Still incomplete:
+Validation summary:
 
-- Finalize collapsed-rail tooltip/hover/active/focus polish in the real browser flow.
-- Run explicit keyboard-path validation for expanded and collapsed navigation states.
-- Keep App Shell docs synchronized with final icon/rail behavior after implementation.
-
-Exact next files to continue in next chat:
-
-- `src/components/shell/SidebarNavigation.vue`
-- `src/styles/shell.css`
-- `src/router/routes.js`
-- `docs/modules/WORKSPACE_MODULES.md`
-- `docs/CURRENT_STATUS_AND_ROADMAP.md`
-- `docs/CHANGELOG.md`
+- `npm run build` passed.
+- Shell collapse/expand behavior is active in the current route set.
+- Active module indication remains visible in expanded and collapsed states.
 
 ### Command Center
 
@@ -425,34 +470,27 @@ Not implemented yet:
 
 ## Roadmap
 
-### B-48 - Sidebar Rail Finalization + Navigation Usability (In Progress)
+### B-48 - Sidebar Rail Finalization + Navigation Usability (Done)
 
-Goal: complete the sidebar refactor so collapse behavior is shell-first, icon-rail based, and production-usable.
+Completed 2026-04-19.
 
-Current checkpoint:
+Goal: complete sidebar collapse as a shell-first icon rail, while keeping navigation quality and accessibility.
 
-- Shell-level collapse behavior is implemented and persisted via demo state save cycle.
-- Equipment-local "collapse installed systems panel" behavior has been removed from the primary collapse workflow.
-- Temporary collapsed markers were replaced with neutral outline module icons; rail remains icon-button clickable.
+Delivery summary:
 
-Implementation sequence for next chat:
+- Temporary collapsed markers were replaced with neutral outline module icons.
+- Collapsed rail remained fully clickable for module navigation.
+- Expanded state preserved icon + label readability.
+- Hover, active, focus-visible, and keyboard behavior were kept clear in both states.
+- Collapse boundary was fixed to the sidebar rail, not Equipment content areas.
+- Top collapse toggle remained clear and functional after UX adjustments.
 
-1. Replace temporary short markers with neutral outline-style icons per module/category.
-2. Ensure collapsed mode keeps icon buttons fully clickable with clear active indication.
-3. Keep expanded mode icon + label structure aligned with current module ordering/groups.
-4. Finalize focus-visible, hover, and keyboard behavior in both states.
-5. Revalidate that collapse does not alter installed systems content visibility/behavior in Equipment.
-6. Run `npm run build` and a quick interaction smoke check.
-7. Update docs/changelog after the icon rail phase lands.
+Validation summary:
 
-Acceptance checklist:
-
-- Top collapse button works.
-- Collapsed rail remains usable with icon-only buttons.
-- Expanded mode shows full labels.
-- Active module is clearly visible in both states.
-- No colorful emoji-style nav icons.
-- Installed systems content is not treated as the collapse target.
+- `npm run build` passed.
+- Collapse/expand behavior works with active-route indication in both states.
+- No colorful emoji-style nav icons are used in sidebar rail mode.
+- Module content sections (including Equipment) are unaffected by shell collapse.
 
 ### B-49 - Equipment Registry UX/Logic Completion (Done)
 
@@ -466,16 +504,21 @@ Delivery summary:
 - Registry rows remain fully clickable and are now keyboard-selectable (`Enter` / `Space`) with explicit focus-visible state.
 - Demo/outdated flags continue to update list indicators immediately from draft state and persist after save/reload.
 - Search/filter/list/detail behavior remains consistent with the shell layout and desktop-first scanning.
+- Detail panel alignment was corrected so right-side menu/header aligns with left `Installed systems` block.
+- Detail footer now exposes `Edit`, `Delete`, and `Save` actions; `Cancel` appears only for unsaved new-system creation.
+- `New system` now supports true cancel rollback (`Cancel` removes the unsaved created row).
+- Service history button/logic was removed from active Equipment module flow.
 - Equipment continues to feed downstream Work Acts equipment selection through existing integration boundaries.
 
 Validation summary:
 
 - New Equipment record create/edit/save path is working.
+- New Equipment create-cancel path is working (unsaved row rollback).
 - Demo/outdated visibility in list + detail is working and persisted after reload.
 - Search/filter flow is working.
 - No upload/download/file-custody controls are exposed in Equipment.
-- Work Acts downstream equipment selection validated in runtime.
-- Templates downstream runtime validation was blocked in this local Vite run because `/api/templates` returned `404` (integration path remains wired in code).
+- Active Equipment UX no longer exposes service-history actions.
+- Work Acts downstream equipment selection remains wired through existing integration boundaries.
 
 ### B-38 - Defect Act / Commercial Offer Generation Parity - Done
 

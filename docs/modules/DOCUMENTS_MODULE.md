@@ -1,6 +1,6 @@
 # Documents Module
 
-Date: 2026-04-16
+Date: 2026-04-19
 
 This document is the detailed source of truth for the `Documents` workspace. Documents is a repository and file custody module. It is not the main template editor, not the shipping tracker, and not the invoice payment module.
 

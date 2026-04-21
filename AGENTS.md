@@ -38,6 +38,29 @@ Important documented areas in this repository include:
 - document generation findings
 - linking and pipeline logic across modules
 
+## Current implementation snapshot (2026-04-19)
+
+This snapshot is here to reduce re-discovery work and keep future chats aligned with shipped behavior:
+
+- Vue 3/Vite shell and router are active. Topbar/sidebar are Vue-owned.
+- Active Vue routes include `Documents`, `Templates`, `Work Acts`, and `Equipment`.
+- `Templates` is split into two routes:
+  - `/templates` list/management
+  - `/templates/:templateId` editor-first detail with Umo as primary surface
+- Reusable Template persistence goes through `/api/templates/`.
+- `Templates` must not create persisted Documents directly.
+- `Work Acts` is the source owner for generated Work Act outputs.
+- `Documents` owns generated/signed file custody and row-level delete custody cleanup.
+- Sidebar collapse is shell-rail-only (`state.sidebarCollapsed`), with neutral outline icon rail in collapsed mode; collapse must not target module content areas.
+- `Equipment` is a structured registry module:
+  - list/detail split
+  - row click + keyboard selection
+  - create/edit/save/delete
+  - `Cancel` appears only for unsaved new-system creation
+  - no upload/download/file-custody actions
+  - service-history button/logic removed from active Equipment flow
+- `vm-web-control.cmd` wraps the PowerShell script with proper exit-code propagation and `powershell.exe` -> `pwsh.exe` fallback.
+
 ---
 
 ## Authoritative documentation
@@ -52,6 +75,7 @@ Start with:
 5. `docs/DOCUMENTATION_RULES.md`
 
 Then read task-relevant module docs, especially:
+- `docs/modules/WORKSPACE_MODULES.md`
 - `docs/modules/DOCUMENTS_MODULE.md`
 - `docs/modules/WORK_ACTS_MODULE.md`
 - `docs/modules/TEMPLATES_MODULE.md`

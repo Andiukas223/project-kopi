@@ -1,6 +1,6 @@
 # Module Documentation Index
 
-Date: 2026-04-16
+Date: 2026-04-19
 
 This folder is the current source of truth for Viva Medical workspace/module behavior. It keeps module rules separate from the broad project plan so future work can change one module without rewriting the whole roadmap.
 

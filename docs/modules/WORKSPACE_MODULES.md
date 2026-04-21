@@ -1,6 +1,6 @@
 # Workspace Modules
 
-Date: 2026-04-18
+Date: 2026-04-19
 
 This document describes active Viva Medical workspace modules. It replaces the old pattern where module rules were mixed into the broad project plan.
 
@@ -57,15 +57,17 @@ Current UI:
 - Sidebar modules are grouped visually, but the top non-functional `Workspace` text label is not shown.
 - Sidebar can collapse/expand from a top toggle button in the rail.
 - Collapse now targets the sidebar rail itself, not Equipment content sections.
+- Collapse toggle is symbol-only near the rail edge (`<` expanded, `>` collapsed), not a boxed icon button.
 - Expanded mode shows neutral outline icon + module label; collapsed mode is a neutral outline icon rail with tooltip/aria module naming.
 - Yellow status badge bubbles are intentionally not used because they confuse module navigation with task/status queues.
 - The old sidebar `Reminders` block is not active. Reminder/notification logic will be redesigned later.
 
-In-progress handoff (2026-04-18):
+Current snapshot (completed 2026-04-19):
 
 - Shell collapse state and toggle wiring are implemented.
 - Equipment-local list collapse behavior was removed so sidebar collapse is the primary navigation collapse mechanism.
-- Neutral outline collapsed icon rail is implemented; next step is explicit browser keyboard/tooltip smoke validation.
+- Neutral outline collapsed icon rail is implemented and remains keyboard/click usable.
+- Active/hover/focus states are preserved in both expanded and collapsed navigation modes.
 
 Does not own:
 
@@ -507,9 +509,12 @@ Owns:
 
 Shows:
 
+- Installed systems list + aligned detail panel.
 - Equipment detail tabs.
 - Installation and acceptance information.
-- Support settings.
+- Support settings (structured metadata only).
+- Footer actions for selected record: `Edit`, `Delete`, `Save`.
+- `Cancel` action only while creating an unsaved new system draft.
 
 Links to:
 
@@ -523,6 +528,8 @@ Does not own:
 - Service job execution.
 - Document generation.
 - Invoice/payment.
+- Upload/download file custody.
+- Service-history case execution timeline.
 
 ## Parts
 
@@ -668,8 +675,8 @@ Current rules:
 
 - Sidebar has a top collapse/expand control.
 - Collapse affects only the shell navigation rail; module content panels remain visible.
-- Expanded mode shows labels; collapsed mode is icon/marker-focused and remains clickable for direct module routing.
-- Neutral outline-style icons are the target style. Temporary compact placeholders may appear during the in-progress refactor.
+- Expanded mode shows labels; collapsed mode is icon-only and remains clickable for direct module routing.
+- Neutral outline-style icons are used in the collapsed rail.
 - Yellow status/count badge bubbles are not shown.
 - Queue pressure, reminders, overdue states, and module counters should be redesigned as a separate notification/overview concept instead of being attached to every sidebar item.
 
